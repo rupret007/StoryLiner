@@ -1,0 +1,38 @@
+# ─── Stage 1: deps ───────────────────────────────────────────────────────────
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci --ignore-scripts
+
+# ─── Stage 2: runner ─────────────────────────────────────────────────────────
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser  --system --uid 1001 worker
+
+# Runtime deps (includes tsx, prisma, etc.)
+COPY --from=deps /app/node_modules ./node_modules
+
+# Application source the worker needs
+COPY package.json ./
+COPY tsconfig.json ./
+COPY prisma ./prisma
+COPY scripts/worker.ts ./scripts/worker.ts
+COPY lib ./lib
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Entrypoint
+COPY scripts/docker-entrypoint-worker.sh /docker-entrypoint-worker.sh
+RUN chmod +x /docker-entrypoint-worker.sh
+
+USER worker
+
+ENTRYPOINT ["/docker-entrypoint-worker.sh"]
+CMD ["npx", "tsx", "scripts/worker.ts"]

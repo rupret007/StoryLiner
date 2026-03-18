@@ -346,6 +346,105 @@ LLM_ADAPTER="mock"
 SOCIAL_ADAPTER="mock"
 ```
 
+## Deploy with Podman (or Docker)
+
+StoryLiner ships a single `compose.yaml` that works identically with **Podman Desktop** and **Docker Desktop** (or any Docker-compatible runtime). One command brings up Postgres, the Next.js app, and the background worker with health-gated startup ordering.
+
+### Prerequisites
+
+| Tool | Notes |
+|---|---|
+| Podman Desktop | [podman.io/getting-started](https://podman.io/getting-started) — install the **Compose** extension (Settings → Resources → Compose → Setup) |
+| **OR** Docker Desktop | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) |
+
+`podman compose` and `docker compose` are interchangeable for every command below.
+
+### Option A — One-command deploy (recommended)
+
+**Windows (PowerShell):**
+
+```powershell
+pwsh scripts/deploy.ps1
+```
+
+**Linux / macOS / WSL:**
+
+```bash
+bash scripts/deploy.sh
+```
+
+The script:
+1. Copies `.env.example` → `.env` if `.env` is missing and prompts you to fill in secrets.
+2. Runs `podman compose up -d` (or `docker compose up -d`).
+3. Waits for the app to report healthy at `http://localhost:3000/api/health`.
+4. Seeds the database once (idempotent — safe to run again).
+5. Prints the URL.
+
+### Option B — Manual (a few copy-paste commands)
+
+```bash
+# 1. Configure environment
+cp .env.example .env
+# Edit .env — the DATABASE_URL is already set for compose (host = "db")
+# Add any real API keys you want (leave blanks for mock mode)
+
+# 2. Start the stack
+podman compose up -d       # or: docker compose up -d
+
+# 3. Seed the database (first time only — upsert-safe, run again any time)
+#    Uses the 'migrate' image which has the full dev deps (tsx, prisma CLI)
+podman compose run --rm migrate npx tsx prisma/seed.ts
+
+# 4. Open the app
+#    http://localhost:3000
+```
+
+### Useful compose commands
+
+```bash
+# View logs for all services
+podman compose logs -f
+
+# View logs for one service
+podman compose logs -f app
+podman compose logs -f worker
+
+# Stop (keeps data volume)
+podman compose down
+
+# Stop and delete the database volume (full reset)
+podman compose down -v
+
+# Rebuild after code changes
+podman compose up -d --build
+
+# Re-seed after a reset
+podman compose run --rm migrate npx tsx prisma/seed.ts
+```
+
+### Services in the stack
+
+| Service | Port | Description |
+|---|---|---|
+| `db` | (internal) | Postgres 16 with persistent volume |
+| `migrate` | (none) | One-shot schema push (exits 0 after success) |
+| `app` | 3000 | Next.js app (standalone build) |
+| `worker` | (none) | Background job worker — polls every 5 s |
+
+The app and worker start only after Postgres passes its health check, so you will never see "connection refused" errors on first boot.
+
+### Health check
+
+`GET http://localhost:3000/api/health` returns:
+
+```json
+{ "ok": true, "db": "connected" }
+```
+
+Returns `503` if the database is unreachable, which is what the deploy script and compose health check rely on.
+
+---
+
 ## Architecture Reference
 
 See [`docs/architecture.md`](docs/architecture.md) for:

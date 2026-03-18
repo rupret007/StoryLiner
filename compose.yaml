@@ -1,0 +1,92 @@
+# StoryLiner — Compose file for Podman Desktop and Docker
+# Works with: podman compose up -d   OR   docker compose up -d
+#
+# First-time setup:
+#   cp .env.example .env           # then edit .env with your secrets
+#   podman compose up -d           # (or docker compose up -d)
+#   podman compose run --rm migrate npx tsx prisma/seed.ts   # seed once
+#
+# Or use the one-command script:
+#   pwsh scripts/deploy.ps1        # Windows PowerShell
+#   bash scripts/deploy.sh         # Unix / WSL / macOS
+
+services:
+
+  # ── Database ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: storyliner
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d storyliner"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ── Schema migration (one-shot, exits 0 on success) ───────────────────────
+  # Runs "prisma db push" after Postgres is healthy.
+  # App and worker wait for this service to complete before starting.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/storyliner
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Next.js App ───────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/storyliner
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # ── Background Worker ─────────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/storyliner
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
