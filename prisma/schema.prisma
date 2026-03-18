@@ -1,0 +1,652 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────────────
+
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+  BLUESKY
+  TIKTOK
+  YOUTUBE
+  TWITCH
+  TWITTER
+}
+
+enum CampaignType {
+  SHOW_ANNOUNCEMENT
+  REMINDER
+  DAY_OF_SHOW
+  LAST_CALL
+  THANK_YOU
+  RECAP
+  REHEARSAL
+  BEHIND_THE_SCENES
+  RELEASE_TEASER
+  RELEASE_DAY
+  MERCH_PUSH
+  CROWD_ENGAGEMENT
+  FAN_QUESTION
+  MILESTONE
+  LIVESTREAM_ANNOUNCEMENT
+  LIVESTREAM_REMINDER
+  GOING_LIVE_NOW
+  POST_STREAM_THANK_YOU
+  POST_STREAM_RECAP
+  CLIP_PROMOTION
+}
+
+enum ContentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ToneVariant {
+  AUTHENTIC
+  ENERGETIC
+  NOSTALGIC
+  FUNNY
+  RAW
+  HYPE
+  GRATEFUL
+  MYSTERIOUS
+  DIRECT
+}
+
+enum ContentLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum JobType {
+  PUBLISH_POST
+  GENERATE_RECAP
+  GENERATE_CLIP_FOLLOW_UP
+  SEND_LIVESTREAM_REMINDER
+}
+
+enum KnowledgeEntryType {
+  BAND_HISTORY
+  MEMBER_INFO
+  SHOW_HISTORY
+  GEAR_INFO
+  RUNNING_JOKE
+  AUDIENCE_NOTE
+  PLATFORM_NOTE
+  GENERAL
+}
+
+// ─── User ──────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String   @default("Operator")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bands     Band[]
+}
+
+// ─── Band ──────────────────────────────────────────────────────────────────────
+
+model Band {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String  @unique
+  description String?
+  genre       String?
+  location    String?
+  founded     String?
+  coverColor  String  @default("#1a1a2e")
+  isActive    Boolean @default(true)
+
+  voiceProfile     BandVoiceProfile?
+  knowledgeEntries KnowledgeEntry[]
+  platformAccounts PlatformAccount[]
+  campaigns        Campaign[]
+  drafts           Draft[]
+  scheduledPosts   ScheduledPost[]
+  publishedPosts   PublishedPost[]
+  analyticsSnapshots AnalyticsSnapshot[]
+  mediaAssets      MediaAssetReference[]
+  events           Event[]
+  livestreamEvents LivestreamEvent[]
+  generationRuns   GenerationRun[]
+  promptTemplates  PromptTemplate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─── Band Voice Profile ────────────────────────────────────────────────────────
+
+model BandVoiceProfile {
+  id     String @id @default(cuid())
+  bandId String @unique
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  // Tone and personality
+  toneDescription   String  @db.Text
+  personalityTraits String[]
+  audienceNotes     String  @db.Text
+  postingGoals      String[]
+
+  // Voice rules
+  toneRules    String[]
+  bannedPhrases String[]
+  bannedTopics  String[]
+
+  // Content settings
+  defaultTone      ToneVariant @default(AUTHENTIC)
+  humorLevel       Int         @default(5) // 1-10
+  edgeLevel        Int         @default(5) // 1-10
+  emojiTolerance   Int         @default(3) // 1-10
+  isExplicitOk     Boolean     @default(false)
+  preferredLengths ContentLength[]
+
+  // Platform-specific voice notes
+  facebookNotes   String? @db.Text
+  instagramNotes  String? @db.Text
+  blueskyNotes    String? @db.Text
+  tiktokNotes     String? @db.Text
+  youtubeNotes    String? @db.Text
+  twitchNotes     String? @db.Text
+
+  // Example posts for reference
+  goodExamples String[] @db.Text
+  badExamples  String[] @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Knowledge Entry ───────────────────────────────────────────────────────────
+
+model KnowledgeEntry {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  type    KnowledgeEntryType
+  title   String
+  content String             @db.Text
+  tags    String[]
+  isActive Boolean           @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+}
+
+// ─── Platform Account ─────────────────────────────────────────────────────────
+
+model PlatformAccount {
+  id       String   @id @default(cuid())
+  bandId   String
+  band     Band     @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  platform Platform
+  handle   String
+  profileUrl String?
+  isConnected Boolean @default(false)
+  isActive    Boolean @default(true)
+  metadata    Json?
+
+  scheduledPosts ScheduledPost[]
+  publishedPosts PublishedPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bandId, platform])
+  @@index([bandId])
+}
+
+// ─── Event ────────────────────────────────────────────────────────────────────
+
+model Event {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  title       String
+  venue       String?
+  city        String?
+  state       String?
+  country     String  @default("US")
+  eventDate   DateTime
+  doorsTime   DateTime?
+  setTime     DateTime?
+  ticketUrl   String?
+  isHeadlining Boolean @default(true)
+  supportActs  String[]
+  notes        String? @db.Text
+  isCancelled  Boolean @default(false)
+
+  campaigns Campaign[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+}
+
+// ─── Campaign ─────────────────────────────────────────────────────────────────
+
+model Campaign {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id])
+
+  type        CampaignType
+  name        String
+  description String?  @db.Text
+  targetDate  DateTime?
+  isActive    Boolean   @default(true)
+
+  drafts Draft[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+}
+
+// ─── Draft ────────────────────────────────────────────────────────────────────
+
+model Draft {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+
+  platform     Platform
+  status       ContentStatus @default(IN_REVIEW)
+  toneVariant  ToneVariant
+  contentLength ContentLength @default(MEDIUM)
+
+  // Generated content
+  caption      String  @db.Text
+  hashtags     String[]
+  ctaText      String?
+  altText      String?
+  imagePrompt  String? @db.Text
+  fanReplies   String[]
+
+  // Quality signals
+  brandFitScore   Int?     // 1-100
+  confidenceNotes String?  @db.Text
+  riskLevel       RiskLevel @default(LOW)
+  riskFlags       String[]
+
+  // Review metadata
+  reviewedAt  DateTime?
+  reviewNotes String?   @db.Text
+  rejectedAt  DateTime?
+  rejectedReason String? @db.Text
+
+  // Versioning
+  versions       DraftVersion[]
+  currentVersion Int           @default(1)
+
+  scheduledPost ScheduledPost?
+
+  generationRunId String?
+  generationRun   GenerationRun? @relation(fields: [generationRunId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+  @@index([status])
+  @@index([campaignId])
+}
+
+// ─── Draft Version ────────────────────────────────────────────────────────────
+
+model DraftVersion {
+  id      String @id @default(cuid())
+  draftId String
+  draft   Draft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  version      Int
+  caption      String  @db.Text
+  hashtags     String[]
+  ctaText      String?
+  rewriteDirective String? // e.g. "funnier", "morePunk"
+  changeNotes  String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@unique([draftId, version])
+  @@index([draftId])
+}
+
+// ─── Scheduled Post ───────────────────────────────────────────────────────────
+
+model ScheduledPost {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  draftId           String          @unique
+  draft             Draft           @relation(fields: [draftId], references: [id])
+  platformAccountId String
+  platformAccount   PlatformAccount @relation(fields: [platformAccountId], references: [id])
+
+  scheduledFor  DateTime
+  status        ContentStatus @default(SCHEDULED)
+  jobId         String?
+  job           Job?          @relation(fields: [jobId], references: [id])
+
+  publishedPost PublishedPost?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+  @@index([scheduledFor])
+}
+
+// ─── Published Post ───────────────────────────────────────────────────────────
+
+model PublishedPost {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  scheduledPostId   String?          @unique
+  scheduledPost     ScheduledPost?   @relation(fields: [scheduledPostId], references: [id])
+  platformAccountId String
+  platformAccount   PlatformAccount  @relation(fields: [platformAccountId], references: [id])
+
+  platform         Platform
+  externalPostId   String?
+  externalPostUrl  String?
+  publishedAt      DateTime
+  caption          String   @db.Text
+  hashtags         String[]
+
+  // Analytics
+  impressions Int?
+  reach       Int?
+  likes       Int?
+  comments    Int?
+  shares      Int?
+  saves       Int?
+  clicks      Int?
+
+  publishLogs PublishLog[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+  @@index([platform])
+  @@index([publishedAt])
+}
+
+// ─── Analytics Snapshot ───────────────────────────────────────────────────────
+
+model AnalyticsSnapshot {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  publishedPostId String?
+  publishedPost   PublishedPost? @relation(fields: [publishedPostId], references: [id])
+
+  platform     Platform
+  campaignType CampaignType?
+  toneVariant  ToneVariant?
+  contentLength ContentLength?
+  postedAt     DateTime
+  dayOfWeek    Int  // 0=Sunday
+  hourOfDay    Int  // 0-23
+
+  impressions Int @default(0)
+  reach       Int @default(0)
+  likes       Int @default(0)
+  comments    Int @default(0)
+  shares      Int @default(0)
+  saves       Int @default(0)
+  clicks      Int @default(0)
+  engagementRate Float @default(0)
+
+  snapshotDate DateTime @default(now())
+
+  @@index([bandId])
+  @@index([platform])
+  @@index([campaignType])
+}
+
+// ─── Media Asset Reference ────────────────────────────────────────────────────
+
+model MediaAssetReference {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String? @db.Text
+  url         String
+  type        String  // "image" | "video" | "audio" | "document"
+  tags        String[]
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+}
+
+// ─── Generation Run ───────────────────────────────────────────────────────────
+
+model GenerationRun {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  promptTemplateId String?
+  promptTemplate   PromptTemplate? @relation(fields: [promptTemplateId], references: [id])
+
+  campaignType    CampaignType
+  platform        Platform
+  inputContext    Json
+  promptSent      String  @db.Text
+  rawResponse     String? @db.Text
+  durationMs      Int?
+  llmAdapter      String  @default("mock")
+  modelUsed       String?
+  tokenCount      Int?
+
+  drafts Draft[]
+
+  createdAt DateTime @default(now())
+
+  @@index([bandId])
+}
+
+// ─── Prompt Template ──────────────────────────────────────────────────────────
+
+model PromptTemplate {
+  id     String @id @default(cuid())
+  bandId String?
+  band   Band?  @relation(fields: [bandId], references: [id])
+
+  name         String
+  campaignType CampaignType?
+  platform     Platform?
+  systemPrompt String  @db.Text
+  userPrompt   String  @db.Text
+  isDefault    Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  generationRuns GenerationRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Livestream Event ─────────────────────────────────────────────────────────
+
+model LivestreamEvent {
+  id     String @id @default(cuid())
+  bandId String
+  band   Band   @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  title        String
+  subtitle     String?
+  description  String? @db.Text
+  scheduledFor DateTime
+  endedAt      DateTime?
+
+  // Stream details
+  pinnedComment String? @db.Text
+  ctaText       String?
+  guestNotes    String? @db.Text
+  sceneNotes    String? @db.Text
+
+  // Gear and tech
+  gearChecklist String[]
+  obsNotes      String? @db.Text
+
+  // Post-stream content ideas
+  clipIdeas     String[]
+  highlightIdeas String[]
+  recapNotes    String? @db.Text
+
+  // Status
+  isLive       Boolean @default(false)
+  isCancelled  Boolean @default(false)
+  isCompleted  Boolean @default(false)
+
+  runOfShowItems   LivestreamRunOfShowItem[]
+  destinations     LivestreamDestination[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bandId])
+  @@index([scheduledFor])
+}
+
+// ─── Livestream Run Of Show Item ──────────────────────────────────────────────
+
+model LivestreamRunOfShowItem {
+  id              String         @id @default(cuid())
+  livestreamEventId String
+  livestreamEvent LivestreamEvent @relation(fields: [livestreamEventId], references: [id], onDelete: Cascade)
+
+  order      Int
+  title      String
+  duration   Int?    // minutes
+  notes      String? @db.Text
+  banterPrompts String[]
+  engagementPrompts String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([livestreamEventId])
+}
+
+// ─── Livestream Destination ───────────────────────────────────────────────────
+
+model LivestreamDestination {
+  id              String         @id @default(cuid())
+  livestreamEventId String
+  livestreamEvent LivestreamEvent @relation(fields: [livestreamEventId], references: [id], onDelete: Cascade)
+
+  platform    Platform
+  streamTitle String?
+  streamKey   String? // stored encrypted in real deployment
+  rtmpUrl     String?
+  isEnabled   Boolean @default(true)
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([livestreamEventId])
+}
+
+// ─── Job ──────────────────────────────────────────────────────────────────────
+
+model Job {
+  id   String @id @default(cuid())
+  type JobType
+  status JobStatus @default(PENDING)
+
+  payload     Json
+  runAt       DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  errorMessage String? @db.Text
+  retryCount   Int     @default(0)
+  maxRetries   Int     @default(3)
+  nextRetryAt  DateTime?
+
+  scheduledPosts ScheduledPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, runAt])
+}
+
+// ─── Publish Log ──────────────────────────────────────────────────────────────
+
+model PublishLog {
+  id String @id @default(cuid())
+
+  publishedPostId String?
+  publishedPost   PublishedPost? @relation(fields: [publishedPostId], references: [id])
+
+  platform    Platform
+  adapter     String
+  success     Boolean
+  responseCode Int?
+  responseBody String? @db.Text
+  errorMessage String? @db.Text
+  durationMs   Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([publishedPostId])
+}
