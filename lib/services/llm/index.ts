@@ -11,6 +11,12 @@ export function getLlmAdapter(): LLMAdapter {
 
   switch (adapterName) {
     case "openai":
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error(
+          "[StoryLiner] LLM_ADAPTER=openai is set but OPENAI_API_KEY is not defined in .env.local. " +
+            "Add it, or set LLM_ADAPTER=mock to use the template-based mock adapter."
+        );
+      }
       _adapter = new OpenAiLlmAdapter();
       break;
     case "mock":
