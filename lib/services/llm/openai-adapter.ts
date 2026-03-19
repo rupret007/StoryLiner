@@ -1,5 +1,5 @@
 /**
- * OpenAI LLM Adapter — production implementation.
+ * OpenAI LLM Adapter -- production implementation.
  * Uses GPT-4o for all content generation, rewriting, risk assessment,
  * talking points, and engagement prompts.
  *
@@ -48,21 +48,15 @@ function buildGenerateSystemPrompt(
   const vp = band.voiceProfile;
   const isRadDad = band.name.toLowerCase().includes("rad dad");
 
-  const platformNotes = vp
-    ? {
-        FACEBOOK: vp.facebookNotes,
-        INSTAGRAM: vp.instagramNotes,
-        YOUTUBE: vp.youtubeNotes,
-        BLUESKY: vp.blueskyNotes,
-        TIKTOK: vp.tiktokNotes,
-        TWITCH: vp.twitchNotes,
-      }[platform]
+  const platformNoteMap = vp
+    ? { FACEBOOK: vp.facebookNotes, INSTAGRAM: vp.instagramNotes, YOUTUBE: vp.youtubeNotes, BLUESKY: vp.blueskyNotes, TIKTOK: vp.tiktokNotes, TWITCH: vp.twitchNotes }
     : null;
+  const platformNotes = platformNoteMap ? platformNoteMap[platform as keyof typeof platformNoteMap] : null;
 
   const toneDescription = vp?.toneDescription ?? (
     isRadDad
-      ? "Pop-punk cover band energy — nostalgic, crowd-first, fun, self-aware, not too serious."
-      : "Dry indie rock — scene-rooted, honest, a little distant, values substance over flash."
+      ? "Pop-punk cover band energy -- nostalgic, crowd-first, fun, self-aware, not too serious."
+      : "Dry indie rock -- scene-rooted, honest, a little distant, values substance over flash."
   );
 
   const personalityTraits = vp?.personalityTraits?.length
@@ -119,7 +113,7 @@ Always respond with a valid JSON object matching this exact schema:
 
 The "fanReplies" field should contain 2-3 realistic short comments that fans might leave on this post. Make them specific to ${band.name}'s personality, not generic.
 
-The "brandFitScore" is 0-100 — rate how well the caption matches the band's voice profile.
+The "brandFitScore" is 0-100 -- rate how well the caption matches the band's voice profile.
 
 The "riskFlags" field must be an empty array if the caption is clean, or contain short string descriptions of any issues found.
 
@@ -143,7 +137,7 @@ function buildGenerateUserPrompt(
         : "Caption must be 200 characters or fewer. One short paragraph only.";
   } else if (contentLength === "LONG") {
     contentLengthInstruction =
-      "Write a longer caption — multiple paragraphs welcome. Include backstory, context, or a genuine note that fits the band's voice.";
+      "Write a longer caption -- multiple paragraphs welcome. Include backstory, context, or a genuine note that fits the band's voice.";
   }
 
   const contextSection = context
@@ -160,64 +154,66 @@ function buildGenerateUserPrompt(
 
   const toneInstruction =
     toneVariant && toneVariant !== "AUTHENTIC"
-      ? `\nTONE VARIANT: ${toneVariant} — adjust the delivery accordingly.\n`
+      ? `\nTONE VARIANT: ${toneVariant} -- adjust the delivery accordingly.\n`
       : "\n";
 
   // Platform-specific constraints
-  const platformConstraints: Record<Platform, string> = {
+  const platformConstraints: Record<string, string> = {
     FACEBOOK:
       "Facebook supports longer posts. Can include line breaks for readability. Emojis optional.",
     INSTAGRAM:
-      "Instagram caption — lead with the hook. The first line must grab attention because it shows in the feed preview. Hashtags can go at the end.",
+      "Instagram caption -- lead with the hook. The first line must grab attention because it shows in the feed preview. Hashtags can go at the end.",
     YOUTUBE:
-      "YouTube community post — can be conversational and link-focused. Less formal than a show announcement.",
+      "YouTube community post -- can be conversational and link-focused. Less formal than a show announcement.",
     BLUESKY:
-      "Bluesky — concise, conversational, maximum 300 characters recommended. No hashtag spam.",
+      "Bluesky -- concise, conversational, maximum 300 characters recommended. No hashtag spam.",
     TIKTOK:
-      "TikTok — punchy,趃no-fluff,趃hooks趃fast.趃Consider趃whether趃it趃plays趃over趃a趃video趃clip.",
+      "TikTok -- punchy, no-fluff, hooks fast. Consider whether it plays over a video clip.",
     TWITCH:
-      "Twitch community — casual, in-the-moment energy, conversational.",
+      "Twitch community -- casual, in-the-moment energy, conversational.",
   };
 
   const platformInstruction = platformConstraints[platform] ?? "";
 
-  // Campaign-type-specific guidance
-  const campaignGuidance: Record<string, string> = {
-    SHOW_ANNOUNCEMENT: isRadDad
-      ? "Write like you're hyped to play this show and want everyone there. Name the venue, date, and what makes this show worth showing up to. Enthusiastic but not desperate."
-      : "Announce the show with the vibe of someone who expects the room to show up. State the facts (venue, date), then add one line that sets the tone. Dry energy, not cheerleading.",
-    SHOW_REMINDER: isRadDad
-      ? "Remind people the show is coming up. Create urgency without being annoying. Name what's at stake — last chance to hear X song, this is the biggest room we've played, etc."
-      : "Gentle reminder. The kind of post someone sees and thinks 'oh right, I meant to get tickets.' State the facts plainly.",
-    LAST_CALL: isRadDad
-      ? "Final push. Tickets are almost gone or the show is tonight/tomorrow. Create real urgency — name the number of tickets left if known, or just lean into the 'this is your last chance' energy.",
-      : "Last call. Keep it terse. The kind of post that hits different if you've been on the fence.",
-    DAY_OF_SHOW: isRadDad
-      ? "Post on the day of the show. Build excitement for tonight. Can include details about what to expect, who to find, where to park. Ends with a clear invitation.",
-      : "Day-of post. Shorter, punchier. Could be the soundcheck, could be a photo from load-in. Add one line of dry anticipation.",
-    RECAP: isRadDad
-      ? "Recap a show that already happened. Celebrate the crowd, reference a specific moment, thank the city. Energy should be post-high — still buzzing but not frantic.",
-      : "Recap a show. Acknowledge what happened without overselling it. Could mention something specific about the room or the set. Thank the people who came.",
-    LIVE: isRadDad
-      ? "Promote an upcoming livestream. Make it sound like you want people to show up in real time, not just watch the replay. Include what they'll see/hear.",
-      : "Promote a livestream. Note what makes this stream worth watching live. Could be a specific song, a Q&A, something happening that won't be on the replay.",
-    GENERAL: isRadDad
-      ? "General band content — practice, new ideas, behind-the-scenes. Keep it light and conversational. Don't force it — if there's nothing interesting to say, say it in an interesting way."
-      : "General band content. Could be about practice, new material, a random thought. Stalemate voice: dry, a little detached, honest. Don't overshare.",
+  // Campaign guidance: separate objects by band type, combined at runtime.
+  // This avoids a TypeScript parsing quirk with ternary expressions as object property values.
+  const stalemateGuidance: Record<string, string> = {
+    SHOW_ANNOUNCEMENT: "Announce the show with the vibe of someone who expects the room to show up. State the facts (venue, date), then add one line that sets the tone. Dry energy, not cheerleading.",
+    SHOW_REMINDER: "Gentle reminder. The kind of post someone sees and thinks 'oh right, I meant to get tickets.' State the facts plainly.",
+    LAST_CALL: "Last call. Keep it terse. The kind of post that hits different if you've been on the fence.",
+    DAY_OF_SHOW: "Day-of post. Shorter, punchier. Could be the soundcheck, could be a photo from load-in. Add one line of dry anticipation.",
+    RECAP: "Recap a show. Acknowledge what happened without overselling it. Could mention something specific about the room or the set. Thank the people who came.",
+    LIVE: "Promote a livestream. Note what makes this stream worth watching live. Could be a specific song, a Q&A, something happening that won't be on the replay.",
+    GENERAL: "General band content. Could be about practice, new material, a random thought. Stalemate voice: dry, a little detached, honest. Don't overshare.",
     CAMPAIGN: "Write content for an ongoing campaign. Keep the messaging consistent with the campaign's theme.",
-    PROMO: isRadDad
-      ? "Promotional content. Build interest in the band, a show, or a release. Keep it energetic without being obvious about 'selling' something."
-      : "Promotional content. Honest and direct. Don't oversell.",
+    PROMO: "Promotional content. Honest and direct. Don't oversell.",
     CONTEST: "Write a contest announcement or call-to-action. Be clear about the prize, how to enter, and the deadline.",
     PODCAST: "Write a podcast episode announcement or episode note. Name the episode topic, what listeners will get out of it.",
     BLOG: "Write a blog post or update. Can be longer form, more personal, or more detailed than a social post.",
     NEWSLETTER: "Write a newsletter update. Conversational but more considered than a social post. Can be longer.",
-    THANK_YOU: isRadDad
-      ? "Thank the crowd, venue, another band, or fans. Be specific if possible. Rad Dad thanks with energy and warmth — not corporate gratitude."
-      : "Say thank you without it sounding like an obligation. One genuine sentence beats a paragraph of praise.",
+    THANK_YOU: "Say thank you without it sounding like an obligation. One genuine sentence beats a paragraph of praise.",
     UNSPECIFIED: "Write a natural, in-character band post.",
   };
 
+  const radDadGuidance: Record<string, string> = {
+    SHOW_ANNOUNCEMENT: "Write like you're hyped to play this show and want everyone there. Name the venue, date, and what makes this show worth showing up to. Enthusiastic but not desperate.",
+    SHOW_REMINDER: "Remind people the show is coming up. Create urgency without being annoying. Name what's at stake -- last chance to hear X song, this is the biggest room we've played, etc.",
+    LAST_CALL: "Final push. Tickets are almost gone or the show is tonight/tomorrow. Create real urgency -- name the number of tickets left if known, or just lean into the 'this is your last chance' energy.",
+    DAY_OF_SHOW: "Post on the day of the show. Build excitement for tonight. Can include details about what to expect, who to find, where to park. Ends with a clear invitation.",
+    RECAP: "Recap a show that already happened. Celebrate the crowd, reference a specific moment, thank the city. Energy should be post-high -- still buzzing but not frantic.",
+    LIVE: "Promote an upcoming livestream. Make it sound like you want people to show up in real time, not just watch the replay. Include what they'll see/hear.",
+    GENERAL: "General band content -- practice, new ideas, behind-the-scenes. Keep it light and conversational. Don't force it -- if there's nothing interesting to say, say it in an interesting way.",
+    CAMPAIGN: "Write content for an ongoing campaign. Keep the messaging consistent with the campaign's theme.",
+    PROMO: "Promotional content. Build interest in the band, a show, or a release. Keep it energetic without being obvious about 'selling' something.",
+    CONTEST: "Write a contest announcement or call-to-action. Be clear about the prize, how to enter, and the deadline.",
+    PODCAST: "Write a podcast episode announcement or episode note. Name the episode topic, what listeners will get out of it.",
+    BLOG: "Write a blog post or update. Can be longer form, more personal, or more detailed than a social post.",
+    NEWSLETTER: "Write a newsletter update. Conversational but more considered than a social post. Can be longer.",
+    THANK_YOU: "Thank the crowd, venue, another band, or fans. Be specific if possible. Rad Dad thanks with energy and warmth -- not corporate gratitude.",
+    UNSPECIFIED: "Write a natural, in-character band post.",
+  };
+
+  const campaignGuidance = isRadDad ? radDadGuidance : stalemateGuidance;
   const campaignInstruction = campaignGuidance[typeLabel] ?? campaignGuidance.UNSPECIFIED;
 
   return `${campaignInstruction}
@@ -241,8 +237,8 @@ function buildRewriteSystemPrompt(
 
   const toneDescription = vp?.toneDescription ?? (
     isRadDad
-      ? "Pop-punk cover band energy — nostalgic, crowd-first, fun, self-aware."
-      : "Dry indie rock — scene-rooted, honest, a little distant."
+      ? "Pop-punk cover band energy -- nostalgic, crowd-first, fun, self-aware."
+      : "Dry indie rock -- scene-rooted, honest, a little distant."
   );
 
   const bannedPhrases = vp?.bannedPhrases?.length
@@ -261,7 +257,7 @@ The user will provide:
 
 Apply the directive while keeping the caption in ${band.name}'s voice.
 Do not re-introduce banned phrases.
-Return only the rewritten caption as plain text — no JSON, no explanation.
+Return only the rewritten caption as plain text -- no JSON, no explanation.
 
 If the directive is not recognized, apply its literal meaning sensibly.
 If the directive is "shorterHashtags", keep only short hashtags (under 15 characters).
@@ -452,7 +448,7 @@ Return JSON now.`;
 
     const system = `You are a social media strategist for ${bandName}.
 Generate 5 short engagement prompts (1-2 sentences each) that a ${platformLabel(platform).toLowerCase()} post from this band should ask fans.
-These should feel natural and specific to the band's personality — not generic.
+These should feel natural and specific to the band's personality -- not generic.
 Return JSON: { "prompts": ["prompt1", "prompt2", ...] }`;
 
     const user = `Band: ${bandName}
