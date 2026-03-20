@@ -70,6 +70,12 @@ export default async function PublishedPostsPage({
                       <span className="text-xs text-muted-foreground">
                         {formatDateTime(post.publishedAt)}
                       </span>
+                      <Link
+                        href={`/published-posts/${post.id}`}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Details
+                      </Link>
                       {post.externalPostUrl && (
                         <a
                           href={post.externalPostUrl}
