@@ -120,7 +120,7 @@ export default async function PublishedPostDetailPage({
             />
             <StatCard
               label="Engagement"
-              value={post.reach && post.likes && post.comments ? (((post.likes + post.comments) / post.reach) * 100).toFixed(1) + "%" : "—"}
+              value={post.reach && post.reach > 0 ? ((( (post.likes || 0) + (post.comments || 0) + (post.shares || 0) ) / post.reach) * 100).toFixed(1) + "%" : "—"}
               icon={BarChart3}
             />
           </div>
