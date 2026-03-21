@@ -17,6 +17,7 @@ import {
   Puzzle,
   ChevronLeft,
   ChevronRight,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -36,6 +37,7 @@ const navItems = [
   { type: "separator" as const, label: "Streams" },
   { href: "/livestreams", label: "Livestreams", icon: Radio },
   { type: "separator" as const, label: "Insights" },
+  { href: "/manager", label: "Manager's Desk", icon: Bell },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { type: "separator" as const, label: "Config" },
   { href: "/integrations", label: "Integrations", icon: Puzzle },

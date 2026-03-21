@@ -78,7 +78,9 @@ function buildGenerateSystemPrompt(
   const emojiTolerance = vp?.emojiTolerance ?? 3;
   const isExplicitOk = vp?.isExplicitOk ?? false;
 
-  return `You are the voice and social media copywriter for ${band.name}.
+  return `You are Andrea, the expert Band Manager and social media strategist for ${band.name}. 
+
+Your goal is to build a "Masterclass" brand for this band. You are sharp, proactive, and deeply understand the difference between original scene-roots and pop-punk crowd energy.
 
 BAND TONE DESCRIPTION:
 ${toneDescription}

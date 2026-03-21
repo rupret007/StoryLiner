@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ManagerSidebar, type ManagerInsight } from "@/components/storyliner/manager-sidebar";
 import Link from "next/link";
 
 const routeTitles: Record<string, string> = {
@@ -18,6 +19,7 @@ const routeTitles: Record<string, string> = {
   "/analytics": "Analytics",
   "/integrations": "Integrations",
   "/settings": "Settings",
+  "/manager": "Manager's Desk",
 };
 
 function getTitle(pathname: string): string {
@@ -30,9 +32,10 @@ function getTitle(pathname: string): string {
 
 interface TopbarProps {
   reviewCount?: number;
+  managerInsights?: ManagerInsight[];
 }
 
-export function Topbar({ reviewCount = 0 }: TopbarProps) {
+export function Topbar({ reviewCount = 0, managerInsights = [] }: TopbarProps) {
   const pathname = usePathname();
   const title = getTitle(pathname);
 
@@ -41,6 +44,8 @@ export function Topbar({ reviewCount = 0 }: TopbarProps) {
       <h1 className="text-base font-semibold text-foreground">{title}</h1>
 
       <div className="flex items-center gap-2">
+        <ManagerSidebar insights={managerInsights} />
+
         <Button
           variant="ghost"
           size="sm"
