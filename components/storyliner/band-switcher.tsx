@@ -34,6 +34,7 @@ interface BandSwitcherProps {
 
 export function BandSwitcher({ bands, activeBandId }: BandSwitcherProps) {
   const [open, setOpen] = React.useState(false);
+  const [isPending, setIsPending] = React.useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -41,6 +42,7 @@ export function BandSwitcher({ bands, activeBandId }: BandSwitcherProps) {
 
   const onBandSelect = (band: Band) => {
     setOpen(false);
+    setIsPending(true);
     
     // Update the URL with the new bandId
     const params = new URLSearchParams(searchParams.toString());
@@ -50,7 +52,12 @@ export function BandSwitcher({ bands, activeBandId }: BandSwitcherProps) {
     document.cookie = `activeBandId=${band.id}; path=/; max-age=31536000`;
     
     router.push(`?${params.toString()}`);
-    router.refresh();
+    
+    // Reset loading state after a brief delay to allow router to transition
+    setTimeout(() => {
+      setIsPending(false);
+      router.refresh();
+    }, 500);
   };
 
   return (
@@ -62,17 +69,25 @@ export function BandSwitcher({ bands, activeBandId }: BandSwitcherProps) {
           role="combobox"
           aria-expanded={open}
           aria-label="Select a band"
-          className={cn("w-full justify-between gap-2 px-2 hover:bg-sidebar-accent", !selectedBand && "text-muted-foreground")}
+          disabled={isPending}
+          className={cn(
+            "w-full justify-between gap-2 px-2 hover:bg-sidebar-accent transition-all", 
+            !selectedBand && "text-muted-foreground",
+            isPending && "opacity-50 grayscale cursor-wait"
+          )}
         >
           <div className="flex items-center gap-2 overflow-hidden">
             <div 
-              className="h-5 w-5 rounded-md shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
+              className={cn(
+                "h-5 w-5 rounded-md shrink-0 flex items-center justify-center text-[10px] font-bold text-white",
+                isPending && "animate-pulse"
+              )}
               style={{ backgroundColor: selectedBand?.coverColor || "#333" }}
             >
-              {selectedBand?.name.charAt(0)}
+              {isPending ? "..." : selectedBand?.name.charAt(0)}
             </div>
             <span className="truncate font-medium text-xs">
-              {selectedBand?.name || "Select Band"}
+              {isPending ? "Switching..." : (selectedBand?.name || "Select Band")}
             </span>
           </div>
           <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />

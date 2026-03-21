@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const activeBandIdCookie = cookieStore.get("activeBandId")?.value;
+  const sidebarCollapsed = cookieStore.get("sidebarCollapsed")?.value === "true";
 
   const [reviewCount, bands] = await Promise.all([
     prisma.draft.count({ where: { status: "IN_REVIEW" } }),
@@ -32,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar bands={bands} activeBandId={activeBandId} />
+      <Sidebar bands={bands} activeBandId={activeBandId} isCollapsed={sidebarCollapsed} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar reviewCount={reviewCount} managerInsights={managerInsights as any} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>

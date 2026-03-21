@@ -47,13 +47,22 @@ const navItems = [
 
 export function Sidebar({ 
   bands = [], 
-  activeBandId 
+  activeBandId,
+  isCollapsed = false
 }: { 
   bands?: any[]; 
   activeBandId?: string; 
+  isCollapsed?: boolean;
 }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(isCollapsed);
+
+  const toggleSidebar = () => {
+    const newState = !collapsed;
+    setCollapsed(newState);
+    // Persist the collapsed state in a cookie
+    document.cookie = `sidebarCollapsed=${newState}; path=/; max-age=31536000`;
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -143,7 +152,7 @@ export function Sidebar({
         {/* Collapse toggle */}
         <div className="border-t border-sidebar-border p-2">
           <button
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={toggleSidebar}
             className={cn(
               "flex w-full items-center rounded-md px-2 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
               collapsed ? "justify-center" : "gap-3"

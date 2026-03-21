@@ -53,10 +53,16 @@ export class InsightEngine {
     // 4. Check for posting frequency
     await this.checkPostingFrequency(band);
 
-    // 5. Advanced LLM Strategy
+    // 5. Check for platform specific gaps
+    await this.checkPlatformGaps(band);
+
+    // 6. Check for livestream readiness
+    await this.checkLivestreamReadiness(band);
+
+    // 7. Advanced LLM Strategy
     await this.generateAdvancedAdvice(band);
     
-    // 6. Proactive Draft Proposal
+    // 8. Proactive Draft Proposal
     await this.proposeUrgentDrafts(band);
   }
 
@@ -165,6 +171,73 @@ export class InsightEngine {
         message: `It's been ${daysSince} days since our last post. Let's keep the momentum going - maybe a quick behind-the-scenes update?`,
         actionUrl: "/content-studio",
       });
+    }
+  }
+
+  private async checkPlatformGaps(band: any) {
+    const platforms = await prisma.platformAccount.findMany({
+      where: { bandId: band.id, isConnected: true, isActive: true },
+    });
+
+    for (const account of platforms) {
+      const lastPost = await prisma.publishedPost.findFirst({
+        where: { bandId: band.id, platform: account.platform },
+        orderBy: { publishedAt: "desc" },
+      });
+
+      if (!lastPost) {
+        await this.createInsight({
+          bandId: band.id,
+          type: "WARNING",
+          priority: 2,
+          message: `You haven't posted anything to ${account.platform} yet! Connecting the account is great, but the crowd is waiting for content.`,
+          actionUrl: "/content-studio",
+        });
+        continue;
+      }
+
+      const daysSince = Math.ceil(
+        (Date.now() - lastPost.publishedAt.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (daysSince >= 10) {
+        await this.createInsight({
+          bandId: band.id,
+          type: "ADVICE",
+          priority: 3,
+          message: `${account.platform} has been quiet for ${daysSince} days. A fresh update would keep you in their feed.`,
+          actionUrl: "/content-studio",
+        });
+      }
+    }
+  }
+
+  private async checkLivestreamReadiness(band: any) {
+    const upcomingStreams = await prisma.livestreamEvent.findMany({
+      where: {
+        bandId: band.id,
+        scheduledFor: {
+          gte: new Date(),
+          lte: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // Next 48 hours
+        },
+        isCompleted: false,
+        isCancelled: false,
+      },
+      include: {
+        runOfShowItems: true,
+      },
+    });
+
+    for (const stream of upcomingStreams) {
+      if (stream.runOfShowItems.length === 0) {
+        await this.createInsight({
+          bandId: band.id,
+          type: "TASK",
+          priority: 1,
+          message: `Your livestream "${stream.title}" is coming up soon, but the Run of Show is empty. Let's plan the segments.`,
+          actionUrl: `/livestreams/${stream.id}`,
+        });
+      }
     }
   }
 

@@ -14,6 +14,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { InsightEngine } from "@/lib/services/manager/insight-engine";
 import { RefreshInsightsButton } from "./refresh-button";
+import { ShowPulse } from "@/components/storyliner/show-pulse";
 
 export const metadata: Metadata = { title: "Manager's Desk" };
 
@@ -181,17 +182,39 @@ export default async function ManagerPage() {
   const warnings = insights.filter((i) => i.type === "WARNING");
   const celebrations = insights.filter((i) => i.type === "CELEBRATION");
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const hasUpcomingShowToday = await prisma.event.findFirst({
+    where: {
+      bandId: band.id,
+      eventDate: {
+        gte: today,
+        lt: tomorrow,
+      },
+    },
+  }) !== null;
+
+  const isStreamingNow = await prisma.livestreamEvent.findFirst({
+    where: {
+      bandId: band.id,
+      isLive: true,
+    },
+  }) !== null;
+
   return (
     <div className="max-w-6xl mx-auto space-y-10 py-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-8">
         <div>
-          <div className="flex items-center gap-2 text-primary font-bold text-[10px] uppercase tracking-[0.2em] mb-3">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-            </span>
-            Live Management Active
+          <div className="mb-4">
+            <ShowPulse 
+              bandName={band.name} 
+              hasUpcomingShowToday={hasUpcomingShowToday} 
+              isStreamingNow={isStreamingNow} 
+            />
           </div>
           <h1 className="text-5xl font-black text-foreground tracking-tighter flex items-center gap-3">
             Andrea's Desk
