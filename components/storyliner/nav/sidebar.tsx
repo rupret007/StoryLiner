@@ -20,9 +20,10 @@ import {
   Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { BandSwitcher } from "@/components/storyliner/band-switcher";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -44,7 +45,13 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ 
+  bands = [], 
+  activeBandId 
+}: { 
+  bands?: any[]; 
+  activeBandId?: string; 
+}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -70,6 +77,15 @@ export function Sidebar() {
             </span>
           )}
         </div>
+
+        {/* Band Switcher */}
+        {!collapsed && (
+          <div className="px-2 py-3 border-b border-sidebar-border">
+            <Suspense fallback={<div className="h-8 w-full bg-muted animate-pulse rounded-md" />}>
+              <BandSwitcher bands={bands} activeBandId={activeBandId} />
+            </Suspense>
+          </div>
+        )}
 
         {/* Navigation */}
         <ScrollArea className="flex-1 py-2">
