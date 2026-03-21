@@ -65,6 +65,10 @@ export class FacebookRealAdapter extends SocialProviderAdapter {
         body: JSON.stringify(body),
       });
 
+      if (!response) {
+        throw new Error("No response from Facebook API");
+      }
+
       const data = (await response.json()) as Record<string, unknown>;
 
       if (!response.ok) {
@@ -110,7 +114,7 @@ export class FacebookRealAdapter extends SocialProviderAdapter {
         method: "DELETE",
         headers: { Authorization: `Bearer ${pageAccessToken}` },
       });
-      return response.ok;
+      return response && response.ok;
     } catch {
       return false;
     }

@@ -145,9 +145,22 @@ export class YouTubeRealAdapter extends SocialProviderAdapter {
       }
 
       const snippet = items[0].snippet as Record<string, unknown>;
-      const description = payload.hashtags.length
-        ? `${payload.caption}\n\n${payload.hashtags.join(" ")}`
-        : payload.caption;
+      // Max YouTube description length is 5000 characters.
+      const MAX_DESCRIPTION_LENGTH = 5000;
+      let description = payload.caption;
+
+      if (payload.hashtags.length > 0) {
+        const hashtagBlock = `\n\n${payload.hashtags.join(" ")}`;
+        if (description.length + hashtagBlock.length > MAX_DESCRIPTION_LENGTH) {
+          // Truncate caption if needed to fit hashtags
+          description = description.substring(0, MAX_DESCRIPTION_LENGTH - hashtagBlock.length);
+        }
+        description += hashtagBlock;
+      }
+
+      // Ensure total length is within limits as a final safeguard
+      description = description.substring(0, MAX_DESCRIPTION_LENGTH);
+
 
       // Update only the description; preserve categoryId, title, etc.
       const updateResponse = await fetch(`${YT_API_BASE}/videos?part=snippet`, {

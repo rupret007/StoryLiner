@@ -1,0 +1,8 @@
+{"level":40,"time":1774040600555,"service":"storyliner-backend","event":"social.facebook.auth.missing_credentials","msg":"Facebook credentials are not configured"}
+{"level":40,"time":1774040600561,"service":"storyliner-backend","event":"social.instagram.auth.missing_credentials","msg":"Instagram credentials are not configured"}
+{"level":40,"time":1774040600564,"service":"storyliner-backend","event":"social.youtube.auth.missing_credentials","msg":"YouTube credentials are not configured"}
+{"level":40,"time":1774040664325,"service":"storyliner-backend","event":"api.logs.unauthorized","remote":"::1","msg":"Unauthorized logs endpoint access attempt"}
+{"level":30,"time":1774040664632,"service":"storyliner-backend","event":"api.logs.read","limit":5,"returnedEntries":4,"msg":"Recent logs requested"}
+{"level":40,"time":1774040664872,"service":"storyliner-backend","event":"api.health.db_unavailable","error":"\nInvalid `prisma.$queryRaw()` invocation:\n\n\nerror: Environment variable not found: DATABASE_URL.\n  -->  schema.prisma:7\n   | \n 6 |   provider = \"postgresql\"\n 7 |   url      = env(\"DATABASE_URL\")\n   | \n\nValidation Error Count: 1","msg":"Health check failed due to database connectivity"}
+{"level":30,"time":1774040674876,"service":"storyliner-backend","event":"test.redaction","apiKey":"[REDACTED]","nested":{"password":"[REDACTED]","authorization":"Bearer abc.def.ghi"},"msg":"Redaction test event"}
+{"level":30,"time":1774040675174,"service":"storyliner-backend","event":"api.logs.read","limit":20,"returnedEntries":7,"msg":"Recent logs requested"}
