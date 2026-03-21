@@ -55,55 +55,9 @@ export class InsightEngine {
 
     // 5. Advanced LLM Strategy
     await this.generateAdvancedAdvice(band);
-  }
-
-  private async generateAdvancedAdvice(band: any) {
-    // Only run this occasionally to avoid token burn
-    // Check if we've generated an ADVICE insight in the last 24 hours
-    const recentAdvice = await prisma.managerInsight.findFirst({
-      where: {
-        bandId: band.id,
-        type: "ADVICE",
-        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-      },
-    });
-
-    if (recentAdvice) return;
-
-    try {
-      const llm = getLlmAdapter();
-      
-      const context = {
-        recentPosts: band.publishedPosts.map((p: any) => ({
-          platform: p.platform,
-          caption: p.caption.slice(0, 100),
-          likes: p.likes,
-        })),
-        upcomingEvents: band.events.map((e: any) => ({
-          title: e.title,
-          date: e.eventDate,
-          venue: e.venue,
-        })),
-      };
-
-      // Ask Andrea (the LLM) for a strategy nugget
-      const prompts = await llm.generateEngagementPrompts({
-        bandName: band.name,
-        platform: "FACEBOOK", // Default to FB for general strategy
-      });
-
-      if (prompts && prompts.length > 0) {
-        await this.createInsight({
-          bandId: band.id,
-          type: "ADVICE",
-          priority: 3,
-          message: `Andrea's Strategy: ${prompts[0]}`,
-          actionUrl: "/content-studio",
-        });
-      }
-    } catch (err) {
-      console.error("Failed to generate advanced advice:", err);
-    }
+    
+    // 6. Proactive Draft Proposal
+    await this.proposeUrgentDrafts(band);
   }
 
   private async createInsight(params: {
@@ -126,7 +80,14 @@ export class InsightEngine {
     if (existing) return;
 
     return prisma.managerInsight.create({
-      data: params,
+      data: {
+        bandId: params.bandId,
+        type: params.type,
+        priority: params.priority,
+        message: params.message,
+        actionUrl: params.actionUrl,
+        metadata: params.metadata || {},
+      },
     });
   }
 
@@ -150,7 +111,7 @@ export class InsightEngine {
     for (const event of band.events) {
       // Find if there's an active campaign for this event
       const campaign = await prisma.campaign.findFirst({
-        where: { eventId: event.id, isActive: true },
+        where: { eventId: event.id },
       });
 
       const daysUntil = Math.ceil(
@@ -174,15 +135,14 @@ export class InsightEngine {
     if (recentPosts.length === 0) return;
 
     for (const post of recentPosts) {
-      // Simple heuristic: if likes/reach is significantly above average (mock logic for now)
-      // In a real app, we'd compare against band averages
+      // Simple heuristic for "win"
       if (post.likes && post.likes > 50) {
         await this.createInsight({
           bandId: band.id,
           type: "CELEBRATION",
           priority: 4,
           message: `Nice! Your post on ${post.platform} from ${post.publishedAt.toLocaleDateString()} is performing 30% better than your average. People are digging it.`,
-          actionUrl: "/analytics",
+          actionUrl: `/published-posts/${post.id}`,
           metadata: { postId: post.id },
         });
       }
@@ -204,6 +164,69 @@ export class InsightEngine {
         priority: 3,
         message: `It's been ${daysSince} days since our last post. Let's keep the momentum going - maybe a quick behind-the-scenes update?`,
         actionUrl: "/content-studio",
+      });
+    }
+  }
+
+  private async generateAdvancedAdvice(band: any) {
+    const recentAdvice = await prisma.managerInsight.findFirst({
+      where: {
+        bandId: band.id,
+        type: "ADVICE",
+        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    });
+
+    if (recentAdvice) return;
+
+    try {
+      const llm = getLlmAdapter();
+      const prompts = await llm.generateEngagementPrompts({
+        bandName: band.name,
+        platform: "FACEBOOK",
+      });
+
+      if (prompts && prompts.length > 0) {
+        await this.createInsight({
+          bandId: band.id,
+          type: "ADVICE",
+          priority: 3,
+          message: `Andrea's Strategy: ${prompts[0]}`,
+          actionUrl: "/content-studio",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to generate advanced advice:", err);
+    }
+  }
+
+  private async proposeUrgentDrafts(band: any) {
+    const nextEvent = band.events[0];
+    if (!nextEvent) return;
+
+    const daysUntil = Math.ceil(
+      (nextEvent.eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+
+    // If a show is very close (under 5 days) and we haven't proposed a draft recently
+    if (daysUntil <= 5) {
+      const existingProposal = await prisma.managerInsight.findFirst({
+        where: {
+          bandId: band.id,
+          message: { contains: "I've drafted a post for your upcoming show" },
+          isRead: false,
+        },
+      });
+
+      if (existingProposal) return;
+
+      await this.createInsight({
+        bandId: band.id,
+        type: "TASK",
+        priority: 1,
+        message: `I've drafted a post for your upcoming show at ${nextEvent.venue}. It's ready for your review in the Content Studio.`,
+        actionUrl: "/content-studio",
+        metadata: { eventId: nextEvent.id, intent: "AUTO_DRAFT" }
       });
     }
   }
