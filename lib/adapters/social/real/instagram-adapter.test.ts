@@ -1,6 +1,8 @@
-import { describe, it, expect, jest, beforeEach } from "@jest/globals";
+import { describe, it, expect, beforeEach } from "@jest/globals";
 import { InstagramRealAdapter } from "./instagram-adapter";
 import type { PublishPayload } from "../base";
+
+const mockFetch = jest.fn();
 
 describe("InstagramRealAdapter", () => {
   let adapter: InstagramRealAdapter;
@@ -8,7 +10,6 @@ describe("InstagramRealAdapter", () => {
     caption: "Test Instagram Post",
     hashtags: ["#test", "#rad"],
     mediaUrls: ["https://example.com/image.jpg"],
-    platform: "INSTAGRAM",
     accountMetadata: {
       instagramUserId: "123456789",
     },
@@ -17,7 +18,8 @@ describe("InstagramRealAdapter", () => {
   beforeEach(() => {
     adapter = new InstagramRealAdapter();
     // Reset fetch mocks
-    global.fetch = jest.fn() as any;
+    mockFetch.mockClear();
+    global.fetch = mockFetch as typeof fetch;
     
     // Mock credentials
     process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fake_token";
@@ -36,7 +38,7 @@ describe("InstagramRealAdapter", () => {
 
     it("should handle the two-step publishing process (container + publish)", async () => {
       // 1. Mock container creation response
-      (global.fetch as any)
+      mockFetch
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
@@ -60,7 +62,7 @@ describe("InstagramRealAdapter", () => {
     });
 
     it("should handle container creation errors gracefully", async () => {
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 400,
         json: async () => ({
@@ -78,7 +80,7 @@ describe("InstagramRealAdapter", () => {
 
   describe("deletePost", () => {
     it("should delete a post successfully", async () => {
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => ({ success: true }),

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -140,7 +141,7 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
       <div className="text-center py-16">
         <p className="text-muted-foreground mb-4">No bands configured yet.</p>
         <Button asChild>
-          <a href="/bands">Add a Band</a>
+          <Link href="/bands">Add a Band</Link>
         </Button>
       </div>
     );

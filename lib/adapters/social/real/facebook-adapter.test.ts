@@ -7,8 +7,7 @@ describe("FacebookRealAdapter", () => {
 
   beforeEach(() => {
     adapter = new FacebookRealAdapter();
-    // @ts-ignore
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as typeof fetch;
     mockFetch.mockClear();
     process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "mock-token";
     process.env.FACEBOOK_PAGE_ID = "mock-id";
@@ -26,7 +25,7 @@ describe("FacebookRealAdapter", () => {
         mediaUrls: [],
         hashtags: ["#band", "#music"],
         accountMetadata: { pageId: "123", pageAccessToken: "token" },
-        scheduledFor: null,
+        scheduledFor: undefined,
       };
 
       const result = await adapter.publish(payload);
@@ -77,7 +76,7 @@ describe("FacebookRealAdapter", () => {
         mediaUrls: [],
         hashtags: [],
         accountMetadata: { pageId: "123", pageAccessToken: "token" },
-        scheduledFor: null,
+        scheduledFor: undefined,
       };
 
       const result = await adapter.publish(payload);
