@@ -1,4 +1,5 @@
 import type { Platform } from "@prisma/client";
+import { extractYouTubeVideoId } from "@/lib/services/publish/youtube-url";
 
 /** Platforms that have a real write adapter. All others must stay mock/draft-only. */
 export const REAL_LIVE_PLATFORMS: ReadonlySet<Platform> = new Set([
@@ -104,26 +105,43 @@ export function sanitizeMediaUrls(urls: unknown): string[] {
 }
 
 export function hasYouTubeVideoUrl(urls: string[]): boolean {
-  return urls.some((url) => {
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== "https:") return false;
-      const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
-      if (host === "youtu.be") return parsed.pathname.length > 1;
-      if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
-        return (
-          parsed.searchParams.has("v") ||
-          parsed.pathname.startsWith("/watch") ||
-          parsed.pathname.startsWith("/shorts/") ||
-          parsed.pathname.startsWith("/embed/") ||
-          parsed.pathname.startsWith("/live/")
-        );
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  });
+  return extractYouTubeVideoId(urls) != null;
+}
+
+export { extractYouTubeVideoId };
+
+export const POSSIBLE_LIVE_WRITE_MARKER = "POSSIBLE_LIVE_WRITE:";
+
+export const POSSIBLE_LIVE_WRITE_NOTE =
+  "POSSIBLE_LIVE_WRITE: A Facebook / Instagram / YouTube write may already be live. " +
+  "Check the platform before scheduling again. This does not publish.";
+
+export function draftHasPossibleLiveWrite(
+  reviewNotes: string | null | undefined
+): boolean {
+  return typeof reviewNotes === "string" && reviewNotes.includes(POSSIBLE_LIVE_WRITE_MARKER);
+}
+
+export function withPossibleLiveWriteNote(
+  reviewNotes: string | null | undefined
+): string {
+  if (draftHasPossibleLiveWrite(reviewNotes)) {
+    return reviewNotes as string;
+  }
+  if (!reviewNotes?.trim()) return POSSIBLE_LIVE_WRITE_NOTE;
+  return `${POSSIBLE_LIVE_WRITE_NOTE}\n${reviewNotes.trim()}`;
+}
+
+export function stripPossibleLiveWriteNote(
+  reviewNotes: string | null | undefined
+): string | null {
+  if (!reviewNotes) return null;
+  const stripped = reviewNotes
+    .split("\n")
+    .filter((line) => !line.includes(POSSIBLE_LIVE_WRITE_MARKER))
+    .join("\n")
+    .trim();
+  return stripped.length > 0 ? stripped : null;
 }
 
 function metadataFlag(metadata: unknown, key: string): boolean {
@@ -263,6 +281,25 @@ export function canRescheduleJob(jobStatus: string | null | undefined): boolean 
 }
 
 /**
+ * A draft marked possible-live-write cannot be scheduled again until Jeff
+ * confirms he checked Facebook / Instagram / YouTube.
+ */
+export function assertCanScheduleAfterPossibleLiveWrite(options: {
+  possibleLiveWrite: boolean;
+  confirmCheckedNoLivePost?: boolean;
+}): LivePublishSafety {
+  if (options.possibleLiveWrite && !options.confirmCheckedNoLivePost) {
+    return {
+      ok: false,
+      reason:
+        "A previous Facebook / Instagram / YouTube write may already be live. " +
+        "Check the platform, then confirm. Scheduling still does not publish.",
+    };
+  }
+  return { ok: true };
+}
+
+/**
  * Hold parks a draft. It does not schedule or publish.
  * Allowed from IN_REVIEW (not ready yet) or APPROVED (not ready to schedule).
  */
@@ -318,13 +355,19 @@ export function assertCanMutateDraftCaption(options: {
 }
 
 /**
- * After a failed live write, Jeff can return the draft to Approved
- * and schedule again. Never allowed for published or in-flight jobs.
+ * Pull a scheduled draft back to Approved. Does not publish.
+ *
+ * PENDING (no write yet) can unschedule.
+ * FAILED can return.
+ * If the adapter write already started, Jeff must confirm he checked
+ * Facebook / Instagram / YouTube so a new schedule cannot silently double-post.
  */
-export function assertCanReturnFailedSchedule(options: {
+export function assertCanReturnScheduleToApproved(options: {
   scheduledStatus: string;
   draftStatus: string;
   jobStatus: string | null | undefined;
+  adapterWriteStarted: boolean;
+  confirmCheckedPlatform?: boolean;
 }): LivePublishSafety {
   if (options.scheduledStatus === "PUBLISHED" || options.draftStatus === "PUBLISHED") {
     return {
@@ -340,13 +383,6 @@ export function assertCanReturnFailedSchedule(options: {
     };
   }
 
-  if (options.jobStatus !== "FAILED") {
-    return {
-      ok: false,
-      reason: "Only a failed publish job can return to Approved. This does not publish.",
-    };
-  }
-
   if (options.scheduledStatus !== "SCHEDULED") {
     return {
       ok: false,
@@ -354,5 +390,48 @@ export function assertCanReturnFailedSchedule(options: {
     };
   }
 
+  if (options.jobStatus !== "PENDING" && options.jobStatus !== "FAILED") {
+    return {
+      ok: false,
+      reason: "Only a pending or failed job can return to Approved. This does not publish.",
+    };
+  }
+
+  if (options.adapterWriteStarted && !options.confirmCheckedPlatform) {
+    return {
+      ok: false,
+      reason:
+        "A live write may have already reached Facebook / Instagram / YouTube. " +
+        "Check the platform, then confirm. This does not publish.",
+    };
+  }
+
   return { ok: true };
+}
+
+/**
+ * After a failed live write, Jeff can return the draft to Approved
+ * and schedule again. Never allowed for published or in-flight jobs.
+ */
+export function assertCanReturnFailedSchedule(options: {
+  scheduledStatus: string;
+  draftStatus: string;
+  jobStatus: string | null | undefined;
+  adapterWriteStarted?: boolean;
+  confirmCheckedPlatform?: boolean;
+}): LivePublishSafety {
+  if (options.jobStatus !== "FAILED") {
+    return {
+      ok: false,
+      reason: "Only a failed publish job can return to Approved. This does not publish.",
+    };
+  }
+
+  return assertCanReturnScheduleToApproved({
+    scheduledStatus: options.scheduledStatus,
+    draftStatus: options.draftStatus,
+    jobStatus: options.jobStatus,
+    adapterWriteStarted: options.adapterWriteStarted === true,
+    confirmCheckedPlatform: options.confirmCheckedPlatform,
+  });
 }

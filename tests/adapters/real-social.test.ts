@@ -37,8 +37,8 @@ describe("FacebookRealAdapter — capability declarations", () => {
     expect(adapter.capabilities.canDraftOnly).toBe(false);
   });
 
-  it("canSchedule is true (Graph API supports scheduled posts)", () => {
-    expect(adapter.capabilities.canSchedule).toBe(true);
+  it("canSchedule is false (StoryLiner owns scheduling; native Graph schedule is refused)", () => {
+    expect(adapter.capabilities.canSchedule).toBe(false);
   });
 
   it("maxCaptionLength is 63206", () => {
@@ -49,8 +49,9 @@ describe("FacebookRealAdapter — capability declarations", () => {
     expect(adapter.getDegradationWarning("publish")).toBeNull();
   });
 
-  it("no degradation warning for schedule action", () => {
-    expect(adapter.getDegradationWarning("schedule")).toBeNull();
+  it("tells the operator that StoryLiner owns scheduling", () => {
+    const warning = adapter.getDegradationWarning("schedule");
+    expect(warning).toMatch(/job queue/i);
   });
 });
 

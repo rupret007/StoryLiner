@@ -28,7 +28,9 @@ export class FacebookRealAdapter extends SocialProviderAdapter {
 
   readonly capabilities: SocialAdapterCapabilities = {
     canDirectPublish: true,
-    canSchedule: true,    // Facebook Page API supports scheduled posts (published=false + scheduled_publish_time)
+    // StoryLiner's job queue is the only scheduler. Native Graph
+    // scheduled_publish_time is refused in publish().
+    canSchedule: false,
     canDraftOnly: false,
     canDeletePost: true,
     supportsMedia: true,

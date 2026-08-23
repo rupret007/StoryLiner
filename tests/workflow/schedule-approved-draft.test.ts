@@ -48,6 +48,14 @@ describe("scheduleDraftSchema validation", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts an optional platform-check confirm after a possible live write", () => {
+    const result = scheduleDraftSchema.safeParse({
+      ...validInput,
+      confirmCheckedNoLivePost: true,
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("future-time validation logic", () => {

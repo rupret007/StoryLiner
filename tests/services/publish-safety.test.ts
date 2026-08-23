@@ -5,7 +5,12 @@ import {
   assertCanMutateDraftCaption,
   assertCanResumeHeldDraft,
   assertCanReturnFailedSchedule,
+  assertCanReturnScheduleToApproved,
+  assertCanScheduleAfterPossibleLiveWrite,
   assertLivePublishResult,
+  draftHasPossibleLiveWrite,
+  stripPossibleLiveWriteNote,
+  withPossibleLiveWriteNote,
   assertReadyForLivePublish,
   assertSafeToLivePublish,
   canRescheduleJob,
@@ -109,6 +114,7 @@ describe("hasYouTubeVideoUrl", () => {
   it("accepts watch and short https YouTube URLs", () => {
     expect(hasYouTubeVideoUrl(["https://www.youtube.com/watch?v=abcdefghijk"])).toBe(true);
     expect(hasYouTubeVideoUrl(["https://youtu.be/abcdefghijk"])).toBe(true);
+    expect(hasYouTubeVideoUrl(["https://www.youtube.com/shorts/abcdefghijk"])).toBe(true);
   });
 
   it("rejects non-YouTube https URLs", () => {
@@ -321,6 +327,77 @@ describe("review decisions do not publish", () => {
         jobStatus: "DONE",
       }).ok
     ).toBe(false);
+  });
+
+  it("allows unscheduling a pending job that has not reached the adapter", () => {
+    expect(
+      assertCanReturnScheduleToApproved({
+        scheduledStatus: "SCHEDULED",
+        draftStatus: "SCHEDULED",
+        jobStatus: "PENDING",
+        adapterWriteStarted: false,
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it("refuses to return a write-started failure without a platform check", () => {
+    const blocked = assertCanReturnScheduleToApproved({
+      scheduledStatus: "SCHEDULED",
+      draftStatus: "SCHEDULED",
+      jobStatus: "FAILED",
+      adapterWriteStarted: true,
+      confirmCheckedPlatform: false,
+    });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) {
+      expect(blocked.reason).toMatch(/Check the platform/i);
+    }
+
+    expect(
+      assertCanReturnScheduleToApproved({
+        scheduledStatus: "SCHEDULED",
+        draftStatus: "SCHEDULED",
+        jobStatus: "FAILED",
+        adapterWriteStarted: true,
+        confirmCheckedPlatform: true,
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it("refuses RUNNING jobs so a live write cannot be yanked mid-flight", () => {
+    expect(
+      assertCanReturnScheduleToApproved({
+        scheduledStatus: "SCHEDULED",
+        draftStatus: "SCHEDULED",
+        jobStatus: "RUNNING",
+        adapterWriteStarted: true,
+        confirmCheckedPlatform: true,
+      }).ok
+    ).toBe(false);
+  });
+});
+
+describe("possible live write notes", () => {
+  it("requires confirm before scheduling again", () => {
+    const blocked = assertCanScheduleAfterPossibleLiveWrite({
+      possibleLiveWrite: true,
+      confirmCheckedNoLivePost: false,
+    });
+    expect(blocked.ok).toBe(false);
+
+    expect(
+      assertCanScheduleAfterPossibleLiveWrite({
+        possibleLiveWrite: true,
+        confirmCheckedNoLivePost: true,
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it("round-trips the sentinel on review notes", () => {
+    const noted = withPossibleLiveWriteNote("Held from review queue.");
+    expect(draftHasPossibleLiveWrite(noted)).toBe(true);
+    expect(stripPossibleLiveWriteNote(noted)).toBe("Held from review queue.");
+    expect(draftHasPossibleLiveWrite(stripPossibleLiveWriteNote(noted))).toBe(false);
   });
 });
 

@@ -63,6 +63,7 @@ export const scheduleDraftSchema = z.object({
   draftId: z.string().cuid(),
   platformAccountId: z.string().cuid(),
   scheduledFor: z.string().datetime(),
+  confirmCheckedNoLivePost: z.boolean().optional(),
 });
 
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;

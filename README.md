@@ -123,7 +123,7 @@ App runs at [http://localhost:3000](http://localhost:3000)
 | `/campaign-builder` | View and manage campaign groupings |
 | `/calendar` | Upcoming posts, events, and streams in one view |
 | `/review-queue` | Approve / Hold / Deny / edit / rewrite / schedule / archive drafts |
-| `/scheduled-posts` | Posts queued for publishing with reschedule support |
+| `/scheduled-posts` | Queued worker jobs. Unschedule pending posts or return failed writes — neither publishes. |
 | `/published-posts` | Published post history with engagement metrics |
 | `/livestreams` | Livestream events, run-of-show, AI banter prompts, gear checklist |
 | `/analytics` | Heuristic-based pattern insights and timing recommendations |
@@ -155,7 +155,7 @@ All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, an
 | Approve | Marks draft as APPROVED, ready to schedule. Does **not** publish. |
 | Hold | Parks the draft (`HELD`). Does **not** schedule or publish. |
 | Deny | Requires confirmation; marks as REJECTED. Does **not** publish. |
-| Schedule | Opens account + datetime picker (approved drafts only) |
+| Schedule | Opens account + datetime picker (approved drafts only). After a write that may already be live, requires a platform check. |
 | Edit | Direct caption edit inline, creates new version |
 | Rewrite | Apply a tone directive, recomputes risk signals, creates new version |
 | Duplicate | Creates a copy back in review for variant testing (copies `mediaUrls`) |
@@ -289,8 +289,10 @@ Jest is required in CI. Suites include:
 | `tests/adapters/real-social.test.ts` | Real adapter contract shape, isDraftOnly semantics, credential validation |
 | `tests/workflow/schedule-approved-draft.test.ts` | Scheduling schema validation, future-time gates |
 | `tests/jobs/publish-post.test.ts` | Draft-only adapter publish result semantics |
-| `tests/jobs/handle-publish-post.test.ts` | Worker fail-closed: Twitter/TikTok/Bluesky, draft-only, no PublishedPost |
-| `tests/jobs/worker-policy.test.ts` | Unimplemented jobs fail and never mark DONE |
+| `tests/jobs/handle-publish-post.test.ts` | Worker fail-closed: Twitter/TikTok/Bluesky, draft-only, no PublishedPost, keep write claim |
+| `tests/jobs/publish-attempt.test.ts` | Write claim never clears after the adapter is invoked |
+| `tests/jobs/worker-policy.test.ts` | Unimplemented jobs and stale RUNNING fail closed |
+| `tests/services/youtube-url.test.ts` | YouTube watch/shorts/embed/live ids — no bare ids |
 | `tests/workflow/review-decisions.test.ts` | Approve / Hold / Deny status gates |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
 | `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |

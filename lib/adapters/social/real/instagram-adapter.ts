@@ -115,12 +115,28 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
         };
       }
 
-      const creationId = containerData.id as string;
+      const creationId =
+        typeof containerData.id === "string" ? containerData.id.trim() : "";
+      if (!creationId) {
+        return {
+          success: false,
+          isDraftOnly: false,
+          errorMessage:
+            "Instagram media container was created without an id. Nothing was published.",
+          responseCode: containerResponse.status,
+          durationMs: Date.now() - start,
+        };
+      }
 
-      // For video containers, we need to wait for processing. For MVP, we poll once.
-      // In production, use a webhook or retry loop.
+      // Video containers must be FINISHED before media_publish. Do not fire
+      // publish against IN_PROGRESS / ERROR / EXPIRED — that is not a live post.
       if (isVideo) {
-        await this.waitForVideoProcessing(businessAccountId, creationId, userAccessToken);
+        const notReady = await this.refuseUnreadyVideoContainer(
+          creationId,
+          userAccessToken,
+          start
+        );
+        if (notReady) return notReady;
       }
 
       // Step 2: Publish the container
@@ -183,28 +199,56 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
   }
 
   /**
-   * Poll the media container status once to check if video processing is complete.
-   * Returns when FINISHED or after a single check (not a full retry loop for MVP).
+   * Fail closed unless the container is FINISHED or already PUBLISHED.
+   * IN_PROGRESS / ERROR / EXPIRED / missing status never call media_publish.
    */
-  private async waitForVideoProcessing(
-    igUserId: string,
+  private async refuseUnreadyVideoContainer(
+    creationId: string,
+    accessToken: string,
+    start: number
+  ): Promise<PublishResult | null> {
+    const status = await this.readContainerStatus(creationId, accessToken);
+    if (status === "FINISHED" || status === "PUBLISHED") return null;
+
+    if (status === "IN_PROGRESS") {
+      const waitMs = process.env.JEST_WORKER_ID ? 0 : 5000;
+      await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+      const afterWait = await this.readContainerStatus(creationId, accessToken);
+      if (afterWait === "FINISHED" || afterWait === "PUBLISHED") return null;
+      return {
+        success: false,
+        isDraftOnly: false,
+        errorMessage:
+          "Instagram video container is still processing. Nothing was published. " +
+          "Wait for Instagram to finish, then schedule again after you confirm nothing went live.",
+        durationMs: Date.now() - start,
+      };
+    }
+
+    return {
+      success: false,
+      isDraftOnly: false,
+      errorMessage:
+        status === "ERROR" || status === "EXPIRED"
+          ? `Instagram video container ${status.toLowerCase()}. Nothing was published.`
+          : "Instagram video container is not ready. Nothing was published.",
+      durationMs: Date.now() - start,
+    };
+  }
+
+  private async readContainerStatus(
     creationId: string,
     accessToken: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     try {
       const response = await fetch(
         `${GRAPH_API_BASE}/${creationId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`
       );
-      if (!response.ok) return;
+      if (!response.ok) return null;
       const data = (await response.json()) as Record<string, unknown>;
-      // status_code: EXPIRED | ERROR | FINISHED | IN_PROGRESS | PUBLISHED
-      if (data.status_code === "IN_PROGRESS") {
-        // In production: implement a poll loop with exponential backoff.
-        // For MVP, wait a fixed period and continue (risk of failure for large videos).
-        await new Promise<void>((resolve) => setTimeout(resolve, 5000));
-      }
+      return typeof data.status_code === "string" ? data.status_code : null;
     } catch {
-      // Non-fatal — proceed to publish attempt
+      return null;
     }
   }
 

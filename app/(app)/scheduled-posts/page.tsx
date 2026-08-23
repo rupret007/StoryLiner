@@ -6,7 +6,8 @@ import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { EmptyState } from "@/components/storyliner/empty-state";
 import { Clock } from "lucide-react";
 import { formatRelative } from "@/lib/utils";
-import { RescheduleButton, ReturnFailedScheduleButton } from "./client";
+import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
+import { RescheduleButton, ReturnScheduleButton } from "./client";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Scheduled Posts" };
@@ -38,7 +39,8 @@ export default async function ScheduledPostsPage() {
           {posts.length} post{posts.length !== 1 ? "s" : ""} queued
         </p>
         <p className="text-xs text-muted-foreground">
-          Worker jobs only. A failed write stays visible here — it is never marked published.
+          Worker jobs only. Unschedule a pending job, or return a failed write —
+          neither publishes. A write that already started needs a platform check first.
         </p>
       </div>
 
@@ -51,7 +53,12 @@ export default async function ScheduledPostsPage() {
       ) : (
         <div className="space-y-3">
           {posts.map((post) => {
-            const jobFailed = post.job?.status === "FAILED";
+            const jobStatus = post.job?.status ?? null;
+            const jobFailed = jobStatus === "FAILED";
+            const jobRunning = jobStatus === "RUNNING";
+            const writeStarted = post.job
+              ? jobMayHaveStartedAdapterWrite(post.job.payload)
+              : false;
             return (
               <Card key={post.id}>
                 <CardContent className="p-4 flex items-start gap-4">
@@ -70,6 +77,8 @@ export default async function ScheduledPostsPage() {
                       <BandChip name={post.band.name} color={post.band.coverColor} />
                       {jobFailed ? (
                         <Badge variant="destructive" className="text-xs">Publish failed</Badge>
+                      ) : jobRunning ? (
+                        <Badge variant="warning" className="text-xs">Publishing</Badge>
                       ) : (
                         <Badge variant="info" className="text-xs">Scheduled</Badge>
                       )}
@@ -85,15 +94,31 @@ export default async function ScheduledPostsPage() {
                         {post.job.errorMessage}
                       </p>
                     )}
+                    {jobRunning && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Worker is writing now. Cannot unschedule or reschedule.
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0 flex flex-col gap-2">
-                    {jobFailed ? (
-                      <ReturnFailedScheduleButton scheduledPostId={post.id} />
-                    ) : (
-                      <RescheduleButton
+                    {jobRunning ? null : jobFailed ? (
+                      <ReturnScheduleButton
                         scheduledPostId={post.id}
-                        currentScheduledFor={post.scheduledFor}
+                        jobStatus={jobStatus}
+                        adapterWriteStarted={writeStarted}
                       />
+                    ) : (
+                      <>
+                        <RescheduleButton
+                          scheduledPostId={post.id}
+                          currentScheduledFor={post.scheduledFor}
+                        />
+                        <ReturnScheduleButton
+                          scheduledPostId={post.id}
+                          jobStatus={jobStatus ?? "PENDING"}
+                          adapterWriteStarted={writeStarted}
+                        />
+                      </>
                     )}
                   </div>
                 </CardContent>

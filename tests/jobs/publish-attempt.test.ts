@@ -1,5 +1,7 @@
 import {
   adapterRetryRefusedReason,
+  isAdapterRetryRefusedError,
+  jobMayHaveStartedAdapterWrite,
   parsePublishJobPayload,
   PENDING_SCHEDULED_POST_ID,
   shouldClearAdapterWriteStarted,
@@ -26,22 +28,24 @@ describe("parsePublishJobPayload", () => {
 });
 
 describe("adapter write claim", () => {
-  it("keeps the claim after a live-looking success so retries cannot double-post", () => {
-    expect(
-      shouldClearAdapterWriteStarted({ success: true, isDraftOnly: false })
-    ).toBe(false);
+  it("never clears the write claim — success, API errors, and draft-only all stay claimed", () => {
+    expect(shouldClearAdapterWriteStarted()).toBe(false);
   });
 
-  it("clears the claim after a failed live write so a transient API error can retry", () => {
+  it("treats an unreadable payload as a write that may already have started", () => {
+    expect(jobMayHaveStartedAdapterWrite({ scheduledPostId: "sched_1" })).toBe(false);
     expect(
-      shouldClearAdapterWriteStarted({ success: false, isDraftOnly: false })
+      jobMayHaveStartedAdapterWrite({
+        scheduledPostId: "sched_1",
+        adapterWriteStarted: true,
+      })
     ).toBe(true);
+    expect(jobMayHaveStartedAdapterWrite(null)).toBe(true);
   });
 
-  it("keeps the claim on draft-only so the worker does not keep hitting the adapter", () => {
-    expect(
-      shouldClearAdapterWriteStarted({ success: false, isDraftOnly: true })
-    ).toBe(false);
+  it("recognizes the no-retry double-post refusal", () => {
+    expect(isAdapterRetryRefusedError(adapterRetryRefusedReason())).toBe(true);
+    expect(isAdapterRetryRefusedError("Graph API rejected the write")).toBe(false);
   });
 
   it("persists the claim flag on the job payload", () => {

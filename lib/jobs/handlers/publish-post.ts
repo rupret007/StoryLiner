@@ -9,7 +9,6 @@ import {
 import {
   adapterRetryRefusedReason,
   parsePublishJobPayload,
-  shouldClearAdapterWriteStarted,
   withAdapterWriteStarted,
 } from "@/lib/jobs/publish-attempt";
 import type { Job } from "@prisma/client";
@@ -118,12 +117,8 @@ export async function handlePublishPost(job: Job): Promise<PublishHandlerOutcome
     externalPostId: result.externalPostId,
   });
 
-  if (!liveResult.ok && shouldClearAdapterWriteStarted(result)) {
-    await prisma.job.update({
-      where: { id: job.id },
-      data: { payload: withAdapterWriteStarted(job.payload, false) },
-    });
-  }
+  // Keep adapterWriteStarted even when success=false. A Graph 200 without an
+  // id, a timeout, or a lost response can still mean a live write landed.
 
   const publishLog = await prisma.publishLog.create({
     data: {

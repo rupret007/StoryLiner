@@ -17,3 +17,22 @@ export function isUnimplementedJobType(type: string): boolean {
 export function unimplementedJobError(type: string): string {
   return `Handler not implemented for ${type}`;
 }
+
+/** RUNNING longer than this is treated as dead — never reset to PENDING. */
+export const STALE_RUNNING_MS = 10 * 60 * 1000;
+
+export function isStaleRunningJob(
+  startedAt: Date | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!startedAt) return false;
+  return now.getTime() - startedAt.getTime() >= STALE_RUNNING_MS;
+}
+
+export function staleRunningJobError(): string {
+  return (
+    "Stale RUNNING publish job failed closed. StoryLiner will not reset it to PENDING " +
+    "(that can double-post). Check Facebook / Instagram / YouTube, then Return to Approved " +
+    "if nothing went live."
+  );
+}

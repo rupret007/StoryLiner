@@ -43,12 +43,31 @@ export function adapterRetryRefusedReason(): string {
   );
 }
 
-/** Transient adapter failures (success=false, not draft-only) may retry. */
-export function shouldClearAdapterWriteStarted(result: {
-  success: boolean;
-  isDraftOnly?: boolean;
-}): boolean {
-  return result.success === false && result.isDraftOnly !== true;
+/**
+ * After the adapter is invoked, never clear the write claim.
+ *
+ * Graph 200-without-id, timeouts, and other success=false results can still
+ * mean Facebook / Instagram / YouTube accepted a write. Clearing the claim
+ * (the #5 retry path) lets the worker post twice.
+ */
+export function shouldClearAdapterWriteStarted(): boolean {
+  return false;
+}
+
+export function isAdapterRetryRefusedError(message: string): boolean {
+  return message.includes("will not double-publish");
+}
+
+/**
+ * Fail closed when the payload cannot be parsed — treat it as a write that
+ * may already have reached Facebook / Instagram / YouTube.
+ */
+export function jobMayHaveStartedAdapterWrite(payload: unknown): boolean {
+  try {
+    return parsePublishJobPayload(payload).adapterWriteStarted;
+  } catch {
+    return true;
+  }
 }
 
 export function withAdapterWriteStarted(

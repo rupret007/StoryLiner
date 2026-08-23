@@ -73,6 +73,48 @@ describe("InstagramRealAdapter", () => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
+    it("fails closed when the container has no id", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      });
+
+      const result = await adapter.publish(mockPayload);
+
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toMatch(/without an id/i);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("fails closed when a video container is still processing", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "container_video" }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ status_code: "IN_PROGRESS" }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ status_code: "IN_PROGRESS" }),
+        });
+
+      const result = await adapter.publish({
+        ...mockPayload,
+        mediaUrls: ["https://example.com/clip.mp4"],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toMatch(/still processing/i);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
     it("fails closed when publish returns no post id", async () => {
       mockFetch
         .mockResolvedValueOnce({
