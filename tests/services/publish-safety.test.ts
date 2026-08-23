@@ -1,6 +1,7 @@
 import {
   assertCanApproveDraft,
   assertCanDenyDraft,
+  assertCanDuplicateDraft,
   assertCanHoldDraft,
   assertCanMutateDraftCaption,
   assertCanResumeHeldDraft,
@@ -21,6 +22,8 @@ import {
   POSSIBLE_LIVE_WRITE_NOTE,
   returnScheduleButtonLabel,
   returnScheduleSuccessToast,
+  reviewNotesForDuplicateDraft,
+  duplicateDraftSuccessToast,
   sanitizeMediaUrls,
 } from "@/lib/services/publish/safety";
 
@@ -310,6 +313,16 @@ describe("review decisions do not publish", () => {
     expect(assertCanMutateDraftCaption({ status: "PUBLISHED" }).ok).toBe(false);
   });
 
+  it("refuses Copy of SCHEDULED or PUBLISHED drafts", () => {
+    expect(assertCanDuplicateDraft({ status: "IN_REVIEW" })).toEqual({ ok: true });
+    expect(assertCanDuplicateDraft({ status: "HELD" })).toEqual({ ok: true });
+    expect(assertCanDuplicateDraft({ status: "APPROVED" })).toEqual({ ok: true });
+    expect(assertCanDuplicateDraft({ status: "REJECTED" })).toEqual({ ok: true });
+    expect(assertCanDuplicateDraft({ status: "ARCHIVED" })).toEqual({ ok: true });
+    expect(assertCanDuplicateDraft({ status: "SCHEDULED" }).ok).toBe(false);
+    expect(assertCanDuplicateDraft({ status: "PUBLISHED" }).ok).toBe(false);
+  });
+
   it("only returns a failed schedule to Approved", () => {
     expect(
       assertCanReturnFailedSchedule({
@@ -454,6 +467,27 @@ describe("possible live write notes", () => {
     ).toBe("Held from review queue.");
     expect(mergeReviewNotesPreservingPossibleLiveWrite(null, "")).toBeNull();
     expect(draftHasPossibleLiveWrite(POSSIBLE_LIVE_WRITE_NOTE)).toBe(true);
+  });
+
+  it("Copy keeps POSSIBLE_LIVE_WRITE so schedule still requires a platform check", () => {
+    const existing = withPossibleLiveWriteNote("Returned from a failed publish job.");
+    const copied = reviewNotesForDuplicateDraft(existing);
+    expect(typeof copied).toBe("string");
+    expect(draftHasPossibleLiveWrite(copied)).toBe(true);
+    expect(copied).toMatch(/Copy is not publish/i);
+    expect(reviewNotesForDuplicateDraft("Looks good.")).toBeUndefined();
+    expect(reviewNotesForDuplicateDraft(null)).toBeUndefined();
+  });
+
+  it("never claims Copy is a clean new draft after a possible live write", () => {
+    const writeStarted = duplicateDraftSuccessToast({ possibleLiveWrite: true });
+    expect(writeStarted).not.toMatch(/Find the copy in the In Review tab/i);
+    expect(writeStarted).toMatch(/may already be live/i);
+    expect(writeStarted).toMatch(/Copy is not publish/i);
+
+    expect(duplicateDraftSuccessToast({ possibleLiveWrite: false })).toMatch(
+      /In Review/i
+    );
   });
 });
 

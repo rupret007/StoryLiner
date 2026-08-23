@@ -400,6 +400,14 @@ export function assertCanResumeHeldDraft(options: { status: string }): LivePubli
 }
 
 const MUTABLE_CAPTION_STATUSES = new Set(["IN_REVIEW", "HELD", "APPROVED"]);
+const DUPLICABLE_STATUSES = new Set([
+  "DRAFT",
+  "IN_REVIEW",
+  "HELD",
+  "APPROVED",
+  "REJECTED",
+  "ARCHIVED",
+]);
 
 /**
  * Caption edit / rewrite must not pull SCHEDULED or PUBLISHED drafts
@@ -415,6 +423,65 @@ export function assertCanMutateDraftCaption(options: {
     };
   }
   return { ok: true };
+}
+
+/**
+ * Copy is not Unschedule and is not a second live yes.
+ * A scheduled or published draft already has a Facebook / Instagram /
+ * YouTube path. Duplicating it would create a clean IN_REVIEW row that
+ * can be approved and scheduled without the platform check.
+ */
+export function assertCanDuplicateDraft(options: {
+  status: string;
+}): LivePublishSafety {
+  if (options.status === "SCHEDULED" || options.status === "PUBLISHED") {
+    return {
+      ok: false,
+      reason:
+        "Cannot copy a scheduled or published draft. Copy is not Unschedule " +
+        "and is not a second live yes. Return to Approved first if the job " +
+        "failed. This does not publish.",
+    };
+  }
+
+  if (!DUPLICABLE_STATUSES.has(options.status)) {
+    return {
+      ok: false,
+      reason: `Draft cannot be copied from status ${options.status}.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Copy must not drop POSSIBLE_LIVE_WRITE. Hold / Approve already keep
+ * the sentinel; a new draft without it can be scheduled as if nothing
+ * reached Facebook / Instagram / YouTube.
+ */
+export function reviewNotesForDuplicateDraft(
+  existing: string | null | undefined
+): string | undefined {
+  if (!draftHasPossibleLiveWrite(existing)) {
+    return undefined;
+  }
+
+  return withPossibleLiveWriteNote(
+    "Duplicated from a draft that may already have a live Facebook / Instagram / YouTube write. " +
+      "Copy is not publish. Check the platform before scheduling."
+  );
+}
+
+export function duplicateDraftSuccessToast(options: {
+  possibleLiveWrite: boolean;
+}): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Copied to review. A Facebook / Instagram / YouTube write may already be live. " +
+      "Copy is not publish."
+    );
+  }
+  return "Duplicated. Find the copy in the In Review tab.";
 }
 
 /**

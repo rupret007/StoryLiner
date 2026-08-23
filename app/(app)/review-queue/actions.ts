@@ -6,6 +6,7 @@ import { validateDraftForPlatform } from "@/lib/services/publish/validate";
 import {
   assertCanApproveDraft,
   assertCanDenyDraft,
+  assertCanDuplicateDraft,
   assertCanHoldDraft,
   assertCanMutateDraftCaption,
   assertCanResumeHeldDraft,
@@ -15,6 +16,7 @@ import {
   canRescheduleJob,
   draftHasPossibleLiveWrite,
   mergeReviewNotesPreservingPossibleLiveWrite,
+  reviewNotesForDuplicateDraft,
   sanitizeMediaUrls,
   stripPossibleLiveWriteNote,
   withPossibleLiveWriteNote,
@@ -126,6 +128,12 @@ export async function duplicateDraft(draftId: string) {
   const original = await prisma.draft.findUniqueOrThrow({
     where: { id: draftId },
   });
+  const duplicable = assertCanDuplicateDraft({ status: original.status });
+  if (!duplicable.ok) {
+    throw new Error(duplicable.reason);
+  }
+
+  const reviewNotes = reviewNotesForDuplicateDraft(original.reviewNotes);
 
   const duplicate = await prisma.draft.create({
     data: {
@@ -147,6 +155,7 @@ export async function duplicateDraft(draftId: string) {
       riskLevel: original.riskLevel,
       riskFlags: original.riskFlags,
       currentVersion: 1,
+      reviewNotes,
     },
   });
 
