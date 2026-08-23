@@ -5,6 +5,7 @@ import {
   parsePublishJobPayload,
   PENDING_SCHEDULED_POST_ID,
   shouldClearAdapterWriteStarted,
+  shouldFailPublishRetry,
   withAdapterWriteStarted,
 } from "@/lib/jobs/publish-attempt";
 
@@ -46,6 +47,42 @@ describe("adapter write claim", () => {
   it("recognizes the no-retry double-post refusal", () => {
     expect(isAdapterRetryRefusedError(adapterRetryRefusedReason())).toBe(true);
     expect(isAdapterRetryRefusedError("Graph API rejected the write")).toBe(false);
+  });
+
+  it("fails retries immediately once the write claim is set", () => {
+    const claimed = { scheduledPostId: "sched_1", adapterWriteStarted: true };
+    const clean = { scheduledPostId: "sched_1", adapterWriteStarted: false };
+
+    expect(
+      shouldFailPublishRetry({
+        payload: claimed,
+        errorMessage: "Adapter reported success without an external post id.",
+      })
+    ).toBe(true);
+    expect(
+      shouldFailPublishRetry({
+        payload: claimed,
+        errorMessage: "Graph API rejected the write",
+      })
+    ).toBe(true);
+    expect(
+      shouldFailPublishRetry({
+        payload: clean,
+        errorMessage: adapterRetryRefusedReason(),
+      })
+    ).toBe(true);
+    expect(
+      shouldFailPublishRetry({
+        payload: clean,
+        errorMessage: "Refusing live Instagram publish: a public https image or video URL is required.",
+      })
+    ).toBe(false);
+    expect(
+      shouldFailPublishRetry({
+        payload: null,
+        errorMessage: "PUBLISH_POST job is missing a payload object.",
+      })
+    ).toBe(true);
   });
 
   it("persists the claim flag on the job payload", () => {

@@ -59,6 +59,23 @@ export function isAdapterRetryRefusedError(message: string): boolean {
 }
 
 /**
+ * After the write claim is set, another PENDING attempt cannot succeed
+ * (handlePublishPost refuses the adapter). Putting the job back on the
+ * queue makes it look Unschedule-able and can double-post if the claim
+ * is ever cleared. Fail closed immediately.
+ *
+ * Unreadable payloads fail closed — they may already have reached
+ * Facebook / Instagram / YouTube.
+ */
+export function shouldFailPublishRetry(options: {
+  payload: unknown;
+  errorMessage: string;
+}): boolean {
+  if (isAdapterRetryRefusedError(options.errorMessage)) return true;
+  return jobMayHaveStartedAdapterWrite(options.payload);
+}
+
+/**
  * Fail closed when the payload cannot be parsed — treat it as a write that
  * may already have reached Facebook / Instagram / YouTube.
  */

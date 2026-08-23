@@ -59,6 +59,7 @@ export default async function ScheduledPostsPage() {
             const writeStarted = post.job
               ? jobMayHaveStartedAdapterWrite(post.job.payload)
               : false;
+            const writeMayBeLive = writeStarted && !jobRunning;
             return (
               <Card key={post.id}>
                 <CardContent className="p-4 flex items-start gap-4">
@@ -75,10 +76,10 @@ export default async function ScheduledPostsPage() {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <PlatformIcon platform={post.draft.platform} showLabel />
                       <BandChip name={post.band.name} color={post.band.coverColor} />
-                      {jobFailed ? (
-                        <Badge variant="destructive" className="text-xs">Publish failed</Badge>
-                      ) : jobRunning ? (
+                      {jobRunning ? (
                         <Badge variant="warning" className="text-xs">Publishing</Badge>
+                      ) : jobFailed || writeMayBeLive ? (
+                        <Badge variant="destructive" className="text-xs">Publish failed</Badge>
                       ) : (
                         <Badge variant="info" className="text-xs">Scheduled</Badge>
                       )}
@@ -89,9 +90,15 @@ export default async function ScheduledPostsPage() {
                         {post.draft.hashtags.join(" ")}
                       </p>
                     )}
-                    {jobFailed && post.job?.errorMessage && (
+                    {(jobFailed || writeMayBeLive) && post.job?.errorMessage && (
                       <p className="text-xs text-rose-300 mt-2">
                         {post.job.errorMessage}
+                      </p>
+                    )}
+                    {writeMayBeLive && !jobFailed && (
+                      <p className="text-xs text-amber-200 mt-2">
+                        A Facebook / Instagram / YouTube write may already be live.
+                        Cannot Unschedule or Reschedule as if this is still pending.
                       </p>
                     )}
                     {jobRunning && (
@@ -101,7 +108,7 @@ export default async function ScheduledPostsPage() {
                     )}
                   </div>
                   <div className="shrink-0 flex flex-col gap-2">
-                    {jobRunning ? null : jobFailed ? (
+                    {jobRunning ? null : jobFailed || writeMayBeLive ? (
                       <ReturnScheduleButton
                         scheduledPostId={post.id}
                         jobStatus={jobStatus}

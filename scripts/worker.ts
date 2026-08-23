@@ -8,7 +8,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { handlePublishPost } from "../lib/jobs/handlers/publish-post";
-import { isAdapterRetryRefusedError } from "../lib/jobs/publish-attempt";
+import { shouldFailPublishRetry } from "../lib/jobs/publish-attempt";
 import {
   STALE_RUNNING_MS,
   isStaleRunningJob,
@@ -113,7 +113,16 @@ async function processDueJobs(): Promise<void> {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`[${WORKER_ID}] Job ${job.id} failed: ${errorMessage}`);
 
-      const failWithoutRetry = isAdapterRetryRefusedError(errorMessage);
+      // Re-read the payload. handlePublishPost claims the write before the
+      // adapter call; the in-memory job still has the pre-claim payload.
+      const latest = await prisma.job.findUnique({
+        where: { id: job.id },
+        select: { payload: true },
+      });
+      const failWithoutRetry = shouldFailPublishRetry({
+        payload: latest?.payload ?? job.payload,
+        errorMessage,
+      });
       const retryCount = failWithoutRetry ? job.maxRetries : job.retryCount + 1;
       const maxRetries = job.maxRetries;
       const shouldRetry = !failWithoutRetry && retryCount < maxRetries;
