@@ -15,7 +15,12 @@ import {
   assertSafeToLivePublish,
   canRescheduleJob,
   hasYouTubeVideoUrl,
+  isCleanPendingScheduleJob,
   isLiveDestinationPlatform,
+  mergeReviewNotesPreservingPossibleLiveWrite,
+  POSSIBLE_LIVE_WRITE_NOTE,
+  returnScheduleButtonLabel,
+  returnScheduleSuccessToast,
   sanitizeMediaUrls,
 } from "@/lib/services/publish/safety";
 
@@ -340,6 +345,30 @@ describe("review decisions do not publish", () => {
     ).toEqual({ ok: true });
   });
 
+  it("refuses to Unschedule a write-started PENDING job without a platform check", () => {
+    const blocked = assertCanReturnScheduleToApproved({
+      scheduledStatus: "SCHEDULED",
+      draftStatus: "SCHEDULED",
+      jobStatus: "PENDING",
+      adapterWriteStarted: true,
+      confirmCheckedPlatform: false,
+    });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) {
+      expect(blocked.reason).toMatch(/Check the platform/i);
+    }
+
+    expect(
+      assertCanReturnScheduleToApproved({
+        scheduledStatus: "SCHEDULED",
+        draftStatus: "SCHEDULED",
+        jobStatus: "PENDING",
+        adapterWriteStarted: true,
+        confirmCheckedPlatform: true,
+      })
+    ).toEqual({ ok: true });
+  });
+
   it("refuses to return a write-started failure without a platform check", () => {
     const blocked = assertCanReturnScheduleToApproved({
       scheduledStatus: "SCHEDULED",
@@ -399,6 +428,73 @@ describe("possible live write notes", () => {
     expect(stripPossibleLiveWriteNote(noted)).toBe("Held from review queue.");
     expect(draftHasPossibleLiveWrite(stripPossibleLiveWriteNote(noted))).toBe(false);
   });
+
+  it("Hold / Approve cannot erase POSSIBLE_LIVE_WRITE", () => {
+    const existing = withPossibleLiveWriteNote("Returned from a failed publish job.");
+    const held = mergeReviewNotesPreservingPossibleLiveWrite(
+      existing,
+      "Held from review queue. Approve does not publish."
+    );
+    expect(typeof held).toBe("string");
+    expect(draftHasPossibleLiveWrite(held)).toBe(true);
+    expect(held).toContain("Held from review queue");
+
+    const approved = mergeReviewNotesPreservingPossibleLiveWrite(held, "Looks good.");
+    expect(draftHasPossibleLiveWrite(approved)).toBe(true);
+    expect(approved).toContain("Looks good.");
+
+    expect(
+      mergeReviewNotesPreservingPossibleLiveWrite(existing, undefined)
+    ).toBe(existing);
+    expect(
+      mergeReviewNotesPreservingPossibleLiveWrite(null, undefined)
+    ).toBeUndefined();
+    expect(
+      mergeReviewNotesPreservingPossibleLiveWrite(null, "Held from review queue.")
+    ).toBe("Held from review queue.");
+    expect(mergeReviewNotesPreservingPossibleLiveWrite(null, "")).toBeNull();
+    expect(draftHasPossibleLiveWrite(POSSIBLE_LIVE_WRITE_NOTE)).toBe(true);
+  });
+});
+
+describe("Unschedule vs write-started copy", () => {
+  it("only calls a job Unschedule while it is a clean pending write", () => {
+    expect(
+      isCleanPendingScheduleJob({ jobStatus: "PENDING", adapterWriteStarted: false })
+    ).toBe(true);
+    expect(
+      isCleanPendingScheduleJob({ jobStatus: "PENDING", adapterWriteStarted: true })
+    ).toBe(false);
+    expect(
+      isCleanPendingScheduleJob({ jobStatus: "FAILED", adapterWriteStarted: false })
+    ).toBe(false);
+
+    expect(
+      returnScheduleButtonLabel({ jobStatus: "PENDING", adapterWriteStarted: false })
+    ).toBe("Unschedule");
+    expect(
+      returnScheduleButtonLabel({ jobStatus: "PENDING", adapterWriteStarted: true })
+    ).toBe("Return to Approved");
+    expect(
+      returnScheduleButtonLabel({ jobStatus: "FAILED", adapterWriteStarted: true })
+    ).toBe("Return to Approved");
+  });
+
+  it("never claims nothing was published after a write started", () => {
+    const writeStarted = returnScheduleSuccessToast({
+      jobStatus: "PENDING",
+      adapterWriteStarted: true,
+    });
+    expect(writeStarted).not.toMatch(/Nothing was published/i);
+    expect(writeStarted).toMatch(/may already be live/i);
+
+    expect(
+      returnScheduleSuccessToast({
+        jobStatus: "PENDING",
+        adapterWriteStarted: false,
+      })
+    ).toMatch(/Unscheduled/i);
+  });
 });
 
 describe("isLiveDestinationPlatform", () => {
@@ -423,5 +519,11 @@ describe("canRescheduleJob", () => {
     expect(canRescheduleJob("RUNNING")).toBe(false);
     expect(canRescheduleJob("DONE")).toBe(false);
     expect(canRescheduleJob("FAILED")).toBe(false);
+  });
+
+  it("refuses reschedule after the adapter write started", () => {
+    expect(canRescheduleJob("PENDING", true)).toBe(false);
+    expect(canRescheduleJob("FAILED", true)).toBe(false);
+    expect(canRescheduleJob("PENDING", false)).toBe(true);
   });
 });

@@ -144,6 +144,30 @@ export function stripPossibleLiveWriteNote(
   return stripped.length > 0 ? stripped : null;
 }
 
+/**
+ * Hold / Approve must not erase POSSIBLE_LIVE_WRITE. That sentinel is
+ * the schedule gate after a write may already be live.
+ *
+ * `undefined` next means "leave the existing notes" (Prisma skip).
+ * The marker is still returned when it was already present so a later
+ * explicit write cannot drop it by accident.
+ */
+export function mergeReviewNotesPreservingPossibleLiveWrite(
+  existing: string | null | undefined,
+  next: string | null | undefined
+): string | null | undefined {
+  if (next === undefined) {
+    return draftHasPossibleLiveWrite(existing) ? (existing as string) : undefined;
+  }
+
+  if (draftHasPossibleLiveWrite(existing)) {
+    return withPossibleLiveWriteNote(next);
+  }
+
+  const trimmed = next?.trim();
+  return trimmed ? trimmed : null;
+}
+
 function metadataFlag(metadata: unknown, key: string): boolean {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return false;
@@ -276,8 +300,47 @@ export function assertCanApproveDraft(options: {
   return { ok: true };
 }
 
-export function canRescheduleJob(jobStatus: string | null | undefined): boolean {
+export function canRescheduleJob(
+  jobStatus: string | null | undefined,
+  adapterWriteStarted = false
+): boolean {
+  if (adapterWriteStarted) return false;
   return jobStatus == null || jobStatus === "PENDING";
+}
+
+/**
+ * Unschedule is only honest while the worker has not reached Facebook /
+ * Instagram / YouTube. A write-started job is a failed write, even if
+ * the worker briefly left it PENDING for retry.
+ */
+export function isCleanPendingScheduleJob(options: {
+  jobStatus: string | null | undefined;
+  adapterWriteStarted: boolean;
+}): boolean {
+  return options.jobStatus === "PENDING" && !options.adapterWriteStarted;
+}
+
+export function returnScheduleButtonLabel(options: {
+  jobStatus: string | null | undefined;
+  adapterWriteStarted: boolean;
+}): "Unschedule" | "Return to Approved" {
+  return isCleanPendingScheduleJob(options) ? "Unschedule" : "Return to Approved";
+}
+
+export function returnScheduleSuccessToast(options: {
+  jobStatus: string | null | undefined;
+  adapterWriteStarted: boolean;
+}): string {
+  if (options.adapterWriteStarted) {
+    return (
+      "Returned to Approved. A Facebook / Instagram / YouTube write may already be live. " +
+      "This did not publish."
+    );
+  }
+  if (options.jobStatus === "PENDING") {
+    return "Unscheduled. Nothing was published.";
+  }
+  return "Returned to Approved. Nothing was published. Schedule again after the fix.";
 }
 
 /**

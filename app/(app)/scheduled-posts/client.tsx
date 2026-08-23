@@ -16,6 +16,10 @@ import {
 import { CalendarClock, Loader2 } from "lucide-react";
 import { formatDatetimeLocalValue } from "@/lib/utils";
 import {
+  returnScheduleButtonLabel,
+  returnScheduleSuccessToast,
+} from "@/lib/services/publish/safety";
+import {
   reschedulePost,
   returnScheduleToApproved,
 } from "@/app/(app)/review-queue/actions";
@@ -103,17 +107,20 @@ export function ReturnScheduleButton({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [checkedPlatform, setCheckedPlatform] = useState(false);
 
-  const isPendingJob = jobStatus === "PENDING";
-  const label = isPendingJob ? "Unschedule" : "Return to Approved";
+  const label = returnScheduleButtonLabel({
+    jobStatus,
+    adapterWriteStarted,
+  });
 
   function submit(confirmCheckedPlatform: boolean) {
     startTransition(async () => {
       try {
         await returnScheduleToApproved(scheduledPostId, confirmCheckedPlatform);
         toast.success(
-          isPendingJob
-            ? "Unscheduled. Nothing was published."
-            : "Returned to Approved. Nothing was published. Schedule again after the fix."
+          returnScheduleSuccessToast({
+            jobStatus,
+            adapterWriteStarted,
+          })
         );
         setConfirmOpen(false);
         router.refresh();
@@ -174,7 +181,7 @@ export function ReturnScheduleButton({
   );
 }
 
-/** @deprecated Use ReturnScheduleButton. */
+/** @deprecated Use ReturnScheduleButton. Fail-closed: require a platform check. */
 export function ReturnFailedScheduleButton({
   scheduledPostId,
 }: {
@@ -184,7 +191,7 @@ export function ReturnFailedScheduleButton({
     <ReturnScheduleButton
       scheduledPostId={scheduledPostId}
       jobStatus="FAILED"
-      adapterWriteStarted={false}
+      adapterWriteStarted={true}
     />
   );
 }

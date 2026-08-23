@@ -14,6 +14,7 @@ import {
   assertReadyForLivePublish,
   canRescheduleJob,
   draftHasPossibleLiveWrite,
+  mergeReviewNotesPreservingPossibleLiveWrite,
   sanitizeMediaUrls,
   stripPossibleLiveWriteNote,
   withPossibleLiveWriteNote,
@@ -44,7 +45,7 @@ export async function approveDraft(
     data: {
       status: "APPROVED",
       reviewedAt: new Date(),
-      reviewNotes: notes,
+      reviewNotes: mergeReviewNotesPreservingPossibleLiveWrite(draft.reviewNotes, notes),
     },
   });
   revalidatePath("/review-queue");
@@ -85,7 +86,10 @@ export async function holdDraft(draftId: string, notes?: string) {
     where: { id: draftId },
     data: {
       status: "HELD",
-      reviewNotes: notes ?? "Held from review queue. Approve does not publish.",
+      reviewNotes: mergeReviewNotesPreservingPossibleLiveWrite(
+        draft.reviewNotes,
+        notes ?? "Held from review queue. Approve does not publish."
+      ),
     },
   });
   revalidatePath("/review-queue");
@@ -307,10 +311,16 @@ export async function reschedulePost(
     throw new Error("Only SCHEDULED posts can be rescheduled.");
   }
 
-  if (!canRescheduleJob(existing.job?.status)) {
+  const writeStarted = existing.job
+    ? jobMayHaveStartedAdapterWrite(existing.job.payload)
+    : false;
+  if (!canRescheduleJob(existing.job?.status, writeStarted)) {
     throw new Error(
-      "Cannot reschedule a post that is already publishing or completed. " +
-        "Resetting a RUNNING job to PENDING can double-publish."
+      writeStarted
+        ? "Cannot reschedule after a Facebook / Instagram / YouTube write started. " +
+          "Check the platform, then Return to Approved. This does not publish."
+        : "Cannot reschedule a post that is already publishing or completed. " +
+          "Resetting a RUNNING job to PENDING can double-publish."
     );
   }
 
@@ -409,11 +419,12 @@ export async function returnScheduleToApproved(
 
     await tx.scheduledPost.delete({ where: { id: scheduledPostId } });
 
-    const reviewNotes = adapterWriteStarted
-      ? withPossibleLiveWriteNote(existing.draft.reviewNotes)
-      : existing.job?.status === "PENDING"
-        ? "Unscheduled. Approve is not publish."
-        : "Returned from a failed publish job. Approve is not publish. Schedule again after the fix.";
+    const reviewNotes =
+      adapterWriteStarted || draftHasPossibleLiveWrite(existing.draft.reviewNotes)
+        ? withPossibleLiveWriteNote(existing.draft.reviewNotes)
+        : existing.job?.status === "PENDING"
+          ? "Unscheduled. Approve is not publish."
+          : "Returned from a failed publish job. Approve is not publish. Schedule again after the fix.";
 
     await tx.draft.update({
       where: { id: existing.draftId },
