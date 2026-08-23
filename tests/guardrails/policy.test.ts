@@ -2,6 +2,8 @@ import {
   checkHardGuardrails,
   checkBandVoiceSeparation,
   checkAutoPublishGuard,
+  checkEmojiOveruse,
+  evaluateGuardrails,
 } from "@/lib/services/guardrails/policy";
 
 describe("checkHardGuardrails", () => {
@@ -100,6 +102,53 @@ describe("checkBandVoiceSeparation", () => {
       "Stalemate",
       ["Rad Dad"]
     );
+    expect(violations).toHaveLength(0);
+  });
+
+  it("flags another band name case-insensitively", () => {
+    const violations = checkBandVoiceSeparation(
+      "come see rad dad tonight",
+      "Stalemate",
+      ["Rad Dad"]
+    );
+    expect(violations.some((v) => v.rule === "band-voice-separation")).toBe(true);
+  });
+});
+
+describe("checkEmojiOveruse", () => {
+  it("flags when emoji count exceeds tolerance", () => {
+    const violations = checkEmojiOveruse("Show tonight 😀😀😀", 2);
+    expect(violations.some((v) => v.rule === "emoji-overuse")).toBe(true);
+  });
+
+  it("allows emojis within tolerance", () => {
+    const violations = checkEmojiOveruse("Show tonight 😀", 2);
+    expect(violations).toHaveLength(0);
+  });
+});
+
+describe("evaluateGuardrails", () => {
+  it("combines voice, auto-publish, and hard rules without allowing auto-publish", () => {
+    const violations = evaluateGuardrails({
+      caption: "Excited to announce Rad Dad is opening. 😀😀😀",
+      bandName: "Stalemate",
+      otherBandNames: ["Rad Dad"],
+      emojiTolerance: 1,
+      isAutoPublish: true,
+    });
+    expect(violations.some((v) => v.rule === "no-linkedin-tone")).toBe(true);
+    expect(violations.some((v) => v.rule === "band-voice-separation")).toBe(true);
+    expect(violations.some((v) => v.rule === "emoji-overuse")).toBe(true);
+    expect(violations.some((v) => v.rule === "no-auto-publish")).toBe(true);
+  });
+
+  it("does not flag auto-publish when explicitly false", () => {
+    const violations = evaluateGuardrails({
+      caption: "Playing Burlington Bar on Saturday.",
+      bandName: "Stalemate",
+      otherBandNames: ["Rad Dad"],
+      isAutoPublish: false,
+    });
     expect(violations).toHaveLength(0);
   });
 });

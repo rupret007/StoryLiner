@@ -269,7 +269,7 @@ Key constraints:
 npm test
 ```
 
-112 tests across 8 suites:
+140 tests across 12 suites (Jest is required in CI):
 
 | Suite | Coverage |
 |---|---|

@@ -1,12 +1,23 @@
 import type { Platform } from "@prisma/client";
-import { allMockAdapters } from "./mock-adapter";
+import { allMockAdapters, createDraftOnlyFallbackAdapter } from "./mock-adapter";
 import type { SocialProviderAdapter } from "./base";
 
 /**
- * Supported real adapter platforms for this sprint.
- * Bluesky, TikTok, and Twitch remain mock-only until their adapters are implemented.
+ * Supported real adapter platforms.
+ * Bluesky, TikTok, Twitch, and Twitter/X stay draft-only fallbacks — no live write.
  */
 const REAL_ADAPTER_PLATFORMS = new Set<Platform>(["FACEBOOK", "INSTAGRAM", "YOUTUBE"]);
+
+function unsupportedRealFallback(platform: Platform): SocialProviderAdapter {
+  console.warn(
+    `[SocialAdapter] No real adapter for ${platform}. ` +
+      "Returning draft-only fallback so StoryLiner will not mark a mock write as live."
+  );
+  return createDraftOnlyFallbackAdapter(
+    platform,
+    `real-fallback-draft-only-${platform.toLowerCase()}`
+  );
+}
 
 export async function getSocialAdapter(platform: Platform): Promise<SocialProviderAdapter> {
   const mode = process.env.SOCIAL_ADAPTER ?? "mock";
@@ -21,11 +32,7 @@ export async function getSocialAdapter(platform: Platform): Promise<SocialProvid
 
   if (mode === "real") {
     if (!REAL_ADAPTER_PLATFORMS.has(platform)) {
-      console.warn(
-        `[SocialAdapter] No real adapter yet for ${platform}. ` +
-          "Falling back to mock adapter. Set SOCIAL_ADAPTER=mock to suppress this warning."
-      );
-      return allMockAdapters[platform];
+      return unsupportedRealFallback(platform);
     }
 
     switch (platform) {
@@ -42,7 +49,7 @@ export async function getSocialAdapter(platform: Platform): Promise<SocialProvid
         return new YouTubeRealAdapter();
       }
       default:
-        return allMockAdapters[platform];
+        return unsupportedRealFallback(platform);
     }
   }
 

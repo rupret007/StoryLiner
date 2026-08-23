@@ -50,9 +50,8 @@ export function getFacebookCredentials(
   accountMetadata?: Record<string, unknown>
 ): FacebookCredentials {
   return {
-    pageAccessToken:
-      (accountMetadata?.pageAccessToken as string | undefined) ??
-      requireCredential("FACEBOOK_PAGE_ACCESS_TOKEN", "FacebookAdapter"),
+    // Tokens come from env only — never from PlatformAccount.metadata (plaintext DB).
+    pageAccessToken: requireCredential("FACEBOOK_PAGE_ACCESS_TOKEN", "FacebookAdapter"),
     pageId:
       (accountMetadata?.pageId as string | undefined) ??
       requireCredential("FACEBOOK_PAGE_ID", "FacebookAdapter"),

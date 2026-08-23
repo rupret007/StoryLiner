@@ -100,15 +100,35 @@ export function checkHardGuardrails(caption: string): GuardrailViolation[] {
   return violations;
 }
 
+export function checkEmojiOveruse(
+  caption: string,
+  emojiTolerance = 5
+): GuardrailViolation[] {
+  const emojiCount = (caption.match(/[\u{1F300}-\u{1FFFF}]/gu) ?? []).length;
+  if (emojiCount > emojiTolerance) {
+    return [
+      {
+        rule: "emoji-overuse",
+        detail: `Emoji overuse: ${emojiCount} emojis (tolerance: ${emojiTolerance}).`,
+      },
+    ];
+  }
+  return [];
+}
+
 export function checkBandVoiceSeparation(
   caption: string,
   targetBandName: string,
   otherBandNames: string[]
 ): GuardrailViolation[] {
   const violations: GuardrailViolation[] = [];
+  const haystack = caption.toLowerCase();
+  const target = targetBandName.toLowerCase();
 
   for (const name of otherBandNames) {
-    if (name !== targetBandName && caption.includes(name)) {
+    if (!name) continue;
+    const needle = name.toLowerCase();
+    if (needle !== target && haystack.includes(needle)) {
       violations.push({
         rule: "band-voice-separation",
         detail: `Caption references another band: "${name}". Bands must have separate voices.`,
@@ -129,4 +149,30 @@ export function checkAutoPublishGuard(isAutoPublish: boolean): GuardrailViolatio
     ];
   }
   return [];
+}
+
+export interface EvaluateGuardrailsInput {
+  caption: string;
+  bandName: string;
+  otherBandNames: string[];
+  emojiTolerance?: number;
+  /** Always false in StoryLiner. Kept as an explicit argument so auto-publish cannot be implicit. */
+  isAutoPublish?: boolean;
+}
+
+/**
+ * Combined hard-guardrail pass used after generate, rewrite, and manual caption edit.
+ * Violations flag risk; they do not publish and do not skip review.
+ */
+export function evaluateGuardrails(input: EvaluateGuardrailsInput): GuardrailViolation[] {
+  return [
+    ...checkHardGuardrails(input.caption),
+    ...checkEmojiOveruse(input.caption, input.emojiTolerance),
+    ...checkBandVoiceSeparation(input.caption, input.bandName, input.otherBandNames),
+    ...checkAutoPublishGuard(input.isAutoPublish ?? false),
+  ];
+}
+
+export function riskLevelFromFlags(flagCount: number): "LOW" | "MEDIUM" | "HIGH" {
+  return flagCount === 0 ? "LOW" : flagCount <= 2 ? "MEDIUM" : "HIGH";
 }

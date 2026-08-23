@@ -17,12 +17,12 @@ const WORKER_ID = `worker_${process.pid}`;
 async function processDueJobs(): Promise<void> {
   const now = new Date();
 
-  // Claim pending jobs atomically
+  // Claim pending jobs that are due. Retry timing is written to runAt.
+  // Do not use prisma.job.fields.maxRetries here — that is DMMF metadata, not a number.
   const jobs = await prisma.job.findMany({
     where: {
       status: "PENDING",
       runAt: { lte: now },
-      retryCount: { lt: prisma.job.fields.maxRetries ? undefined : 3 },
     },
     take: 5,
     orderBy: { runAt: "asc" },
@@ -40,21 +40,31 @@ async function processDueJobs(): Promise<void> {
     console.log(`[${WORKER_ID}] Processing job ${job.id} (type: ${job.type})`);
 
     try {
+      const unimplemented =
+        job.type === "GENERATE_RECAP" ||
+        job.type === "GENERATE_CLIP_FOLLOW_UP" ||
+        job.type === "SEND_LIVESTREAM_REMINDER";
+
+      if (unimplemented) {
+        await prisma.job.update({
+          where: { id: job.id },
+          data: {
+            status: "FAILED",
+            failedAt: new Date(),
+            errorMessage: `Handler not implemented for ${job.type}`,
+            retryCount: job.maxRetries,
+          },
+        });
+        console.warn(`[${WORKER_ID}] Job ${job.id} failed: handler not implemented (${job.type})`);
+        continue;
+      }
+
       switch (job.type) {
         case "PUBLISH_POST":
           await handlePublishPost(job);
           break;
-        case "GENERATE_RECAP":
-          console.log(`[${WORKER_ID}] GENERATE_RECAP job ${job.id} - handler not yet implemented`);
-          break;
-        case "GENERATE_CLIP_FOLLOW_UP":
-          console.log(`[${WORKER_ID}] GENERATE_CLIP_FOLLOW_UP job ${job.id} - handler not yet implemented`);
-          break;
-        case "SEND_LIVESTREAM_REMINDER":
-          console.log(`[${WORKER_ID}] SEND_LIVESTREAM_REMINDER job ${job.id} - handler not yet implemented`);
-          break;
         default:
-          console.warn(`[${WORKER_ID}] Unknown job type: ${job.type}`);
+          throw new Error(`Unknown job type: ${job.type}`);
       }
 
       await prisma.job.update({

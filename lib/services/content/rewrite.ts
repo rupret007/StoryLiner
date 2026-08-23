@@ -2,32 +2,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { getLlmAdapter } from "@/lib/services/llm";
-import { checkHardGuardrails } from "@/lib/services/guardrails/policy";
+import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
+import { deriveHashtags, HASHTAG_DIRECTIVES } from "@/lib/services/content/hashtags";
 import type { RewriteDraftInput } from "@/lib/schemas/content";
 import type { Draft } from "@prisma/client";
-
-/** Directives that affect the hashtag array, not just the caption text. */
-const HASHTAG_DIRECTIVES = new Set(["noHashtags", "shorterHashtags"]);
-
-/**
- * Derive updated hashtags based on the directive applied.
- * Keeps existing hashtags unless the directive explicitly changes them.
- */
-function deriveHashtags(
-  existingHashtags: string[],
-  newCaption: string,
-  directive: string
-): string[] {
-  if (directive === "noHashtags") {
-    return [];
-  }
-  if (directive === "shorterHashtags") {
-    // Remove any hashtags longer than 14 characters
-    return existingHashtags.filter((h) => h.length <= 14);
-  }
-  // For non-hashtag directives, keep existing hashtags (they weren't rewritten)
-  return existingHashtags;
-}
 
 export async function rewriteDraft(input: RewriteDraftInput): Promise<Draft> {
   const draft = await prisma.draft.findUniqueOrThrow({
@@ -55,13 +33,22 @@ export async function rewriteDraft(input: RewriteDraftInput): Promise<Draft> {
     newCaption,
     draft.band as Parameters<typeof llm.assessRisk>[1]
   );
-  const hardViolations = checkHardGuardrails(newCaption);
+  const otherBands = await prisma.band.findMany({
+    where: { id: { not: draft.bandId } },
+    select: { name: true },
+  });
+  const hardViolations = evaluateGuardrails({
+    caption: newCaption,
+    bandName: draft.band.name,
+    otherBandNames: otherBands.map((b) => b.name),
+    emojiTolerance: draft.band.voiceProfile?.emojiTolerance,
+    isAutoPublish: false,
+  });
   const hardFlags = hardViolations.map((v) => v.detail);
 
   // Merge flags — deduplicate
   const mergedFlags = Array.from(new Set([...riskAssessment.flags, ...hardFlags]));
-  const riskLevel =
-    mergedFlags.length === 0 ? "LOW" : mergedFlags.length <= 2 ? "MEDIUM" : "HIGH";
+  const riskLevel = riskLevelFromFlags(mergedFlags.length);
   const brandFitScore = hardFlags.length > 0 ? Math.min(riskAssessment.brandFitScore, 60) : riskAssessment.brandFitScore;
 
   // Atomically increment version and save — prevents duplicate version numbers

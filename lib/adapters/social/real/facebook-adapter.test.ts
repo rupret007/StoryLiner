@@ -24,7 +24,7 @@ describe("FacebookRealAdapter", () => {
         caption: "Hello Facebook!",
         mediaUrls: [],
         hashtags: ["#band", "#music"],
-        accountMetadata: { pageId: "123", pageAccessToken: "token" },
+        accountMetadata: { pageId: "123" },
         scheduledFor: undefined,
       };
 
@@ -41,27 +41,21 @@ describe("FacebookRealAdapter", () => {
       );
     });
 
-    it("should handle scheduling 15 minutes into the future", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ id: "pageid_postid" }),
-      });
-
+    it("refuses Facebook native scheduled publish when scheduledFor is in the future", async () => {
       const futureDate = new Date(Date.now() + 15 * 60 * 1000);
       const payload: PublishPayload = {
         caption: "Scheduled post",
         mediaUrls: [],
         hashtags: [],
-        accountMetadata: { pageId: "123", pageAccessToken: "token" },
+        accountMetadata: { pageId: "123" },
         scheduledFor: futureDate,
       };
 
       const result = await adapter.publish(payload);
 
-      expect(result.success).toBe(true);
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.published).toBe(false);
-      expect(body.scheduled_publish_time).toBe(Math.floor(futureDate.getTime() / 1000));
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toMatch(/StoryLiner owns scheduling/i);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it("should handle API errors gracefully", async () => {
@@ -75,7 +69,7 @@ describe("FacebookRealAdapter", () => {
         caption: "Fail",
         mediaUrls: [],
         hashtags: [],
-        accountMetadata: { pageId: "123", pageAccessToken: "token" },
+        accountMetadata: { pageId: "123" },
         scheduledFor: undefined,
       };
 

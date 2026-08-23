@@ -24,6 +24,20 @@ describe("YouTubeRealAdapter", () => {
   });
 
   describe("updateVideoDescription", () => {
+    it("stays draft-only when a video id is present without explicit allow flag", async () => {
+      const result = await adapter.publish({
+        caption: "New caption for the video.",
+        mediaUrls: [],
+        hashtags: [],
+        accountMetadata: {},
+        scheduledFor: new Date(),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.isDraftOnly).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("should update description with caption only", async () => {
       mockFetch
         .mockResolvedValueOnce({
@@ -39,7 +53,7 @@ describe("YouTubeRealAdapter", () => {
         caption: "New caption for the video.",
         mediaUrls: [],
         hashtags: [],
-        accountMetadata: {},
+        accountMetadata: { allowVideoDescriptionUpdate: true },
         scheduledFor: new Date(),
       };
 
@@ -77,7 +91,7 @@ describe("YouTubeRealAdapter", () => {
         caption: "Caption with some content.",
         mediaUrls: [],
         hashtags: ["#hashtag1", "#hashtag2"],
-        accountMetadata: {},
+        accountMetadata: { allowVideoDescriptionUpdate: true },
         scheduledFor: new Date(),
       };
 
@@ -119,7 +133,7 @@ describe("YouTubeRealAdapter", () => {
         caption: longCaption,
         mediaUrls: [],
         hashtags: ["#short", "#tags"],
-        accountMetadata: {},
+        accountMetadata: { allowVideoDescriptionUpdate: true },
         scheduledFor: new Date(),
       };
 
@@ -146,7 +160,7 @@ describe("YouTubeRealAdapter", () => {
         caption: "",
         mediaUrls: [],
         hashtags: ["#onlyhashtags"],
-        accountMetadata: {},
+        accountMetadata: { allowVideoDescriptionUpdate: true },
         scheduledFor: new Date(),
       };
 

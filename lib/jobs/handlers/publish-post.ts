@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSocialAdapter } from "@/lib/adapters/social";
 import { validateDraftForPlatform } from "@/lib/services/publish/validate";
+import { assertSafeToLivePublish } from "@/lib/services/publish/safety";
 import type { Job } from "@prisma/client";
 
 export async function handlePublishPost(job: Job): Promise<void> {
@@ -19,6 +20,16 @@ export async function handlePublishPost(job: Job): Promise<void> {
   if (scheduledPost.status !== "SCHEDULED") {
     console.log(`[worker] Skipping ${scheduledPostId}: status is ${scheduledPost.status}`);
     return;
+  }
+
+  const liveSafety = assertSafeToLivePublish({
+    socialAdapterMode: process.env.SOCIAL_ADAPTER ?? "mock",
+    platform: scheduledPost.draft.platform,
+    accountIsConnected: scheduledPost.platformAccount.isConnected,
+    accountIsActive: scheduledPost.platformAccount.isActive,
+  });
+  if (!liveSafety.ok) {
+    throw new Error(liveSafety.reason);
   }
 
   const validation = validateDraftForPlatform(scheduledPost.draft);
