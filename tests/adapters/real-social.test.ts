@@ -121,29 +121,30 @@ describe("InstagramRealAdapter — capability declarations", () => {
   });
 });
 
-describe("InstagramRealAdapter — isDraftOnly when no media provided", () => {
+describe("InstagramRealAdapter — fails closed when no media provided", () => {
   const adapter = new InstagramRealAdapter();
 
-  it("returns isDraftOnly=true when no mediaUrls are provided", async () => {
+  it("fails closed when no mediaUrls are provided", async () => {
     const result = await adapter.publish({
       caption: "Come to our show Friday.",
       hashtags: ["#bandlife"],
       // No mediaUrls — Instagram requires media for feed posts
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.isDraftOnly).toBe(true);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    expect(result.errorMessage).toMatch(/https/i);
   });
 
-  it("returns isDraftOnly=true when mediaUrls is empty array", async () => {
+  it("fails closed when mediaUrls is empty array", async () => {
     const result = await adapter.publish({
       caption: "Playing tonight.",
       hashtags: [],
       mediaUrls: [],
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.isDraftOnly).toBe(true);
   });
 });
@@ -197,7 +198,7 @@ describe("YouTubeRealAdapter — capability declarations", () => {
   });
 });
 
-describe("YouTubeRealAdapter — text-only publish returns isDraftOnly", () => {
+describe("YouTubeRealAdapter — text-only publish fails closed", () => {
   const adapter = new YouTubeRealAdapter();
 
   it("returns isDraftOnly=true for text-only posts (no video URL)", async () => {
@@ -207,21 +208,22 @@ describe("YouTubeRealAdapter — text-only publish returns isDraftOnly", () => {
       // No mediaUrls — no YouTube API for text community posts
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.isDraftOnly).toBe(true);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     // externalPostUrl should point operator toward YouTube Studio
     expect(result.externalPostUrl).toContain("studio.youtube.com");
+    expect(result.errorMessage).toMatch(/no text post API/i);
   });
 
-  it("returns isDraftOnly=true when non-YouTube media URL is provided", async () => {
+  it("fails closed when non-YouTube media URL is provided", async () => {
     const result = await adapter.publish({
       caption: "Check this out.",
       hashtags: [],
       mediaUrls: ["https://example.com/image.jpg"],
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.isDraftOnly).toBe(true);
   });
 });

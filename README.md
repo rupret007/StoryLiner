@@ -218,15 +218,15 @@ YOUTUBE_CLIENT_SECRET=...
 YOUTUBE_REFRESH_TOKEN=...   # Offline refresh token via OAuth consent flow
 ```
 
-### Draft-Only Platforms
+### Draft-Only / Incomplete Writes
 
-When a platform adapter sets `isDraftOnly=true` in the publish result (e.g. YouTube text posts, TikTok), the worker:
-- Marks the job as complete
-- Keeps the draft in `APPROVED` status (not `PUBLISHED`)
-- Adds a `reviewNotes` timestamp indicating manual publish is needed
-- Does NOT create a `PublishedPost` record
+When a platform adapter cannot go live (`success=false` and/or `isDraftOnly=true` — e.g. Instagram without media, YouTube text posts), the worker **fails closed**:
+- Does **not** create a `PublishedPost` record
+- Does **not** mark the draft or scheduled post as `PUBLISHED`
+- Fails the job so it can be retried after media / account setup
+- Logs the reason on `PublishLog`
 
-This prevents draft submissions from appearing as live published posts in analytics.
+Live destinations are Facebook, Instagram, and YouTube only. Other platforms are refused in real mode.
 
 ## Analytics
 
@@ -269,7 +269,7 @@ Key constraints:
 npm test
 ```
 
-140 tests across 12 suites (Jest is required in CI):
+Jest is required in CI. Suites include:
 
 | Suite | Coverage |
 |---|---|

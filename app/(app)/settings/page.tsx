@@ -85,6 +85,8 @@ export default function SettingsPage() {
             "Never generate fake accomplishments",
             "Never mix band voices",
             "Never auto-publish",
+            "Never mark draft-only writes as published",
+            "Facebook, Instagram, and YouTube only for live publish",
             "Never use obvious AI phrases",
           ].map((rule, i) => (
             <div key={i} className="flex items-center gap-2 text-muted-foreground">

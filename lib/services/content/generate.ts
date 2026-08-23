@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getLlmAdapter } from "@/lib/services/llm";
 import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
+import { sanitizeMediaUrls } from "@/lib/services/publish/safety";
 import type { GenerateContentInput } from "@/lib/schemas/content";
 import type { Draft } from "@prisma/client";
 
@@ -63,6 +64,7 @@ export async function generateContent(input: GenerateContentInput): Promise<Draf
       contentLength: input.contentLength,
       caption: generated.caption,
       hashtags: generated.hashtags,
+      mediaUrls: sanitizeMediaUrls(input.mediaUrls),
       ctaText: generated.ctaText,
       altText: generated.altText,
       imagePrompt: generated.imagePrompt,

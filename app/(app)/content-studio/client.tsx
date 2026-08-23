@@ -51,9 +51,7 @@ const CAMPAIGN_TYPES = [
   { value: "CLIP_PROMOTION", label: "Clip Promotion" },
 ];
 
-const PLATFORMS = [
-  "FACEBOOK", "INSTAGRAM", "BLUESKY", "TIKTOK", "YOUTUBE", "TWITCH",
-];
+const PLATFORMS = ["FACEBOOK", "INSTAGRAM", "YOUTUBE"] as const;
 
 const TONES = [
   { value: "AUTHENTIC", label: "Authentic" },
@@ -90,6 +88,7 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
   const [showDate, setShowDate] = useState("");
   const [ticketUrl, setTicketUrl] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
 
   const [generatedDraftId, setGeneratedDraftId] = useState<string | null>(null);
 
@@ -114,6 +113,7 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
           platform: platform as Parameters<typeof generateContentAction>[0]["platform"],
           contentLength: contentLength as "SHORT" | "MEDIUM" | "LONG",
           toneVariant: toneVariant as Parameters<typeof generateContentAction>[0]["toneVariant"],
+          mediaUrls: mediaUrl.trim() ? [mediaUrl.trim()] : undefined,
           context: {
             venue: venue || undefined,
             city: city || undefined,
@@ -314,6 +314,19 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
                 className="min-h-[80px]"
               />
             </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Public media URL (optional)</Label>
+              <Input
+                type="url"
+                placeholder="https://…/show-photo.jpg"
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                https only. Required later for real Instagram. Facebook can go live caption-only.
+                YouTube text posts stay manual.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -346,8 +359,8 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>1. Pick your band. Each one has a completely separate voice profile.</p>
-            <p>2. Set the campaign type, platform, and tone.</p>
-            <p>3. Add context if you have it — venue, date, extra notes.</p>
+            <p>2. Set the campaign type, platform, and tone. Live platforms are Facebook, Instagram, and YouTube only.</p>
+            <p>3. Add context if you have it — venue, date, extra notes, public media URL.</p>
             <p>4. Generate. The draft goes to the review queue before anything is published.</p>
             <p className="text-foreground font-medium">Nothing auto-publishes.</p>
           </CardContent>

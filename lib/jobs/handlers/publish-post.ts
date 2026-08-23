@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getSocialAdapter } from "@/lib/adapters/social";
 import { validateDraftForPlatform } from "@/lib/services/publish/validate";
-import { assertSafeToLivePublish } from "@/lib/services/publish/safety";
+import {
+  assertLivePublishResult,
+  assertReadyForLivePublish,
+  sanitizeMediaUrls,
+} from "@/lib/services/publish/safety";
 import type { Job } from "@prisma/client";
 
 export async function handlePublishPost(job: Job): Promise<void> {
@@ -22,11 +26,14 @@ export async function handlePublishPost(job: Job): Promise<void> {
     return;
   }
 
-  const liveSafety = assertSafeToLivePublish({
+  const mediaUrls = sanitizeMediaUrls(scheduledPost.draft.mediaUrls);
+  const liveSafety = assertReadyForLivePublish({
     socialAdapterMode: process.env.SOCIAL_ADAPTER ?? "mock",
     platform: scheduledPost.draft.platform,
     accountIsConnected: scheduledPost.platformAccount.isConnected,
     accountIsActive: scheduledPost.platformAccount.isActive,
+    mediaUrls,
+    accountMetadata: scheduledPost.platformAccount.metadata,
   });
   if (!liveSafety.ok) {
     throw new Error(liveSafety.reason);
@@ -46,6 +53,7 @@ export async function handlePublishPost(job: Job): Promise<void> {
   const result = await adapter.publish({
     caption: scheduledPost.draft.caption,
     hashtags: scheduledPost.draft.hashtags,
+    mediaUrls,
     scheduledFor: scheduledPost.scheduledFor,
     // Forward platform-account metadata so real adapters can resolve the correct
     // account ID (e.g. Facebook page ID, Instagram user ID, YouTube channel ID).
@@ -55,45 +63,26 @@ export async function handlePublishPost(job: Job): Promise<void> {
         : undefined,
   });
 
-  // Record publish log
+  const liveResult = assertLivePublishResult({
+    success: result.success,
+    isDraftOnly: result.isDraftOnly,
+    errorMessage: result.errorMessage,
+  });
+
+  // Record publish log. Draft-only / failed writes stay failed — never "published".
   const publishLog = await prisma.publishLog.create({
     data: {
       platform: scheduledPost.draft.platform,
       adapter: adapter.adapterName,
-      success: result.success,
+      success: liveResult.ok,
       responseCode: result.responseCode,
-      errorMessage: result.isDraftOnly
-        ? `Submitted as platform draft — manual publish required. Draft URL: ${result.externalPostUrl ?? "n/a"}`
-        : result.errorMessage,
+      errorMessage: liveResult.ok ? result.errorMessage : liveResult.reason,
       durationMs: result.durationMs,
     },
   });
 
-  if (!result.success) {
-    throw new Error(result.errorMessage ?? "Publish failed with unknown error");
-  }
-
-  if (result.isDraftOnly) {
-    // Platform only supports draft submission (e.g. TikTok). The content is in
-    // the platform's draft queue but is NOT live yet. Keep draft in APPROVED so
-    // the operator knows manual action is still needed.
-    await prisma.scheduledPost.update({
-      where: { id: scheduledPost.id },
-      data: { status: "PUBLISHED" }, // job completed successfully — post was submitted
-    });
-
-    await prisma.draft.update({
-      where: { id: scheduledPost.draftId },
-      data: {
-        status: "APPROVED", // intentionally NOT published — needs manual publish
-        reviewNotes: `Submitted to ${scheduledPost.draft.platform} draft queue on ${new Date().toISOString()}. Manual publish required.`,
-      },
-    });
-
-    console.log(
-      `[worker] Submitted post to ${scheduledPost.draft.platform} draft queue (not live). Manual publish required.`
-    );
-    return;
+  if (!liveResult.ok) {
+    throw new Error(liveResult.reason);
   }
 
   // Create published post record for fully published content

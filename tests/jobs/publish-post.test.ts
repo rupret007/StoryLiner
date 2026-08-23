@@ -1,6 +1,7 @@
 /**
  * Tests for publish-post handler behavior around draft-only adapters.
- * Validates the isDraftOnly flag semantics and status transitions.
+ * Draft-only / unsuccessful adapter results must fail closed and never
+ * be treated as a live published post.
  */
 
 import { mockTikTokAdapter, mockInstagramAdapter } from "@/lib/adapters/social/mock-adapter";

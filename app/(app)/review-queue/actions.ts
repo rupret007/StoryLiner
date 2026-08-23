@@ -3,16 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { validateDraftForPlatform } from "@/lib/services/publish/validate";
-import { assertSafeToLivePublish, canRescheduleJob } from "@/lib/services/publish/safety";
+import {
+  assertCanApproveDraft,
+  assertReadyForLivePublish,
+  canRescheduleJob,
+  sanitizeMediaUrls,
+} from "@/lib/services/publish/safety";
 import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 import { rewriteDraft } from "@/lib/services/content/rewrite";
-import { scheduleDraftSchema } from "@/lib/schemas/content";
-import type { RewriteDraftInput, ScheduleDraftInput } from "@/lib/schemas/content";
+import { attachDraftMediaSchema, scheduleDraftSchema } from "@/lib/schemas/content";
+import type { AttachDraftMediaInput, RewriteDraftInput, ScheduleDraftInput } from "@/lib/schemas/content";
 
-export async function approveDraft(draftId: string, notes?: string) {
+export async function approveDraft(
+  draftId: string,
+  notes?: string,
+  confirmHighRisk = false
+) {
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
-  if (draft.status !== "IN_REVIEW") {
-    throw new Error(`Draft cannot be approved from status ${draft.status}.`);
+  const approvable = assertCanApproveDraft({
+    status: draft.status,
+    riskLevel: draft.riskLevel,
+    confirmHighRisk,
+  });
+  if (!approvable.ok) {
+    throw new Error(approvable.reason);
   }
 
   await prisma.draft.update({
@@ -142,11 +156,13 @@ export async function scheduleApprovedDraft(rawInput: ScheduleDraftInput) {
     );
   }
 
-  const liveSafety = assertSafeToLivePublish({
+  const liveSafety = assertReadyForLivePublish({
     socialAdapterMode: process.env.SOCIAL_ADAPTER ?? "mock",
     platform: draft.platform,
     accountIsConnected: account.isConnected,
     accountIsActive: account.isActive,
+    mediaUrls: draft.mediaUrls,
+    accountMetadata: account.metadata,
   });
   if (!liveSafety.ok) {
     throw new Error(liveSafety.reason);
@@ -243,6 +259,31 @@ export async function reschedulePost(
 
   revalidatePath("/scheduled-posts");
   return scheduledPost;
+}
+
+export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
+  const input = attachDraftMediaSchema.parse(rawInput);
+  const draft = await prisma.draft.findUniqueOrThrow({
+    where: { id: input.draftId },
+  });
+
+  if (draft.status !== "IN_REVIEW" && draft.status !== "APPROVED") {
+    throw new Error("Media can only be attached while the draft is in review or approved.");
+  }
+
+  const mediaUrls = sanitizeMediaUrls(input.mediaUrls);
+  const provided = input.mediaUrls.map((url) => url.trim()).filter(Boolean);
+  if (provided.length > 0 && mediaUrls.length === 0) {
+    throw new Error("Media URL must be a public https:// link. http, data, and javascript URLs are rejected.");
+  }
+
+  const updated = await prisma.draft.update({
+    where: { id: draft.id },
+    data: { mediaUrls },
+  });
+
+  revalidatePath("/review-queue");
+  return updated;
 }
 
 export async function updateDraftCaption(draftId: string, caption: string) {

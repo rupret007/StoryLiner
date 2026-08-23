@@ -14,6 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { CalendarClock, Loader2 } from "lucide-react";
+import { formatDatetimeLocalValue } from "@/lib/utils";
 import { reschedulePost } from "@/app/(app)/review-queue/actions";
 
 interface RescheduleButtonProps {
@@ -29,7 +30,7 @@ export function RescheduleButton({
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [newTime, setNewTime] = useState(
-    new Date(currentScheduledFor).toISOString().slice(0, 16)
+    formatDatetimeLocalValue(new Date(currentScheduledFor))
   );
 
   function handleReschedule() {
@@ -62,7 +63,7 @@ export function RescheduleButton({
             <Input
               type="datetime-local"
               value={newTime}
-              min={new Date().toISOString().slice(0, 16)}
+              min={formatDatetimeLocalValue(new Date())}
               onChange={(e) => setNewTime(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">Must be in the future.</p>

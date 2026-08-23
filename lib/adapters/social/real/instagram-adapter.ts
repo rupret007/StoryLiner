@@ -12,8 +12,8 @@
  *   2. Publish the container (makes it live)
  *
  * IMPORTANT: Instagram requires a media attachment (image or video) for standard Feed posts.
- * If no mediaUrls are provided, this adapter returns isDraftOnly=true with the caption
- * prepared for manual posting. The operator should add media in Instagram natively.
+ * If no public https mediaUrls are provided, this adapter fails closed (success=false,
+ * isDraftOnly=true). The worker will not mark the post published.
  *
  * Docs: https://developers.facebook.com/docs/instagram-api/guides/content-publishing
  * Permission required: instagram_content_publish, pages_read_engagement
@@ -27,6 +27,7 @@ import {
   type SocialAdapterCapabilities,
 } from "../base";
 import { getInstagramCredentials, hasInstagramCredentials } from "./credentials";
+import { sanitizeMediaUrls } from "@/lib/services/publish/safety";
 
 const GRAPH_API_BASE = "https://graph.facebook.com/v18.0";
 
@@ -48,13 +49,15 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
   async publish(payload: PublishPayload): Promise<PublishResult> {
     const start = Date.now();
 
-    // Instagram requires at least one media item for Feed posts.
-    // Without media, surface the content for manual posting.
-    if (!payload.mediaUrls || payload.mediaUrls.length === 0) {
+    // Instagram requires at least one public https media item for Feed posts.
+    // Fail closed — do not report success or let the worker mark this published.
+    const mediaUrls = sanitizeMediaUrls(payload.mediaUrls);
+    if (mediaUrls.length === 0) {
       return {
-        success: true,
+        success: false,
         isDraftOnly: true,
-        errorMessage: undefined,
+        errorMessage:
+          "Instagram feed posts require a public https image or video URL. Nothing was published.",
         responseCode: undefined,
         externalPostId: undefined,
         externalPostUrl: undefined,
@@ -71,7 +74,7 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
         ? `${payload.caption}\n\n${payload.hashtags.join(" ")}`
         : payload.caption;
 
-      const mediaUrl = payload.mediaUrls[0];
+      const mediaUrl = mediaUrls[0];
       const isVideo = /\.(mp4|mov|avi|mkv)$/i.test(mediaUrl);
 
       // Step 1: Create media container

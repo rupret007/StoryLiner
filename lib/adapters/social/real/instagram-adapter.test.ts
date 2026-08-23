@@ -27,13 +27,25 @@ describe("InstagramRealAdapter", () => {
   });
 
   describe("publish", () => {
-    it("should return isDraftOnly: true if no mediaUrls are provided", async () => {
+    it("should fail closed if media URL is not public https", async () => {
+      const result = await adapter.publish({
+        ...mockPayload,
+        mediaUrls: ["http://insecure.example.com/image.jpg"],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.isDraftOnly).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("should fail closed if no mediaUrls are provided", async () => {
       const payloadWithoutMedia = { ...mockPayload, mediaUrls: [] };
       const result = await adapter.publish(payloadWithoutMedia);
 
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.isDraftOnly).toBe(true);
       expect(result.externalPostId).toBeUndefined();
+      expect(result.errorMessage).toMatch(/https/i);
     });
 
     it("should handle the two-step publishing process (container + publish)", async () => {

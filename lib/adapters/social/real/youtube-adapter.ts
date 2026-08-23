@@ -14,8 +14,8 @@
  *
  * What this adapter does:
  *   1. Validates credentials by fetching the authenticated channel info.
- *   2. Returns isDraftOnly=true with the content prepped for manual posting.
- *      The operator can copy the caption into YouTube Studio → Community tab.
+ *   2. Text posts fail closed (success=false, isDraftOnly=true) so the worker
+ *      cannot mark them published. Copy the caption in YouTube Studio.
  *
  * This is the honest capability declaration for YouTube text posts.
  * When a video URL is provided, this adapter can update video metadata (title/description).
@@ -92,8 +92,10 @@ export class YouTubeRealAdapter extends SocialProviderAdapter {
       // on the platform account — do not invent this as a default publish path.
       if (payload.accountMetadata?.allowVideoDescriptionUpdate !== true) {
         return {
-          success: true,
+          success: false,
           isDraftOnly: true,
+          errorMessage:
+            "YouTube description update requires allowVideoDescriptionUpdate=true. Nothing was published.",
           responseCode: undefined,
           externalPostId: videoId,
           externalPostUrl: `https://studio.youtube.com/video/${videoId}/edit`,
@@ -103,11 +105,13 @@ export class YouTubeRealAdapter extends SocialProviderAdapter {
       return this.updateVideoDescription(videoId, payload, start);
     }
 
-    // No video — YouTube has no text post API. Surface content for manual posting.
-    // isDraftOnly=true tells the worker to keep the draft in APPROVED, not mark PUBLISHED.
+    // No video — YouTube has no text post API. Fail closed so the worker
+    // cannot mark a community-tab copy task as a live published post.
     return {
-      success: true,
+      success: false,
       isDraftOnly: true,
+      errorMessage:
+        "YouTube has no text post API. Copy the caption in YouTube Studio. Nothing was published.",
       responseCode: undefined,
       externalPostId: undefined,
       externalPostUrl: "https://studio.youtube.com/channel/content/community",

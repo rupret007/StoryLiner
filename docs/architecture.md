@@ -111,7 +111,9 @@ Schedule (approved drafts only):
 Worker (every 5 seconds):
   → prisma.job.findMany(status: PENDING, runAt: lte now)
   → handlePublishPost()
-    → SocialProviderAdapter.publish()
+    → assertReadyForLivePublish() (connected account, FB/IG/YT only, Instagram media)
+    → SocialProviderAdapter.publish({ mediaUrls })
+    → assertLivePublishResult() (draft-only / failed writes throw — never mark PUBLISHED)
     → prisma.publishedPost.create()
     → prisma.publishLog.create()
     → prisma.draft.update(status: PUBLISHED)
