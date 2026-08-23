@@ -24,7 +24,7 @@ describe("YouTubeRealAdapter", () => {
   });
 
   describe("updateVideoDescription", () => {
-    it("stays draft-only when a video id is present without explicit allow flag", async () => {
+    it("fails closed when a video id is present without explicit allow flag", async () => {
       const result = await adapter.publish({
         caption: "New caption for the video.",
         mediaUrls: [],
@@ -33,8 +33,9 @@ describe("YouTubeRealAdapter", () => {
         scheduledFor: new Date(),
       });
 
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.isDraftOnly).toBe(true);
+      expect(result.errorMessage).toMatch(/allowVideoDescriptionUpdate/i);
       expect(mockFetch).not.toHaveBeenCalled();
     });
 

@@ -301,6 +301,8 @@ model Draft {
   // Generated content
   caption      String  @db.Text
   hashtags     String[]
+  // Public https media the worker can forward. Empty means caption-only.
+  mediaUrls    String[] @default([])
   ctaText      String?
   altText      String?
   imagePrompt  String? @db.Text

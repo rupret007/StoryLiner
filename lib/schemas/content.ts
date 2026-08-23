@@ -26,6 +26,12 @@ export const generateContentSchema = z.object({
   }).optional(),
   campaignId: z.string().cuid().optional(),
   eventId: z.string().cuid().optional(),
+  mediaUrls: z.array(z.string().max(2000)).max(5).optional(),
+});
+
+export const attachDraftMediaSchema = z.object({
+  draftId: z.string().cuid(),
+  mediaUrls: z.array(z.string().max(2000)).max(5),
 });
 
 export const rewriteDraftSchema = z.object({
@@ -60,6 +66,7 @@ export const scheduleDraftSchema = z.object({
 });
 
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
+export type AttachDraftMediaInput = z.infer<typeof attachDraftMediaSchema>;
 export type RewriteDraftInput = z.infer<typeof rewriteDraftSchema>;
 export type ReviewDraftInput = z.infer<typeof reviewDraftSchema>;
 export type ScheduleDraftInput = z.infer<typeof scheduleDraftSchema>;

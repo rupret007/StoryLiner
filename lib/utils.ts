@@ -33,6 +33,22 @@ export function formatDateTime(date: Date | string): string {
   });
 }
 
+/** Local `YYYY-MM-DDTHH:mm` for datetime-local inputs. Do not use toISOString (UTC). */
+export function formatDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    "-",
+    pad(date.getMonth() + 1),
+    "-",
+    pad(date.getDate()),
+    "T",
+    pad(date.getHours()),
+    ":",
+    pad(date.getMinutes()),
+  ].join("");
+}
+
 export function formatRelative(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();

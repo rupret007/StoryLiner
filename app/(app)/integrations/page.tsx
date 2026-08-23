@@ -56,7 +56,7 @@ const SUPPORTED_PLATFORMS = [
   {
     platform: "INSTAGRAM",
     label: "Instagram Business",
-    capability: "Media publish via Content Publishing API (image/video required)",
+    capability: "Media publish via Content Publishing API — public https image/video required or the job fails closed",
     realAdapterAvailable: true,
     docs: "Meta Content Publishing API — instagram_content_publish permission",
     setupNote: "FACEBOOK_PAGE_ACCESS_TOKEN + INSTAGRAM_BUSINESS_ACCOUNT_ID",
@@ -64,7 +64,7 @@ const SUPPORTED_PLATFORMS = [
   {
     platform: "YOUTUBE",
     label: "YouTube",
-    capability: "Video description updates (text posts require manual YouTube Studio)",
+    capability: "No text-post API. Live write is opt-in video description update only; otherwise the job fails closed",
     realAdapterAvailable: true,
     docs: "YouTube Data API v3 — OAuth 2.0 offline access",
     setupNote: "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET + YOUTUBE_REFRESH_TOKEN",
@@ -72,7 +72,7 @@ const SUPPORTED_PLATFORMS = [
   {
     platform: "BLUESKY",
     label: "Bluesky",
-    capability: "Direct publish via AT Protocol",
+    capability: "Not a StoryLiner live destination. Generation only — will not be published",
     realAdapterAvailable: false,
     docs: "AT Protocol — app password auth",
     setupNote: "BLUESKY_IDENTIFIER + BLUESKY_APP_PASSWORD",
@@ -80,7 +80,7 @@ const SUPPORTED_PLATFORMS = [
   {
     platform: "TIKTOK",
     label: "TikTok",
-    capability: "Draft creation (video required for direct publish)",
+    capability: "Not a StoryLiner live destination. Generation only — will not be published",
     realAdapterAvailable: false,
     docs: "TikTok Content Posting API — video.publish scope",
     setupNote: "TIKTOK_CLIENT_KEY + TIKTOK_ACCESS_TOKEN",
@@ -88,7 +88,7 @@ const SUPPORTED_PLATFORMS = [
   {
     platform: "TWITCH",
     label: "Twitch",
-    capability: "Channel metadata updates via Helix API",
+    capability: "Not a StoryLiner live destination. Generation only — will not be published",
     realAdapterAvailable: false,
     docs: "Twitch Helix API — channel:manage:broadcast scope",
     setupNote: "TWITCH_CLIENT_ID + TWITCH_ACCESS_TOKEN",
@@ -311,8 +311,8 @@ export default async function IntegrationsPage() {
           </p>
           <p>4. Restart the dev server — credential status updates immediately</p>
           <p>
-            5. Platforms without real adapters yet (Bluesky, TikTok, Twitch) fall back to mock
-            automatically
+            5. Live publish is Facebook, Instagram, and YouTube only. Bluesky, TikTok, Twitch,
+            and X are refused in real mode — they are never marked published.
           </p>
           <p className="pt-2 border-t border-border">
             See{" "}

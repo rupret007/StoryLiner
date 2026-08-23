@@ -12,6 +12,7 @@ function makeDraft(overrides: Partial<Draft>): Draft {
     contentLength: "MEDIUM",
     caption: "Playing Burlington Bar on Saturday.",
     hashtags: ["#chicago", "#livemusic"],
+    mediaUrls: [],
     ctaText: null,
     altText: null,
     imagePrompt: null,

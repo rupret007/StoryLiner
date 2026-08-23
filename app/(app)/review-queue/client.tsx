@@ -42,7 +42,7 @@ import {
   CalendarClock,
   Loader2,
 } from "lucide-react";
-import { formatRelative } from "@/lib/utils";
+import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
 import {
   approveDraft,
   rejectDraft,
@@ -50,6 +50,7 @@ import {
   duplicateDraft,
   rewriteDraftAction,
   updateDraftCaption,
+  attachDraftMedia,
   scheduleApprovedDraft,
 } from "./actions";
 import type {
@@ -80,6 +81,12 @@ const REWRITE_DIRECTIVES = [
   { value: "moreUrgency", label: "More urgency" },
 ];
 
+function defaultScheduleLocalValue() {
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setSeconds(0, 0);
+  return formatDatetimeLocalValue(d);
+}
+
 function ScheduleDialog({
   draft,
   open,
@@ -93,19 +100,12 @@ function ScheduleDialog({
 }) {
   const [isPending, startTransition] = useTransition();
   const [platformAccountId, setPlatformAccountId] = useState("");
-  const [scheduledFor, setScheduledFor] = useState("");
+  const [scheduledFor, setScheduledFor] = useState(defaultScheduleLocalValue);
 
   // Only accounts matching draft platform
   const compatibleAccounts = draft.band.platformAccounts.filter(
     (a) => a.platform === draft.platform && a.isActive
   );
-
-  // Default datetime to ~1 hour from now for convenience
-  function getDefaultDatetime() {
-    const d = new Date(Date.now() + 60 * 60 * 1000);
-    d.setSeconds(0, 0);
-    return d.toISOString().slice(0, 16);
-  }
 
   function handleSchedule() {
     if (!platformAccountId) {
@@ -175,13 +175,23 @@ function ScheduleDialog({
             <Label>Schedule Time</Label>
             <Input
               type="datetime-local"
-              defaultValue={getDefaultDatetime()}
-              min={new Date().toISOString().slice(0, 16)}
+              value={scheduledFor}
+              min={formatDatetimeLocalValue(new Date())}
               onChange={(e) => setScheduledFor(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Must be in the future. Worker processes jobs every 5 seconds.
+              Local time. Must be in the future. Worker processes jobs every 5 seconds.
             </p>
+            {draft.platform === "INSTAGRAM" && draft.mediaUrls.length === 0 && (
+              <p className="text-xs text-amber-300">
+                Real Instagram will refuse this schedule without a public https image or video.
+              </p>
+            )}
+            {draft.platform === "YOUTUBE" && (
+              <p className="text-xs text-amber-300">
+                Real YouTube will not live-publish a text post. Description updates stay opt-in.
+              </p>
+            )}
           </div>
         </div>
 
@@ -269,12 +279,18 @@ function DraftCard({
   const [showSchedule, setShowSchedule] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmHighRisk, setConfirmHighRisk] = useState(false);
+  const [mediaUrlInput, setMediaUrlInput] = useState(draft.mediaUrls[0] ?? "");
 
-  function handleApprove() {
+  function handleApprove(confirmHighRiskApprove = false) {
     startTransition(async () => {
-      await approveDraft(draft.id);
-      toast.success("Draft approved. Schedule it from the Approved tab.");
-      onAction();
+      try {
+        await approveDraft(draft.id, undefined, confirmHighRiskApprove);
+        toast.success("Draft approved. Schedule it from the Approved tab.");
+        onAction();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Approve failed.");
+      }
     });
   }
 
@@ -325,6 +341,21 @@ function DraftCard({
     });
   }
 
+  function handleSaveMedia() {
+    startTransition(async () => {
+      try {
+        await attachDraftMedia({
+          draftId: draft.id,
+          mediaUrls: mediaUrlInput.trim() ? [mediaUrlInput.trim()] : [],
+        });
+        toast.success(mediaUrlInput.trim() ? "Media URL saved." : "Media URL cleared.");
+        onAction();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not save media URL.");
+      }
+    });
+  }
+
   const riskColor =
     draft.riskLevel === "HIGH"
       ? "text-rose-400"
@@ -357,6 +388,19 @@ function DraftCard({
         confirmLabel="Archive"
         onConfirm={handleArchive}
         onCancel={() => setConfirmArchive(false)}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={confirmHighRisk}
+        title="Approve this high-risk draft?"
+        description="Guardrails flagged this caption. Approving does not publish it. You still have to schedule it separately."
+        confirmLabel="Approve anyway"
+        confirmVariant="destructive"
+        onConfirm={() => {
+          setConfirmHighRisk(false);
+          handleApprove(true);
+        }}
+        onCancel={() => setConfirmHighRisk(false)}
         isPending={isPending}
       />
 
@@ -418,6 +462,15 @@ function DraftCard({
                   {draft.hashtags.join(" ")}
                 </p>
               )}
+              {draft.mediaUrls.length > 0 ? (
+                <p className="text-xs text-muted-foreground mt-1 break-all">
+                  Media: {draft.mediaUrls[0]}
+                </p>
+              ) : draft.platform === "INSTAGRAM" ? (
+                <p className="text-xs text-amber-300 mt-1">
+                  No media URL — real Instagram will fail closed.
+                </p>
+              ) : null}
             </div>
           )}
 
@@ -546,6 +599,36 @@ function DraftCard({
                   </p>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Public media URL (https)
+                </p>
+                {draft.mediaUrls.length > 0 && (
+                  <p className="text-xs text-foreground break-all">
+                    Attached: {draft.mediaUrls[0]}
+                  </p>
+                )}
+                <Input
+                  type="url"
+                  placeholder="https://…/show-photo.jpg"
+                  value={mediaUrlInput}
+                  onChange={(e) => setMediaUrlInput(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSaveMedia}
+                  disabled={isPending}
+                >
+                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save media URL"}
+                </Button>
+                {draft.platform === "INSTAGRAM" && (
+                  <p className="text-xs text-muted-foreground">
+                    Real Instagram will not go live without this.
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -554,7 +637,11 @@ function DraftCard({
             {draft.status === "IN_REVIEW" && (
               <Button
                 size="sm"
-                onClick={handleApprove}
+                onClick={() =>
+                  draft.riskLevel === "HIGH"
+                    ? setConfirmHighRisk(true)
+                    : handleApprove(false)
+                }
                 disabled={isPending}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
