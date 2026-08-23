@@ -6,15 +6,14 @@ describe("YouTubeRealAdapter", () => {
 
   // These mocks should be here, applicable to the whole YouTubeRealAdapter suite
   const mockFetch = jest.fn();
-  // @ts-ignore
-  global.fetch = mockFetch;
+  global.fetch = mockFetch as typeof fetch;
 
   beforeEach(() => {
     adapter = new YouTubeRealAdapter();
     // Mock getAccessToken and extractYouTubeVideoId for isolated testing
-    // @ts-ignore
+    // @ts-expect-error mocking private method
     adapter.getAccessToken = jest.fn(() => Promise.resolve("mock-access-token"));
-    // @ts-ignore
+    // @ts-expect-error mocking private method
     adapter.extractYouTubeVideoId = jest.fn((_urls: string[]) => "mockVideoId");
     // Clear mockFetch for each test case
     mockFetch.mockClear();
@@ -40,7 +39,7 @@ describe("YouTubeRealAdapter", () => {
         caption: "New caption for the video.",
         mediaUrls: [],
         hashtags: [],
-        platformAccount: {} as any,
+        accountMetadata: {},
         scheduledFor: new Date(),
       };
 
@@ -78,7 +77,7 @@ describe("YouTubeRealAdapter", () => {
         caption: "Caption with some content.",
         mediaUrls: [],
         hashtags: ["#hashtag1", "#hashtag2"],
-        platformAccount: {} as any,
+        accountMetadata: {},
         scheduledFor: new Date(),
       };
 
@@ -120,7 +119,7 @@ describe("YouTubeRealAdapter", () => {
         caption: longCaption,
         mediaUrls: [],
         hashtags: ["#short", "#tags"],
-        platformAccount: {} as any,
+        accountMetadata: {},
         scheduledFor: new Date(),
       };
 
@@ -147,7 +146,7 @@ describe("YouTubeRealAdapter", () => {
         caption: "",
         mediaUrls: [],
         hashtags: ["#onlyhashtags"],
-        platformAccount: {} as any,
+        accountMetadata: {},
         scheduledFor: new Date(),
       };
 

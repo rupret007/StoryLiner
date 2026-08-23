@@ -26,7 +26,7 @@ export async function handlePublishPost(job: Job): Promise<void> {
     throw new Error(`Platform validation failed: ${validation.errors.join(", ")}`);
   }
 
-  const adapter = getSocialAdapter(scheduledPost.draft.platform);
+  const adapter = await getSocialAdapter(scheduledPost.draft.platform);
   const degradationWarning = adapter.getDegradationWarning("publish");
   if (degradationWarning) {
     console.warn(`[worker] ${degradationWarning}`);

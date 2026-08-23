@@ -8,7 +8,7 @@ import type { SocialProviderAdapter } from "./base";
  */
 const REAL_ADAPTER_PLATFORMS = new Set<Platform>(["FACEBOOK", "INSTAGRAM", "YOUTUBE"]);
 
-export function getSocialAdapter(platform: Platform): SocialProviderAdapter {
+export async function getSocialAdapter(platform: Platform): Promise<SocialProviderAdapter> {
   const mode = process.env.SOCIAL_ADAPTER ?? "mock";
 
   if (mode === "mock") {
@@ -28,18 +28,17 @@ export function getSocialAdapter(platform: Platform): SocialProviderAdapter {
       return allMockAdapters[platform];
     }
 
-    // Lazy-load real adapters to avoid importing platform SDKs in mock-only environments
     switch (platform) {
       case "FACEBOOK": {
-        const { FacebookRealAdapter } = require("./real/facebook-adapter") as typeof import("./real/facebook-adapter");
+        const { FacebookRealAdapter } = await import("./real/facebook-adapter");
         return new FacebookRealAdapter();
       }
       case "INSTAGRAM": {
-        const { InstagramRealAdapter } = require("./real/instagram-adapter") as typeof import("./real/instagram-adapter");
+        const { InstagramRealAdapter } = await import("./real/instagram-adapter");
         return new InstagramRealAdapter();
       }
       case "YOUTUBE": {
-        const { YouTubeRealAdapter } = require("./real/youtube-adapter") as typeof import("./real/youtube-adapter");
+        const { YouTubeRealAdapter } = await import("./real/youtube-adapter");
         return new YouTubeRealAdapter();
       }
       default:
