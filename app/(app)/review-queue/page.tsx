@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ReviewQueuePage() {
   const drafts = await prisma.draft.findMany({
-    where: { status: { in: ["IN_REVIEW", "APPROVED"] } },
+    where: { status: { in: ["IN_REVIEW", "HELD", "APPROVED", "REJECTED"] } },
     include: {
       band: {
         include: {

@@ -28,17 +28,10 @@ function checkCredentials(platform: string): "ready" | "missing" {
         ? "ready"
         : "missing";
     case "BLUESKY":
-      return process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD
-        ? "ready"
-        : "missing";
     case "TIKTOK":
-      return process.env.TIKTOK_CLIENT_KEY && process.env.TIKTOK_ACCESS_TOKEN
-        ? "ready"
-        : "missing";
+    case "TWITTER":
     case "TWITCH":
-      return process.env.TWITCH_CLIENT_ID && process.env.TWITCH_ACCESS_TOKEN
-        ? "ready"
-        : "missing";
+      return "missing";
     default:
       return "missing";
   }
@@ -72,26 +65,34 @@ const SUPPORTED_PLATFORMS = [
   {
     platform: "BLUESKY",
     label: "Bluesky",
-    capability: "Not a StoryLiner live destination. Generation only — will not be published",
+    capability: "Refused in the live path. Captions can be drafted; StoryLiner will not publish them.",
     realAdapterAvailable: false,
-    docs: "AT Protocol — app password auth",
-    setupNote: "BLUESKY_IDENTIFIER + BLUESKY_APP_PASSWORD",
+    docs: "No live adapter. Env vars are unused.",
+    setupNote: "Not a live destination — credentials are ignored",
   },
   {
     platform: "TIKTOK",
     label: "TikTok",
-    capability: "Not a StoryLiner live destination. Generation only — will not be published",
+    capability: "Refused in the live path. Captions can be drafted; StoryLiner will not publish them.",
     realAdapterAvailable: false,
-    docs: "TikTok Content Posting API — video.publish scope",
-    setupNote: "TIKTOK_CLIENT_KEY + TIKTOK_ACCESS_TOKEN",
+    docs: "No live adapter. Env vars are unused.",
+    setupNote: "Not a live destination — credentials are ignored",
+  },
+  {
+    platform: "TWITTER",
+    label: "X / Twitter",
+    capability: "Schema leftover only. Refused in the live path. No real X adapter.",
+    realAdapterAvailable: false,
+    docs: "No live adapter by Jeff lock.",
+    setupNote: "Not a live destination — do not add an X adapter",
   },
   {
     platform: "TWITCH",
     label: "Twitch",
-    capability: "Not a StoryLiner live destination. Generation only — will not be published",
+    capability: "Refused in the live path. Captions can be drafted; StoryLiner will not publish them.",
     realAdapterAvailable: false,
-    docs: "Twitch Helix API — channel:manage:broadcast scope",
-    setupNote: "TWITCH_CLIENT_ID + TWITCH_ACCESS_TOKEN",
+    docs: "No live adapter. Env vars are unused.",
+    setupNote: "Not a live destination — credentials are ignored",
   },
 ];
 
@@ -200,8 +201,8 @@ export default async function IntegrationsPage() {
                             </Badge>
                           )}
                           {isRealMode && !p.realAdapterAvailable && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              Mock fallback
+                            <Badge variant="outline" className="text-[10px]">
+                              Not live
                             </Badge>
                           )}
                           <Badge variant={badgeVariant} className="text-xs">

@@ -108,9 +108,9 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 |---|---|
 | No auth on server actions | Any reachable client can approve/schedule. Post-MVP in architecture docs. |
 | Tokens/stream keys in DB plaintext | `PlatformAccount.metadata`, `LivestreamDestination.streamKey`. |
-| Worker does not forward `mediaUrls` | Real Instagram always draft-only from worker; safer than accidental media publish. |
-| OpenAI campaign prompts hardcode Stalemate vs Rad Dad | Third band would inherit Stalemate guidance. Trailer Swift still absent — do not invent. |
-| Seed demo facts vs unknown Jeff locks | Stalemate: 2019, Chicago, 3 members, never a festival, *Nothing Stays* February, Burlington Bar 6× 2023. Rad Dad: 2021, Lincoln Hall, always Mr. Brightside, shorts policy. Confirm with Jeff before treating as canon. |
+| Worker does not forward `mediaUrls` | **Fixed on main (PR #3).** Worker sanitizes and forwards `mediaUrls`. See `prisma/README.md`. |
+| OpenAI campaign prompts hardcode Stalemate vs Rad Dad | Still hardcoded fallbacks. Trailer Swift remains absent — do not invent a voice. Prompts now forbid inventing a third band or extra history. |
+| Seed demo facts vs unknown Jeff locks | **Honesty pass:** knowledge rows are prefixed and tagged `demo-unconfirmed`. Voice locks were not rewritten. See `docs/voice-facts.md`. |
 | `datetime-local` `min` uses UTC slice | TZ skew on schedule picker. |
 | Instagram `canDirectPublish: true` vs no-media draft-only | Capability/docs mismatch. |
 | Mock YouTube `canDirectPublish: true` vs real YouTube draft-only | Adapter drift. |

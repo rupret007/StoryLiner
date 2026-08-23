@@ -1,10 +1,14 @@
 import {
   assertCanApproveDraft,
+  assertCanDenyDraft,
+  assertCanHoldDraft,
+  assertCanResumeHeldDraft,
   assertLivePublishResult,
   assertReadyForLivePublish,
   assertSafeToLivePublish,
   canRescheduleJob,
   hasYouTubeVideoUrl,
+  isLiveDestinationPlatform,
   sanitizeMediaUrls,
 } from "@/lib/services/publish/safety";
 
@@ -52,15 +56,22 @@ describe("assertSafeToLivePublish", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("does not block unsupported real-mode platforms (draft-only fallback handles them)", () => {
-    const result = assertSafeToLivePublish({
-      socialAdapterMode: "real",
-      platform: "TWITTER",
-      accountIsConnected: false,
-      accountIsActive: true,
-    });
-    expect(result).toEqual({ ok: true });
-  });
+  it.each(["TWITTER", "TIKTOK", "BLUESKY", "TWITCH"] as const)(
+    "refuses real-mode %s even if an account looks connected",
+    (platform) => {
+      const result = assertSafeToLivePublish({
+        socialAdapterMode: "real",
+        platform,
+        accountIsConnected: true,
+        accountIsActive: true,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toMatch(/YouTube only/i);
+        expect(result.reason).toMatch(new RegExp(platform, "i"));
+      }
+    }
+  );
 });
 
 describe("sanitizeMediaUrls", () => {
@@ -140,18 +151,22 @@ describe("assertReadyForLivePublish", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("refuses real-mode platforms that are not Facebook, Instagram, or YouTube", () => {
-    const result = assertReadyForLivePublish({
-      socialAdapterMode: "real",
-      platform: "TWITTER",
-      accountIsConnected: true,
-      accountIsActive: true,
-    });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toMatch(/YouTube only/i);
+  it.each(["TWITTER", "TIKTOK", "BLUESKY", "TWITCH"] as const)(
+    "refuses real-mode %s at the schedule/worker gate",
+    (platform) => {
+      const result = assertReadyForLivePublish({
+        socialAdapterMode: "real",
+        platform,
+        accountIsConnected: true,
+        accountIsActive: true,
+        mediaUrls: ["https://cdn.example.com/show.jpg"],
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toMatch(/YouTube only/i);
+      }
     }
-  });
+  );
 
   it("refuses real YouTube without an allowed video URL", () => {
     const result = assertReadyForLivePublish({
@@ -226,6 +241,45 @@ describe("assertCanApproveDraft", () => {
     expect(
       assertCanApproveDraft({ status: "SCHEDULED", riskLevel: "LOW" }).ok
     ).toBe(false);
+  });
+
+  it("allows approve from HELD so a parked draft can move to schedule", () => {
+    expect(
+      assertCanApproveDraft({ status: "HELD", riskLevel: "LOW" })
+    ).toEqual({ ok: true });
+  });
+});
+
+describe("review decisions do not publish", () => {
+  it("allows Hold from IN_REVIEW or APPROVED only", () => {
+    expect(assertCanHoldDraft({ status: "IN_REVIEW" })).toEqual({ ok: true });
+    expect(assertCanHoldDraft({ status: "APPROVED" })).toEqual({ ok: true });
+    expect(assertCanHoldDraft({ status: "SCHEDULED" }).ok).toBe(false);
+    expect(assertCanHoldDraft({ status: "PUBLISHED" }).ok).toBe(false);
+    expect(assertCanHoldDraft({ status: "REJECTED" }).ok).toBe(false);
+  });
+
+  it("allows Deny from IN_REVIEW or HELD only", () => {
+    expect(assertCanDenyDraft({ status: "IN_REVIEW" })).toEqual({ ok: true });
+    expect(assertCanDenyDraft({ status: "HELD" })).toEqual({ ok: true });
+    expect(assertCanDenyDraft({ status: "APPROVED" }).ok).toBe(false);
+    expect(assertCanDenyDraft({ status: "SCHEDULED" }).ok).toBe(false);
+  });
+
+  it("only resumes HELD drafts", () => {
+    expect(assertCanResumeHeldDraft({ status: "HELD" })).toEqual({ ok: true });
+    expect(assertCanResumeHeldDraft({ status: "IN_REVIEW" }).ok).toBe(false);
+  });
+});
+
+describe("isLiveDestinationPlatform", () => {
+  it("is true only for Facebook, Instagram, and YouTube", () => {
+    expect(isLiveDestinationPlatform("FACEBOOK")).toBe(true);
+    expect(isLiveDestinationPlatform("INSTAGRAM")).toBe(true);
+    expect(isLiveDestinationPlatform("YOUTUBE")).toBe(true);
+    expect(isLiveDestinationPlatform("TWITTER")).toBe(false);
+    expect(isLiveDestinationPlatform("TIKTOK")).toBe(false);
+    expect(isLiveDestinationPlatform("BLUESKY")).toBe(false);
   });
 });
 

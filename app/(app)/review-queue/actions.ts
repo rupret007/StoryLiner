@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { validateDraftForPlatform } from "@/lib/services/publish/validate";
 import {
   assertCanApproveDraft,
+  assertCanDenyDraft,
+  assertCanHoldDraft,
+  assertCanResumeHeldDraft,
   assertReadyForLivePublish,
   canRescheduleJob,
   sanitizeMediaUrls,
@@ -41,10 +44,11 @@ export async function approveDraft(
   revalidatePath("/scheduled-posts");
 }
 
-export async function rejectDraft(draftId: string, reason?: string) {
+export async function denyDraft(draftId: string, reason?: string) {
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
-  if (draft.status !== "IN_REVIEW") {
-    throw new Error(`Draft cannot be rejected from status ${draft.status}.`);
+  const deniable = assertCanDenyDraft({ status: draft.status });
+  if (!deniable.ok) {
+    throw new Error(deniable.reason);
   }
 
   await prisma.draft.update({
@@ -52,13 +56,54 @@ export async function rejectDraft(draftId: string, reason?: string) {
     data: {
       status: "REJECTED",
       rejectedAt: new Date(),
-      rejectedReason: reason,
+      rejectedReason: reason ?? "Denied from review queue",
     },
   });
   revalidatePath("/review-queue");
 }
 
+/** @deprecated Use denyDraft. Kept so existing callers keep working. */
+export async function rejectDraft(draftId: string, reason?: string) {
+  return denyDraft(draftId, reason);
+}
+
+export async function holdDraft(draftId: string, notes?: string) {
+  const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  const holdable = assertCanHoldDraft({ status: draft.status });
+  if (!holdable.ok) {
+    throw new Error(holdable.reason);
+  }
+
+  await prisma.draft.update({
+    where: { id: draftId },
+    data: {
+      status: "HELD",
+      reviewNotes: notes ?? "Held from review queue. Approve does not publish.",
+    },
+  });
+  revalidatePath("/review-queue");
+}
+
+export async function resumeHeldDraft(draftId: string) {
+  const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  const resumable = assertCanResumeHeldDraft({ status: draft.status });
+  if (!resumable.ok) {
+    throw new Error(resumable.reason);
+  }
+
+  await prisma.draft.update({
+    where: { id: draftId },
+    data: { status: "IN_REVIEW" },
+  });
+  revalidatePath("/review-queue");
+}
+
 export async function archiveDraft(draftId: string) {
+  const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  if (draft.status === "SCHEDULED" || draft.status === "PUBLISHED") {
+    throw new Error(`Draft cannot be archived from status ${draft.status}.`);
+  }
+
   await prisma.draft.update({
     where: { id: draftId },
     data: { status: "ARCHIVED" },
@@ -81,6 +126,7 @@ export async function duplicateDraft(draftId: string) {
       contentLength: original.contentLength,
       caption: original.caption,
       hashtags: original.hashtags,
+      mediaUrls: original.mediaUrls,
       ctaText: original.ctaText ?? undefined,
       altText: original.altText ?? undefined,
       imagePrompt: original.imagePrompt ?? undefined,

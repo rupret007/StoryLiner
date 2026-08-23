@@ -41,11 +41,15 @@ import {
   ChevronUp,
   CalendarClock,
   Loader2,
+  Pause,
+  Undo2,
 } from "lucide-react";
 import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
 import {
   approveDraft,
-  rejectDraft,
+  denyDraft,
+  holdDraft,
+  resumeHeldDraft,
   archiveDraft,
   duplicateDraft,
   rewriteDraftAction,
@@ -192,6 +196,14 @@ function ScheduleDialog({
                 Real YouTube will not live-publish a text post. Description updates stay opt-in.
               </p>
             )}
+            {(draft.platform === "TWITTER" ||
+              draft.platform === "TIKTOK" ||
+              draft.platform === "BLUESKY" ||
+              draft.platform === "TWITCH") && (
+              <p className="text-xs text-amber-300">
+                {draft.platform} is not a live destination. Real mode will refuse this schedule.
+              </p>
+            )}
           </div>
         </div>
 
@@ -277,7 +289,8 @@ function DraftCard({
   const [editedCaption, setEditedCaption] = useState(draft.caption);
   const [showHistory, setShowHistory] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
-  const [confirmReject, setConfirmReject] = useState(false);
+  const [confirmDeny, setConfirmDeny] = useState(false);
+  const [confirmHold, setConfirmHold] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [confirmHighRisk, setConfirmHighRisk] = useState(false);
   const [mediaUrlInput, setMediaUrlInput] = useState(draft.mediaUrls[0] ?? "");
@@ -286,7 +299,7 @@ function DraftCard({
     startTransition(async () => {
       try {
         await approveDraft(draft.id, undefined, confirmHighRiskApprove);
-        toast.success("Draft approved. Schedule it from the Approved tab.");
+        toast.success("Approved. This does not publish — schedule it from the Approved tab.");
         onAction();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Approve failed.");
@@ -294,12 +307,41 @@ function DraftCard({
     });
   }
 
-  function handleReject() {
-    setConfirmReject(false);
+  function handleHold() {
+    setConfirmHold(false);
     startTransition(async () => {
-      await rejectDraft(draft.id, "Rejected from review queue");
-      toast.success("Draft rejected.");
-      onAction();
+      try {
+        await holdDraft(draft.id);
+        toast.success("Held. Nothing was scheduled or published.");
+        onAction();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Hold failed.");
+      }
+    });
+  }
+
+  function handleDeny() {
+    setConfirmDeny(false);
+    startTransition(async () => {
+      try {
+        await denyDraft(draft.id, "Denied from review queue");
+        toast.success("Denied. Nothing was scheduled or published.");
+        onAction();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Deny failed.");
+      }
+    });
+  }
+
+  function handleResume() {
+    startTransition(async () => {
+      try {
+        await resumeHeldDraft(draft.id);
+        toast.success("Returned to Needs Review. Still not published.");
+        onAction();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not return to review.");
+      }
     });
   }
 
@@ -372,13 +414,22 @@ function DraftCard({
         onScheduled={onAction}
       />
       <ConfirmDialog
-        open={confirmReject}
-        title="Reject this draft?"
-        description="The draft will be moved to Rejected status. You can duplicate it first if you want to keep a copy."
-        confirmLabel="Reject"
+        open={confirmHold}
+        title="Hold this draft?"
+        description="Parks the draft for later. Nothing is scheduled or published. You can approve or deny it from the On Hold tab."
+        confirmLabel="Hold"
+        onConfirm={handleHold}
+        onCancel={() => setConfirmHold(false)}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={confirmDeny}
+        title="Deny this draft?"
+        description="Denies the caption. It will not be scheduled or published. Duplicate it first if you want a copy."
+        confirmLabel="Deny"
         confirmVariant="destructive"
-        onConfirm={handleReject}
-        onCancel={() => setConfirmReject(false)}
+        onConfirm={handleDeny}
+        onCancel={() => setConfirmDeny(false)}
         isPending={isPending}
       />
       <ConfirmDialog
@@ -406,7 +457,13 @@ function DraftCard({
 
       <Card
         className={
-          draft.status === "APPROVED" ? "border-emerald-600/30" : ""
+          draft.status === "APPROVED"
+            ? "border-emerald-600/30"
+            : draft.status === "HELD"
+            ? "border-blue-600/30"
+            : draft.status === "REJECTED"
+            ? "border-rose-600/20"
+            : ""
         }
       >
         <CardHeader className="pb-2 pt-4 px-4">
@@ -632,84 +689,114 @@ function DraftCard({
             </div>
           )}
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 pt-1 border-t border-border flex-wrap">
-            {draft.status === "IN_REVIEW" && (
+          {/* Action buttons — Approve / Hold / Deny never publish */}
+          <div className="space-y-2 pt-1 border-t border-border">
+            <p className="text-[11px] text-muted-foreground">
+              Approve, Hold, and Deny are review decisions only. None of them publish.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {(draft.status === "IN_REVIEW" || draft.status === "HELD") && (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    draft.riskLevel === "HIGH"
+                      ? setConfirmHighRisk(true)
+                      : handleApprove(false)
+                  }
+                  disabled={isPending}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  Approve
+                </Button>
+              )}
+
+              {(draft.status === "IN_REVIEW" || draft.status === "APPROVED") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmHold(true)}
+                  disabled={isPending}
+                  title="Park this draft. Does not publish."
+                >
+                  <Pause className="h-3.5 w-3.5" />
+                  Hold
+                </Button>
+              )}
+
+              {(draft.status === "IN_REVIEW" || draft.status === "HELD") && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setConfirmDeny(true)}
+                  disabled={isPending}
+                  className="text-rose-400 hover:text-rose-300 hover:bg-rose-600/10"
+                  title="Deny this draft. Does not publish."
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span className="ml-1">Deny</span>
+                </Button>
+              )}
+
+              {draft.status === "HELD" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleResume}
+                  disabled={isPending}
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  Back to review
+                </Button>
+              )}
+
+              {draft.status === "APPROVED" && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowSchedule(true)}
+                  disabled={isPending}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  Schedule
+                </Button>
+              )}
+
               <Button
                 size="sm"
-                onClick={() =>
-                  draft.riskLevel === "HIGH"
-                    ? setConfirmHighRisk(true)
-                    : handleApprove(false)
-                }
-                disabled={isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                variant="outline"
+                onClick={() => setEditingCaption(!editingCaption)}
+                disabled={isPending || draft.status === "REJECTED"}
               >
-                {isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
-                )}
-                Approve
+                Edit
               </Button>
-            )}
 
-            {draft.status === "APPROVED" && (
               <Button
                 size="sm"
-                onClick={() => setShowSchedule(true)}
+                variant="outline"
+                onClick={handleDuplicate}
                 disabled={isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                title="Duplicate draft"
               >
-                <CalendarClock className="h-3.5 w-3.5" />
-                Schedule
+                <Copy className="h-3.5 w-3.5" />
+                <span className="ml-1">Copy</span>
               </Button>
-            )}
 
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setEditingCaption(!editingCaption)}
-              disabled={isPending}
-            >
-              Edit
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDuplicate}
-              disabled={isPending}
-              title="Duplicate draft"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              <span className="ml-1">Copy</span>
-            </Button>
-
-            {draft.status === "IN_REVIEW" && (
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setConfirmReject(true)}
+                onClick={() => setConfirmArchive(true)}
                 disabled={isPending}
-                className="text-rose-400 hover:text-rose-300 hover:bg-rose-600/10"
-                title="Reject draft"
+                className="text-muted-foreground hover:text-foreground ml-auto"
+                title="Archive draft"
               >
-                <X className="h-3.5 w-3.5" />
-                <span className="ml-1">Reject</span>
+                <Archive className="h-3.5 w-3.5" />
               </Button>
-            )}
-
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setConfirmArchive(true)}
-              disabled={isPending}
-              className="text-muted-foreground hover:text-foreground ml-auto"
-              title="Archive draft"
-            >
-              <Archive className="h-3.5 w-3.5" />
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -725,7 +812,9 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
   const router = useRouter();
 
   const inReview = drafts.filter((d) => d.status === "IN_REVIEW");
+  const held = drafts.filter((d) => d.status === "HELD");
   const approved = drafts.filter((d) => d.status === "APPROVED");
+  const denied = drafts.filter((d) => d.status === "REJECTED");
 
   function refresh() {
     router.refresh();
@@ -733,13 +822,15 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-3">
-          <Badge variant="warning">{inReview.length} in review</Badge>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="warning">{inReview.length} need review</Badge>
+          <Badge variant="info">{held.length} on hold</Badge>
           <Badge variant="success">{approved.length} approved</Badge>
+          <Badge variant="destructive">{denied.length} denied</Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          All content must be approved before scheduling.
+          Approve / Hold / Deny never publish. Scheduling is a separate yes.
         </p>
       </div>
 
@@ -748,8 +839,14 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           <TabsTrigger value="review">
             Needs Review ({inReview.length})
           </TabsTrigger>
+          <TabsTrigger value="held">
+            On Hold ({held.length})
+          </TabsTrigger>
           <TabsTrigger value="approved">
             Approved — Ready to Schedule ({approved.length})
+          </TabsTrigger>
+          <TabsTrigger value="denied">
+            Denied ({denied.length})
           </TabsTrigger>
         </TabsList>
 
@@ -769,16 +866,48 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           )}
         </TabsContent>
 
+        <TabsContent value="held" className="mt-4">
+          {held.length === 0 ? (
+            <EmptyState
+              icon={Pause}
+              title="Nothing on hold"
+              description="Hold parks a draft for later. It does not schedule or publish."
+            />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {held.map((draft) => (
+                <DraftCard key={draft.id} draft={draft} onAction={refresh} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
         <TabsContent value="approved" className="mt-4">
           {approved.length === 0 ? (
             <EmptyState
               icon={Check}
               title="No approved drafts"
-              description="Approve drafts from the In Review tab, then schedule them here."
+              description="Approve drafts from Needs Review, then schedule them here. Approve is not publish."
             />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {approved.map((draft) => (
+                <DraftCard key={draft.id} draft={draft} onAction={refresh} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="denied" className="mt-4">
+          {denied.length === 0 ? (
+            <EmptyState
+              icon={X}
+              title="No denied drafts"
+              description="Deny rejects a caption. Duplicate it if you want another pass."
+            />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {denied.map((draft) => (
                 <DraftCard key={draft.id} draft={draft} onAction={refresh} />
               ))}
             </div>

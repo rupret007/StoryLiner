@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 type Status =
   | "DRAFT"
   | "IN_REVIEW"
+  | "HELD"
   | "APPROVED"
   | "REJECTED"
   | "SCHEDULED"
@@ -15,9 +16,10 @@ const statusConfig: Record<
   { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }
 > = {
   DRAFT: { label: "Draft", variant: "secondary" },
-  IN_REVIEW: { label: "In Review", variant: "warning" },
+  IN_REVIEW: { label: "Needs Review", variant: "warning" },
+  HELD: { label: "On Hold", variant: "info" },
   APPROVED: { label: "Approved", variant: "success" },
-  REJECTED: { label: "Rejected", variant: "destructive" },
+  REJECTED: { label: "Denied", variant: "destructive" },
   SCHEDULED: { label: "Scheduled", variant: "info" },
   PUBLISHED: { label: "Published", variant: "success" },
   ARCHIVED: { label: "Archived", variant: "outline" },

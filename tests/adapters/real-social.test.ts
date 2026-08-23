@@ -302,6 +302,11 @@ describe("getSocialAdapter — real mode wiring", () => {
     const twitter = await getSocialAdapter("TWITTER");
     expect(twitter.adapterName).toBe("real-fallback-draft-only-twitter");
     expect(twitter.capabilities.canDirectPublish).toBe(false);
+
+    const tiktok = await getSocialAdapter("TIKTOK");
+    expect(tiktok.adapterName).toBe("real-fallback-draft-only-tiktok");
+    expect(tiktok.capabilities.canDirectPublish).toBe(false);
+    expect(tiktok.capabilities.canDraftOnly).toBe(true);
   });
 
   it("returns mock adapters when SOCIAL_ADAPTER=mock (default)", async () => {

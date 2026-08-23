@@ -8,6 +8,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { handlePublishPost } from "../lib/jobs/handlers/publish-post";
+import { isUnimplementedJobType, unimplementedJobError } from "../lib/jobs/worker-policy";
 
 const prisma = new PrismaClient();
 
@@ -40,18 +41,13 @@ async function processDueJobs(): Promise<void> {
     console.log(`[${WORKER_ID}] Processing job ${job.id} (type: ${job.type})`);
 
     try {
-      const unimplemented =
-        job.type === "GENERATE_RECAP" ||
-        job.type === "GENERATE_CLIP_FOLLOW_UP" ||
-        job.type === "SEND_LIVESTREAM_REMINDER";
-
-      if (unimplemented) {
+      if (isUnimplementedJobType(job.type)) {
         await prisma.job.update({
           where: { id: job.id },
           data: {
             status: "FAILED",
             failedAt: new Date(),
-            errorMessage: `Handler not implemented for ${job.type}`,
+            errorMessage: unimplementedJobError(job.type),
             retryCount: job.maxRetries,
           },
         });

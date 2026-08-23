@@ -54,7 +54,7 @@ export const rewriteDraftSchema = z.object({
 
 export const reviewDraftSchema = z.object({
   draftId: z.string().cuid(),
-  action: z.enum(["approve", "reject", "archive"]),
+  action: z.enum(["approve", "hold", "deny", "reject", "archive", "resume"]),
   notes: z.string().max(500).optional(),
   rejectedReason: z.string().max(500).optional(),
 });
