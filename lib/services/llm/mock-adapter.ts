@@ -116,7 +116,11 @@ export class MockLlmAdapter implements LLMAdapter {
     return {
       caption,
       hashtags,
-      ctaText: context?.ticketUrl ? "Grab tickets before they're gone" : undefined,
+      ctaText: context?.ticketUrl
+        ? isRD
+          ? "Tickets in bio"
+          : "Tickets if you want them"
+        : undefined,
       altText: `${band.name} performing live on stage`,
       imagePrompt: `${band.name} live performance photo, dark moody lighting, ${isRD ? "energetic crowd" : "intimate venue"}, concert photography style`,
       fanReplies: [

@@ -20,7 +20,7 @@
  * This is the honest capability declaration for YouTube text posts.
  * When a video URL is provided, this adapter can update video metadata (title/description).
  *
- * Docs: https://developers.facebook.com/docs/youtube/data/v3
+ * Docs: https://developers.google.com/youtube/v3
  * Permission required: https://www.googleapis.com/auth/youtube
  */
 
@@ -88,6 +88,18 @@ export class YouTubeRealAdapter extends SocialProviderAdapter {
     const videoId = this.extractYouTubeVideoId(payload.mediaUrls);
 
     if (videoId) {
+      // Live video description writes are destructive. Require an explicit yes
+      // on the platform account — do not invent this as a default publish path.
+      if (payload.accountMetadata?.allowVideoDescriptionUpdate !== true) {
+        return {
+          success: true,
+          isDraftOnly: true,
+          responseCode: undefined,
+          externalPostId: videoId,
+          externalPostUrl: `https://studio.youtube.com/video/${videoId}/edit`,
+          durationMs: Date.now() - start,
+        };
+      }
       return this.updateVideoDescription(videoId, payload, start);
     }
 

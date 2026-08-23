@@ -259,48 +259,58 @@ describe("YouTubeRealAdapter — deletePost is intentionally a no-op", () => {
 // ─── Adapter factory ──────────────────────────────────────────────────────────
 
 describe("getSocialAdapter — real mode wiring", () => {
-  it("returns real adapters for FB/IG/YT when SOCIAL_ADAPTER=real", () => {
-    const saved = process.env.SOCIAL_ADAPTER;
-    process.env.SOCIAL_ADAPTER = "real";
-
-    const { getSocialAdapter } = require("@/lib/adapters/social/index");
-
-    const fb = getSocialAdapter("FACEBOOK");
-    expect(fb.adapterName).toBe("real-facebook");
-
-    const ig = getSocialAdapter("INSTAGRAM");
-    expect(ig.adapterName).toBe("real-instagram");
-
-    const yt = getSocialAdapter("YOUTUBE");
-    expect(yt.adapterName).toBe("real-youtube");
-
-    process.env.SOCIAL_ADAPTER = saved;
+  afterEach(() => {
+    delete process.env.SOCIAL_ADAPTER;
     jest.resetModules();
   });
 
-  it("falls back to mock for unsupported real platforms", () => {
-    const saved = process.env.SOCIAL_ADAPTER;
+  it("returns real adapters for FB/IG/YT when SOCIAL_ADAPTER=real", async () => {
     process.env.SOCIAL_ADAPTER = "real";
-
-    const { getSocialAdapter } = require("@/lib/adapters/social/index");
-
-    const bluesky = getSocialAdapter("BLUESKY");
-    expect(bluesky.adapterName).toBe("mock-bluesky");
-
-    process.env.SOCIAL_ADAPTER = saved;
     jest.resetModules();
+    const { getSocialAdapter } = require("@/lib/adapters/social/index") as {
+      getSocialAdapter: (platform: string) => Promise<{ adapterName: string }>;
+    };
+
+    await expect(getSocialAdapter("FACEBOOK")).resolves.toMatchObject({
+      adapterName: "real-facebook",
+    });
+    await expect(getSocialAdapter("INSTAGRAM")).resolves.toMatchObject({
+      adapterName: "real-instagram",
+    });
+    await expect(getSocialAdapter("YOUTUBE")).resolves.toMatchObject({
+      adapterName: "real-youtube",
+    });
   });
 
-  it("returns mock adapters when SOCIAL_ADAPTER=mock (default)", () => {
-    const saved = process.env.SOCIAL_ADAPTER;
+  it("uses a draft-only fallback for unsupported real platforms", async () => {
+    process.env.SOCIAL_ADAPTER = "real";
+    jest.resetModules();
+    const { getSocialAdapter } = require("@/lib/adapters/social/index") as {
+      getSocialAdapter: (platform: string) => Promise<{
+        adapterName: string;
+        capabilities: { canDirectPublish: boolean; canDraftOnly: boolean };
+      }>;
+    };
+
+    const bluesky = await getSocialAdapter("BLUESKY");
+    expect(bluesky.adapterName).toBe("real-fallback-draft-only-bluesky");
+    expect(bluesky.capabilities.canDirectPublish).toBe(false);
+    expect(bluesky.capabilities.canDraftOnly).toBe(true);
+
+    const twitter = await getSocialAdapter("TWITTER");
+    expect(twitter.adapterName).toBe("real-fallback-draft-only-twitter");
+    expect(twitter.capabilities.canDirectPublish).toBe(false);
+  });
+
+  it("returns mock adapters when SOCIAL_ADAPTER=mock (default)", async () => {
     process.env.SOCIAL_ADAPTER = "mock";
-
-    const { getSocialAdapter } = require("@/lib/adapters/social/index");
-
-    const fb = getSocialAdapter("FACEBOOK");
-    expect(fb.adapterName).toBe("mock-facebook");
-
-    process.env.SOCIAL_ADAPTER = saved;
     jest.resetModules();
+    const { getSocialAdapter } = require("@/lib/adapters/social/index") as {
+      getSocialAdapter: (platform: string) => Promise<{ adapterName: string }>;
+    };
+
+    await expect(getSocialAdapter("FACEBOOK")).resolves.toMatchObject({
+      adapterName: "mock-facebook",
+    });
   });
 });

@@ -41,6 +41,20 @@ export class FacebookRealAdapter extends SocialProviderAdapter {
     const start = Date.now();
 
     try {
+      // StoryLiner's job queue is the scheduler. Do not use Facebook native
+      // scheduled_publish_time (published=false) — that creates an unpublished
+      // Page post that handlePublishPost would still mark as PUBLISHED.
+      if (payload.scheduledFor && payload.scheduledFor.getTime() > Date.now() + 60_000) {
+        return {
+          success: false,
+          isDraftOnly: false,
+          errorMessage:
+            "Refusing Facebook native scheduled publish. StoryLiner owns scheduling; " +
+            "the worker may only post when the job is due.",
+          durationMs: Date.now() - start,
+        };
+      }
+
       const { pageAccessToken, pageId } = getFacebookCredentials(payload.accountMetadata);
 
       const message = payload.hashtags.length
@@ -48,13 +62,6 @@ export class FacebookRealAdapter extends SocialProviderAdapter {
         : payload.caption;
 
       const body: Record<string, unknown> = { message };
-
-      // Use Facebook's native scheduled publish if scheduledFor is set and in the future.
-      // Scheduled posts require a minimum of 10 minutes and maximum of 6 months.
-      if (payload.scheduledFor && payload.scheduledFor > new Date()) {
-        body.scheduled_publish_time = Math.floor(payload.scheduledFor.getTime() / 1000);
-        body.published = false;
-      }
 
       const response = await fetch(`${GRAPH_API_BASE}/${pageId}/feed`, {
         method: "POST",

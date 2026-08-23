@@ -80,6 +80,19 @@ describe("MockLlmAdapter", () => {
       expect(Array.isArray(result.fanReplies)).toBe(true);
     });
 
+    it("does not use FOMO ticket CTAs that conflict with Stalemate voice locks", async () => {
+      const result = await adapter.generateContent({
+        band: mockStalemate,
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform: "INSTAGRAM",
+        contentLength: "MEDIUM",
+        context: { ticketUrl: "https://example.com/tickets" },
+      });
+
+      expect(result.ctaText).not.toMatch(/before they're gone/i);
+      expect(result.ctaText).not.toMatch(/grab your tickets now/i);
+    });
+
     it("returns a valid GeneratedContent object for Rad Dad", async () => {
       const result = await adapter.generateContent({
         band: mockRadDad,

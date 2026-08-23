@@ -4,11 +4,14 @@ import type { JobType } from "@prisma/client";
 interface ScheduleJobOptions {
   type: JobType;
   payload: Record<string, unknown>;
-  runAt?: Date;
+  runAt: Date;
 }
 
 export async function scheduleJob(options: ScheduleJobOptions) {
-  const { type, payload, runAt = new Date() } = options;
+  const { type, payload, runAt } = options;
+  if (!runAt) {
+    throw new Error("scheduleJob requires an explicit runAt. Immediate publish is not allowed.");
+  }
 
   return prisma.job.create({
     data: {

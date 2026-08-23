@@ -151,10 +151,17 @@ async function main() {
     },
   ];
 
-  for (const entry of stalemateKnowledge) {
-    await prisma.knowledgeEntry.create({
-      data: { bandId: stalemate.id, isActive: true, ...entry },
-    });
+  const stalemateKnowledgeCount = await prisma.knowledgeEntry.count({
+    where: { bandId: stalemate.id },
+  });
+  if (stalemateKnowledgeCount === 0) {
+    for (const entry of stalemateKnowledge) {
+      await prisma.knowledgeEntry.create({
+        data: { bandId: stalemate.id, isActive: true, ...entry },
+      });
+    }
+  } else {
+    console.log("Seed: Stalemate knowledge already present — skipping.");
   }
 
   // Stalemate platform accounts
@@ -302,10 +309,17 @@ async function main() {
     },
   ];
 
-  for (const entry of radDadKnowledge) {
-    await prisma.knowledgeEntry.create({
-      data: { bandId: radDad.id, isActive: true, ...entry },
-    });
+  const radDadKnowledgeCount = await prisma.knowledgeEntry.count({
+    where: { bandId: radDad.id },
+  });
+  if (radDadKnowledgeCount === 0) {
+    for (const entry of radDadKnowledge) {
+      await prisma.knowledgeEntry.create({
+        data: { bandId: radDad.id, isActive: true, ...entry },
+      });
+    }
+  } else {
+    console.log("Seed: Rad Dad knowledge already present — skipping.");
   }
 
   // Rad Dad platform accounts
@@ -324,6 +338,16 @@ async function main() {
       update: {},
     });
     radDadPlatformAccounts.push(account);
+  }
+
+  const existingEvent = await prisma.event.findFirst({
+    where: { bandId: { in: [stalemate.id, radDad.id] } },
+    select: { id: true },
+  });
+  if (existingEvent) {
+    console.log("Seed: events/drafts already present — skipping mutable demo rows.");
+    console.log(`  Bands: Stalemate (${stalemate.id}), Rad Dad (${radDad.id})`);
+    return;
   }
 
   // ─── Events ──────────────────────────────────────────────────────────────────
@@ -363,7 +387,7 @@ async function main() {
       bandId: stalemate.id,
       eventId: stalemateShow.id,
       type: "SHOW_ANNOUNCEMENT",
-      name: "Burlington Bar — May Show",
+      name: "Burlington Bar show",
       description: "Announcing and promoting the Burlington Bar show across platforms.",
       targetDate: stalemateShow.eventDate,
     },

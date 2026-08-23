@@ -3,11 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { validateDraftForPlatform } from "@/lib/services/publish/validate";
+import { assertSafeToLivePublish, canRescheduleJob } from "@/lib/services/publish/safety";
+import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 import { rewriteDraft } from "@/lib/services/content/rewrite";
 import { scheduleDraftSchema } from "@/lib/schemas/content";
 import type { RewriteDraftInput, ScheduleDraftInput } from "@/lib/schemas/content";
 
 export async function approveDraft(draftId: string, notes?: string) {
+  const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  if (draft.status !== "IN_REVIEW") {
+    throw new Error(`Draft cannot be approved from status ${draft.status}.`);
+  }
+
   await prisma.draft.update({
     where: { id: draftId },
     data: {
@@ -21,6 +28,11 @@ export async function approveDraft(draftId: string, notes?: string) {
 }
 
 export async function rejectDraft(draftId: string, reason?: string) {
+  const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  if (draft.status !== "IN_REVIEW") {
+    throw new Error(`Draft cannot be rejected from status ${draft.status}.`);
+  }
+
   await prisma.draft.update({
     where: { id: draftId },
     data: {
@@ -130,6 +142,16 @@ export async function scheduleApprovedDraft(rawInput: ScheduleDraftInput) {
     );
   }
 
+  const liveSafety = assertSafeToLivePublish({
+    socialAdapterMode: process.env.SOCIAL_ADAPTER ?? "mock",
+    platform: draft.platform,
+    accountIsConnected: account.isConnected,
+    accountIsActive: account.isActive,
+  });
+  if (!liveSafety.ok) {
+    throw new Error(liveSafety.reason);
+  }
+
   // Atomic transaction: create scheduled post + job + update draft status together
   const scheduledPost = await prisma.$transaction(async (tx) => {
     // Create the job record
@@ -184,29 +206,39 @@ export async function reschedulePost(
     throw new Error("New schedule time must be in the future.");
   }
 
-  // Verify post is still in SCHEDULED state
   const existing = await prisma.scheduledPost.findUniqueOrThrow({
     where: { id: scheduledPostId },
+    include: { job: true },
   });
 
   if (existing.status !== "SCHEDULED") {
     throw new Error("Only SCHEDULED posts can be rescheduled.");
   }
 
+  if (!canRescheduleJob(existing.job?.status)) {
+    throw new Error(
+      "Cannot reschedule a post that is already publishing or completed. " +
+        "Resetting a RUNNING job to PENDING can double-publish."
+    );
+  }
+
   const scheduledPost = await prisma.$transaction(async (tx) => {
-    const post = await tx.scheduledPost.update({
+    if (existing.jobId) {
+      const claimed = await tx.job.updateMany({
+        where: { id: existing.jobId, status: "PENDING" },
+        data: { runAt: newDate },
+      });
+      if (claimed.count === 0) {
+        throw new Error(
+          "Cannot reschedule a post that is already publishing or completed."
+        );
+      }
+    }
+
+    return tx.scheduledPost.update({
       where: { id: scheduledPostId },
       data: { scheduledFor: newDate },
     });
-
-    if (post.jobId) {
-      await tx.job.update({
-        where: { id: post.jobId },
-        data: { runAt: newDate, status: "PENDING" },
-      });
-    }
-
-    return post;
   });
 
   revalidatePath("/scheduled-posts");
@@ -214,8 +246,24 @@ export async function reschedulePost(
 }
 
 export async function updateDraftCaption(draftId: string, caption: string) {
-  const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  const draft = await prisma.draft.findUniqueOrThrow({
+    where: { id: draftId },
+    include: { band: { include: { voiceProfile: true } } },
+  });
   const newVersion = draft.currentVersion + 1;
+
+  const otherBands = await prisma.band.findMany({
+    where: { id: { not: draft.bandId } },
+    select: { name: true },
+  });
+  const violations = evaluateGuardrails({
+    caption,
+    bandName: draft.band.name,
+    otherBandNames: otherBands.map((b) => b.name),
+    emojiTolerance: draft.band.voiceProfile?.emojiTolerance,
+    isAutoPublish: false,
+  });
+  const riskFlags = violations.map((v) => v.detail);
 
   await prisma.draftVersion.create({
     data: {
@@ -234,6 +282,8 @@ export async function updateDraftCaption(draftId: string, caption: string) {
       caption,
       currentVersion: newVersion,
       status: "IN_REVIEW",
+      riskFlags,
+      riskLevel: riskLevelFromFlags(riskFlags.length),
     },
   });
 

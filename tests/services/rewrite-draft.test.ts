@@ -2,23 +2,8 @@
  * Tests for rewrite service hashtag derivation logic and risk recalculation.
  */
 
-// Test the pure hashtag derivation function in isolation.
-// We import from the module once it exports this helper, but for now we
-// replicate the logic directly for whitebox unit testing.
-
-function deriveHashtags(
-  existingHashtags: string[],
-  newCaption: string,
-  directive: string
-): string[] {
-  if (directive === "noHashtags") {
-    return [];
-  }
-  if (directive === "shorterHashtags") {
-    return existingHashtags.filter((h) => h.length <= 14);
-  }
-  return existingHashtags;
-}
+import { deriveHashtags } from "@/lib/services/content/hashtags";
+import { riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 
 describe("deriveHashtags", () => {
   const tags = ["#bandlife", "#independentmusic", "#live", "#alt", "#originalmusiconly"];
@@ -54,15 +39,11 @@ describe("deriveHashtags", () => {
 });
 
 describe("rewrite risk level computation", () => {
-  function computeRiskLevel(flagCount: number): "LOW" | "MEDIUM" | "HIGH" {
-    return flagCount === 0 ? "LOW" : flagCount <= 2 ? "MEDIUM" : "HIGH";
-  }
-
-  it("zero flags = LOW", () => expect(computeRiskLevel(0)).toBe("LOW"));
-  it("one flag = MEDIUM", () => expect(computeRiskLevel(1)).toBe("MEDIUM"));
-  it("two flags = MEDIUM", () => expect(computeRiskLevel(2)).toBe("MEDIUM"));
-  it("three flags = HIGH", () => expect(computeRiskLevel(3)).toBe("HIGH"));
-  it("ten flags = HIGH", () => expect(computeRiskLevel(10)).toBe("HIGH"));
+  it("zero flags = LOW", () => expect(riskLevelFromFlags(0)).toBe("LOW"));
+  it("one flag = MEDIUM", () => expect(riskLevelFromFlags(1)).toBe("MEDIUM"));
+  it("two flags = MEDIUM", () => expect(riskLevelFromFlags(2)).toBe("MEDIUM"));
+  it("three flags = HIGH", () => expect(riskLevelFromFlags(3)).toBe("HIGH"));
+  it("ten flags = HIGH", () => expect(riskLevelFromFlags(10)).toBe("HIGH"));
 });
 
 describe("mock LLM rewriteContent for hashtag directives", () => {

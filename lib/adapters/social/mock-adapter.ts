@@ -154,6 +154,46 @@ export const mockTwitchAdapter = new MockSocialAdapter(
   "mock-twitch"
 );
 
+/**
+ * X/Twitter is schema-legacy only. Do not add a real X adapter.
+ * Keep this stub draft-only so it cannot masquerade as a Facebook live publish.
+ */
+export const mockTwitterAdapter = new MockSocialAdapter(
+  "TWITTER",
+  {
+    canDirectPublish: false,
+    canSchedule: false,
+    canDraftOnly: true,
+    canDeletePost: false,
+    supportsMedia: false,
+    supportsHashtags: true,
+    maxCaptionLength: 280,
+    maxHashtags: 5,
+  },
+  "mock-twitter"
+);
+
+/** Used when SOCIAL_ADAPTER=real but the platform has no real write adapter. */
+export function createDraftOnlyFallbackAdapter(
+  platform: Platform,
+  adapterName: string
+): SocialProviderAdapter {
+  return new MockSocialAdapter(
+    platform,
+    {
+      canDirectPublish: false,
+      canSchedule: false,
+      canDraftOnly: true,
+      canDeletePost: false,
+      supportsMedia: false,
+      supportsHashtags: true,
+      maxCaptionLength: 500,
+      maxHashtags: 10,
+    },
+    adapterName
+  );
+}
+
 export const allMockAdapters: Record<Platform, SocialProviderAdapter> = {
   FACEBOOK: mockFacebookAdapter,
   INSTAGRAM: mockInstagramAdapter,
@@ -161,5 +201,5 @@ export const allMockAdapters: Record<Platform, SocialProviderAdapter> = {
   TIKTOK: mockTikTokAdapter,
   YOUTUBE: mockYouTubeAdapter,
   TWITCH: mockTwitchAdapter,
-  TWITTER: mockFacebookAdapter, // fallback
+  TWITTER: mockTwitterAdapter,
 };

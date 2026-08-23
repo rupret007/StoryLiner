@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getLlmAdapter } from "@/lib/services/llm";
-import { checkHardGuardrails } from "@/lib/services/guardrails/policy";
+import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 import type { GenerateContentInput } from "@/lib/schemas/content";
 import type { Draft } from "@prisma/client";
 
@@ -23,8 +23,19 @@ export async function generateContent(input: GenerateContentInput): Promise<Draf
     context: input.context,
   });
 
-  // Run hard guardrails
-  const violations = checkHardGuardrails(generated.caption);
+  const otherBands = await prisma.band.findMany({
+    where: { id: { not: band.id } },
+    select: { name: true },
+  });
+
+  // Hard guardrails always run. Auto-publish is explicitly false — drafts stay IN_REVIEW.
+  const violations = evaluateGuardrails({
+    caption: generated.caption,
+    bandName: band.name,
+    otherBandNames: otherBands.map((b) => b.name),
+    emojiTolerance: band.voiceProfile?.emojiTolerance,
+    isAutoPublish: false,
+  });
   const additionalFlags = violations.map((v) => v.detail);
   const allFlags = [...generated.riskFlags, ...additionalFlags];
 
@@ -58,7 +69,7 @@ export async function generateContent(input: GenerateContentInput): Promise<Draf
       fanReplies: generated.fanReplies,
       brandFitScore: generated.brandFitScore,
       confidenceNotes: generated.confidenceNotes,
-      riskLevel: allFlags.length === 0 ? "LOW" : allFlags.length <= 2 ? "MEDIUM" : "HIGH",
+      riskLevel: riskLevelFromFlags(allFlags.length),
       riskFlags: allFlags,
       generationRunId: run.id,
       currentVersion: 1,

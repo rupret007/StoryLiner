@@ -20,6 +20,13 @@ describe("Social Provider Mock Adapters", () => {
       expect(allMockAdapters.TWITCH.capabilities.canDirectPublish).toBe(false);
     });
 
+    it("Twitter/X stub is draft-only and is not the Facebook mock", () => {
+      expect(allMockAdapters.TWITTER.adapterName).toBe("mock-twitter");
+      expect(allMockAdapters.TWITTER.capabilities.canDraftOnly).toBe(true);
+      expect(allMockAdapters.TWITTER.capabilities.canDirectPublish).toBe(false);
+      expect(allMockAdapters.TWITTER).not.toBe(allMockAdapters.FACEBOOK);
+    });
+
     it("Bluesky adapter does not support native scheduling", () => {
       expect(allMockAdapters.BLUESKY.capabilities.canSchedule).toBe(false);
     });
@@ -65,6 +72,17 @@ describe("Social Provider Mock Adapters", () => {
       expect(result.externalPostId).toBeTruthy();
       expect(result.externalPostUrl).toBeTruthy();
       expect(result.durationMs).toBeGreaterThan(0);
+    });
+
+    it("Twitter/X stub publishes as draft only", async () => {
+      const result = await allMockAdapters.TWITTER.publish({
+        caption: "This must not look like a live Facebook post.",
+        hashtags: [],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.isDraftOnly).toBe(true);
+      expect(result.externalPostUrl).toContain("/draft/");
     });
 
     it("TikTok adapter publishes as draft", async () => {
