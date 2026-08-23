@@ -46,8 +46,13 @@ import {
 } from "lucide-react";
 import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
 import {
+  denyConfirmDescription,
+  denySuccessToast,
   draftHasPossibleLiveWrite,
   duplicateDraftSuccessToast,
+  holdConfirmDescription,
+  holdSuccessToast,
+  resumeHeldSuccessToast,
 } from "@/lib/services/publish/safety";
 import {
   approveDraft,
@@ -326,6 +331,7 @@ function DraftCard({
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [confirmHighRisk, setConfirmHighRisk] = useState(false);
   const [mediaUrlInput, setMediaUrlInput] = useState(draft.mediaUrls[0] ?? "");
+  const possibleLiveWrite = draftHasPossibleLiveWrite(draft.reviewNotes);
 
   function handleApprove(confirmHighRiskApprove = false) {
     startTransition(async () => {
@@ -344,7 +350,7 @@ function DraftCard({
     startTransition(async () => {
       try {
         await holdDraft(draft.id);
-        toast.success("Held. Nothing was scheduled or published.");
+        toast.success(holdSuccessToast({ possibleLiveWrite }));
         onAction();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Hold failed.");
@@ -357,7 +363,7 @@ function DraftCard({
     startTransition(async () => {
       try {
         await denyDraft(draft.id, "Denied from review queue");
-        toast.success("Denied. Nothing was scheduled or published.");
+        toast.success(denySuccessToast({ possibleLiveWrite }));
         onAction();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Deny failed.");
@@ -369,7 +375,7 @@ function DraftCard({
     startTransition(async () => {
       try {
         await resumeHeldDraft(draft.id);
-        toast.success("Returned to Needs Review. Still not published.");
+        toast.success(resumeHeldSuccessToast({ possibleLiveWrite }));
         onAction();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not return to review.");
@@ -392,7 +398,7 @@ function DraftCard({
         await duplicateDraft(draft.id);
         toast.success(
           duplicateDraftSuccessToast({
-            possibleLiveWrite: draftHasPossibleLiveWrite(draft.reviewNotes),
+            possibleLiveWrite,
           })
         );
         onAction();
@@ -456,7 +462,7 @@ function DraftCard({
       <ConfirmDialog
         open={confirmHold}
         title="Hold this draft?"
-        description="Parks the draft for later. Nothing is scheduled or published. You can approve or deny it from the On Hold tab."
+        description={holdConfirmDescription({ possibleLiveWrite })}
         confirmLabel="Hold"
         onConfirm={handleHold}
         onCancel={() => setConfirmHold(false)}
@@ -465,7 +471,7 @@ function DraftCard({
       <ConfirmDialog
         open={confirmDeny}
         title="Deny this draft?"
-        description="Denies the caption. It will not be scheduled or published. Duplicate it first if you want a copy."
+        description={denyConfirmDescription({ possibleLiveWrite })}
         confirmLabel="Deny"
         confirmVariant="destructive"
         onConfirm={handleDeny}

@@ -162,6 +162,16 @@ describe("queue honesty after a possible live write", () => {
         reviewNotes: expect.stringContaining(POSSIBLE_LIVE_WRITE_MARKER),
       },
     });
+    expect(prismaMock.job.updateMany).toHaveBeenCalledWith({
+      where: { id: "job_1", status: "PENDING" },
+      data: expect.objectContaining({
+        status: "FAILED",
+        errorMessage: expect.stringMatching(/may already be live/i),
+      }),
+    });
+    const jobError = prismaMock.job.updateMany.mock.calls[0][0].data
+      .errorMessage as string;
+    expect(jobError).not.toMatch(/Nothing was published/i);
   });
 
   it("Copy keeps POSSIBLE_LIVE_WRITE so the new draft cannot skip the platform check", async () => {

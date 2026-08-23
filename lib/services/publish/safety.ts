@@ -344,6 +344,54 @@ export function returnScheduleSuccessToast(options: {
 }
 
 /**
+ * Persist an honest job error when pulling a schedule back.
+ * A write-started PENDING job is Return to Approved, not "nothing was published."
+ */
+export function unscheduleJobErrorMessage(adapterWriteStarted: boolean): string {
+  if (adapterWriteStarted) {
+    return (
+      "Returned to Approved after a Facebook / Instagram / YouTube write may already be live. " +
+      "StoryLiner did not mark this published."
+    );
+  }
+  return "Unscheduled by operator. Nothing was published.";
+}
+
+export function claimsNothingWasPublished(message: string): boolean {
+  return /nothing was published/i.test(message);
+}
+
+/**
+ * Adapter / worker errors often say "Nothing was published" after the write
+ * already started (Graph 200 without id, Instagram container created).
+ * The queue must not repeat that claim.
+ */
+export function honestJobFailureMessage(options: {
+  errorMessage: string | null | undefined;
+  adapterWriteStarted: boolean;
+}): string | null {
+  const raw = options.errorMessage?.trim();
+  if (!raw) return null;
+  if (options.adapterWriteStarted && claimsNothingWasPublished(raw)) {
+    return raw.replace(/nothing was published/gi, "StoryLiner did not mark this published");
+  }
+  return raw;
+}
+
+export function writeStartedQueueWarning(options: { jobFailed: boolean }): string {
+  if (options.jobFailed) {
+    return (
+      "A Facebook / Instagram / YouTube write may already be live. " +
+      "StoryLiner did not mark this published. Check the platform before scheduling again."
+    );
+  }
+  return (
+    "A Facebook / Instagram / YouTube write may already be live. " +
+    "Cannot Unschedule or Reschedule as if this is still pending."
+  );
+}
+
+/**
  * A draft marked possible-live-write cannot be scheduled again until Jeff
  * confirms he checked Facebook / Instagram / YouTube.
  */
@@ -482,6 +530,56 @@ export function duplicateDraftSuccessToast(options: {
     );
   }
   return "Duplicated. Find the copy in the In Review tab.";
+}
+
+export function holdSuccessToast(options: { possibleLiveWrite: boolean }): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Held. This did not publish. A Facebook / Instagram / YouTube write may already be live."
+    );
+  }
+  return "Held. Nothing was scheduled or published.";
+}
+
+export function denySuccessToast(options: { possibleLiveWrite: boolean }): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Denied. This did not publish. A Facebook / Instagram / YouTube write may already be live."
+    );
+  }
+  return "Denied. Nothing was scheduled or published.";
+}
+
+export function resumeHeldSuccessToast(options: { possibleLiveWrite: boolean }): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Returned to Needs Review. This did not publish. " +
+      "A Facebook / Instagram / YouTube write may already be live."
+    );
+  }
+  return "Returned to Needs Review. Still not published.";
+}
+
+export function holdConfirmDescription(options: { possibleLiveWrite: boolean }): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Parks the draft for later. This does not publish. " +
+      "A Facebook / Instagram / YouTube write may already be live. " +
+      "Hold does not clear the schedule gate."
+    );
+  }
+  return "Parks the draft for later. Nothing is scheduled or published. You can approve or deny it from the On Hold tab.";
+}
+
+export function denyConfirmDescription(options: { possibleLiveWrite: boolean }): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Denies the caption. This does not publish. " +
+      "A Facebook / Instagram / YouTube write may already be live. " +
+      "Copy keeps that warning if you want another pass."
+    );
+  }
+  return "Denies the caption. It will not be scheduled or published. Duplicate it first if you want a copy.";
 }
 
 /**

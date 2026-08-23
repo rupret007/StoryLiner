@@ -7,6 +7,10 @@ import { EmptyState } from "@/components/storyliner/empty-state";
 import { Clock } from "lucide-react";
 import { formatRelative } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
+import {
+  honestJobFailureMessage,
+  writeStartedQueueWarning,
+} from "@/lib/services/publish/safety";
 import { RescheduleButton, ReturnScheduleButton } from "./client";
 import type { Metadata } from "next";
 
@@ -60,6 +64,10 @@ export default async function ScheduledPostsPage() {
               ? jobMayHaveStartedAdapterWrite(post.job.payload)
               : false;
             const writeMayBeLive = writeStarted && !jobRunning;
+            const failureNote = honestJobFailureMessage({
+              errorMessage: post.job?.errorMessage,
+              adapterWriteStarted: writeStarted,
+            });
             return (
               <Card key={post.id}>
                 <CardContent className="p-4 flex items-start gap-4">
@@ -90,15 +98,14 @@ export default async function ScheduledPostsPage() {
                         {post.draft.hashtags.join(" ")}
                       </p>
                     )}
-                    {(jobFailed || writeMayBeLive) && post.job?.errorMessage && (
+                    {(jobFailed || writeMayBeLive) && failureNote && (
                       <p className="text-xs text-rose-300 mt-2">
-                        {post.job.errorMessage}
+                        {failureNote}
                       </p>
                     )}
-                    {writeMayBeLive && !jobFailed && (
+                    {writeMayBeLive && (
                       <p className="text-xs text-amber-200 mt-2">
-                        A Facebook / Instagram / YouTube write may already be live.
-                        Cannot Unschedule or Reschedule as if this is still pending.
+                        {writeStartedQueueWarning({ jobFailed })}
                       </p>
                     )}
                     {jobRunning && (

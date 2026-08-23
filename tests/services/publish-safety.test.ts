@@ -24,7 +24,15 @@ import {
   returnScheduleSuccessToast,
   reviewNotesForDuplicateDraft,
   duplicateDraftSuccessToast,
+  denyConfirmDescription,
+  denySuccessToast,
+  holdConfirmDescription,
+  holdSuccessToast,
+  honestJobFailureMessage,
+  resumeHeldSuccessToast,
   sanitizeMediaUrls,
+  unscheduleJobErrorMessage,
+  writeStartedQueueWarning,
 } from "@/lib/services/publish/safety";
 
 describe("assertSafeToLivePublish", () => {
@@ -528,6 +536,100 @@ describe("Unschedule vs write-started copy", () => {
         adapterWriteStarted: false,
       })
     ).toMatch(/Unscheduled/i);
+  });
+
+  it("does not persist Nothing was published on a write-started Unschedule", () => {
+    const writeStarted = unscheduleJobErrorMessage(true);
+    expect(writeStarted).not.toMatch(/Nothing was published/i);
+    expect(writeStarted).toMatch(/may already be live/i);
+    expect(writeStarted).toMatch(/did not mark this published/i);
+
+    expect(unscheduleJobErrorMessage(false)).toMatch(/Nothing was published/i);
+  });
+});
+
+describe("queue notes after a possible live write", () => {
+  it("never claims Hold / Deny / Resume cleared the platform", () => {
+    expect(holdSuccessToast({ possibleLiveWrite: true })).not.toMatch(
+      /Nothing was scheduled or published/i
+    );
+    expect(holdSuccessToast({ possibleLiveWrite: true })).toMatch(/may already be live/i);
+    expect(holdSuccessToast({ possibleLiveWrite: false })).toMatch(
+      /Nothing was scheduled or published/i
+    );
+
+    expect(denySuccessToast({ possibleLiveWrite: true })).not.toMatch(
+      /Nothing was scheduled or published/i
+    );
+    expect(denySuccessToast({ possibleLiveWrite: true })).toMatch(/may already be live/i);
+    expect(denySuccessToast({ possibleLiveWrite: false })).toMatch(
+      /Nothing was scheduled or published/i
+    );
+
+    expect(resumeHeldSuccessToast({ possibleLiveWrite: true })).not.toMatch(
+      /Still not published/i
+    );
+    expect(resumeHeldSuccessToast({ possibleLiveWrite: true })).toMatch(
+      /may already be live/i
+    );
+    expect(resumeHeldSuccessToast({ possibleLiveWrite: false })).toMatch(
+      /Still not published/i
+    );
+  });
+
+  it("Hold / Deny dialogs keep the schedule gate after a possible live write", () => {
+    expect(holdConfirmDescription({ possibleLiveWrite: true })).toMatch(
+      /does not clear the schedule gate/i
+    );
+    expect(holdConfirmDescription({ possibleLiveWrite: true })).not.toMatch(
+      /Nothing is scheduled or published/i
+    );
+    expect(holdConfirmDescription({ possibleLiveWrite: false })).toMatch(
+      /Nothing is scheduled or published/i
+    );
+
+    expect(denyConfirmDescription({ possibleLiveWrite: true })).toMatch(
+      /Copy keeps that warning/i
+    );
+    expect(denyConfirmDescription({ possibleLiveWrite: true })).not.toMatch(
+      /It will not be scheduled or published/i
+    );
+    expect(denyConfirmDescription({ possibleLiveWrite: false })).toMatch(
+      /will not be scheduled or published/i
+    );
+  });
+
+  it("does not show Nothing was published on a write-started failed job", () => {
+    const rewritten = honestJobFailureMessage({
+      errorMessage:
+        "Instagram video container is still processing. Nothing was published. Wait for Instagram.",
+      adapterWriteStarted: true,
+    });
+    expect(rewritten).not.toMatch(/Nothing was published/i);
+    expect(rewritten).toMatch(/still processing/i);
+    expect(rewritten).toMatch(/did not mark this published/i);
+
+    expect(
+      honestJobFailureMessage({
+        errorMessage: "Graph API rejected the write",
+        adapterWriteStarted: true,
+      })
+    ).toBe("Graph API rejected the write");
+
+    expect(
+      honestJobFailureMessage({
+        errorMessage: "Unscheduled by operator. Nothing was published.",
+        adapterWriteStarted: false,
+      })
+    ).toMatch(/Nothing was published/i);
+
+    expect(
+      writeStartedQueueWarning({ jobFailed: true })
+    ).not.toMatch(/Nothing was published/i);
+    expect(writeStartedQueueWarning({ jobFailed: true })).toMatch(/may already be live/i);
+    expect(writeStartedQueueWarning({ jobFailed: false })).toMatch(
+      /Cannot Unschedule or Reschedule/i
+    );
   });
 });
 
