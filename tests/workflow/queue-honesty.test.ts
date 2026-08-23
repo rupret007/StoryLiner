@@ -1,13 +1,17 @@
 /**
  * Queue honesty after a possible live write.
- * Prisma is mocked — CI never hits a database. Hold / Approve / Reschedule /
- * Return must stay fail-closed.
+ * Prisma is mocked — CI never hits a database. Hold / Approve / Copy /
+ * Reschedule / Return must stay fail-closed.
  */
 
 const prismaMock = {
   draft: {
     findUniqueOrThrow: jest.fn(),
     update: jest.fn(),
+    create: jest.fn(),
+  },
+  draftVersion: {
+    create: jest.fn(),
   },
   scheduledPost: {
     findUniqueOrThrow: jest.fn(),
@@ -29,6 +33,7 @@ jest.mock("@/lib/prisma", () => ({
 
 import {
   approveDraft,
+  duplicateDraft,
   holdDraft,
   reschedulePost,
   returnScheduleToApproved,
@@ -157,5 +162,92 @@ describe("queue honesty after a possible live write", () => {
         reviewNotes: expect.stringContaining(POSSIBLE_LIVE_WRITE_MARKER),
       },
     });
+  });
+
+  it("Copy keeps POSSIBLE_LIVE_WRITE so the new draft cannot skip the platform check", async () => {
+    prismaMock.draft.findUniqueOrThrow.mockResolvedValue({
+      ...approvedDraft(`${POSSIBLE_LIVE_WRITE_MARKER} check Facebook first`),
+      bandId: "band_1",
+      campaignId: null,
+      platform: "FACEBOOK",
+      toneVariant: "AUTHENTIC",
+      contentLength: "MEDIUM",
+      caption: "Thursday at The Hive.",
+      hashtags: ["#stalemate"],
+      mediaUrls: [],
+      ctaText: null,
+      altText: null,
+      imagePrompt: null,
+      fanReplies: [],
+      brandFitScore: 80,
+      confidenceNotes: null,
+      riskFlags: [],
+    });
+    prismaMock.draft.create.mockResolvedValue({ id: "draft_2" });
+    prismaMock.draftVersion.create.mockResolvedValue({ id: "ver_1" });
+
+    await duplicateDraft("draft_1");
+
+    expect(prismaMock.draft.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: "IN_REVIEW",
+        caption: "Thursday at The Hive.",
+        reviewNotes: expect.stringContaining(POSSIBLE_LIVE_WRITE_MARKER),
+      }),
+    });
+    const notes = prismaMock.draft.create.mock.calls[0][0].data.reviewNotes as string;
+    expect(notes).toMatch(/Copy is not publish/);
+  });
+
+  it("Copy of a clean approved draft does not invent POSSIBLE_LIVE_WRITE", async () => {
+    prismaMock.draft.findUniqueOrThrow.mockResolvedValue({
+      ...approvedDraft(null),
+      bandId: "band_1",
+      campaignId: null,
+      platform: "FACEBOOK",
+      toneVariant: "AUTHENTIC",
+      contentLength: "MEDIUM",
+      caption: "Thursday at The Hive.",
+      hashtags: [],
+      mediaUrls: [],
+      ctaText: null,
+      altText: null,
+      imagePrompt: null,
+      fanReplies: [],
+      brandFitScore: 80,
+      confidenceNotes: null,
+      riskFlags: [],
+    });
+    prismaMock.draft.create.mockResolvedValue({ id: "draft_2" });
+    prismaMock.draftVersion.create.mockResolvedValue({ id: "ver_1" });
+
+    await duplicateDraft("draft_1");
+
+    expect(prismaMock.draft.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: "IN_REVIEW",
+        reviewNotes: undefined,
+      }),
+    });
+  });
+
+  it("refuses Copy of a SCHEDULED draft so a second live path cannot skip the queue", async () => {
+    prismaMock.draft.findUniqueOrThrow.mockResolvedValue({
+      ...approvedDraft(null),
+      status: "SCHEDULED",
+    });
+
+    await expect(duplicateDraft("draft_1")).rejects.toThrow(/scheduled or published/i);
+    expect(prismaMock.draft.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses Copy of a PUBLISHED draft", async () => {
+    prismaMock.draft.findUniqueOrThrow.mockResolvedValue({
+      ...approvedDraft(null),
+      status: "PUBLISHED",
+    });
+
+    await expect(duplicateDraft("draft_1")).rejects.toThrow(/scheduled or published/i);
+    expect(prismaMock.draft.create).not.toHaveBeenCalled();
   });
 });

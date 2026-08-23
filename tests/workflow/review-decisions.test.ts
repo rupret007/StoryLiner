@@ -2,6 +2,7 @@ import { reviewDraftSchema } from "@/lib/schemas/content";
 import {
   assertCanApproveDraft,
   assertCanDenyDraft,
+  assertCanDuplicateDraft,
   assertCanHoldDraft,
   assertCanMutateDraftCaption,
 } from "@/lib/services/publish/safety";
@@ -45,5 +46,11 @@ describe("Approve / Hold / Deny never imply publish", () => {
   it("cannot rewrite or edit a scheduled or published draft", () => {
     expect(assertCanMutateDraftCaption({ status: "SCHEDULED" }).ok).toBe(false);
     expect(assertCanMutateDraftCaption({ status: "PUBLISHED" }).ok).toBe(false);
+  });
+
+  it("cannot copy a scheduled or published draft", () => {
+    expect(assertCanDuplicateDraft({ status: "APPROVED" }).ok).toBe(true);
+    expect(assertCanDuplicateDraft({ status: "SCHEDULED" }).ok).toBe(false);
+    expect(assertCanDuplicateDraft({ status: "PUBLISHED" }).ok).toBe(false);
   });
 });

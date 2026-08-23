@@ -45,7 +45,10 @@ import {
   Undo2,
 } from "lucide-react";
 import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
-import { draftHasPossibleLiveWrite } from "@/lib/services/publish/safety";
+import {
+  draftHasPossibleLiveWrite,
+  duplicateDraftSuccessToast,
+} from "@/lib/services/publish/safety";
 import {
   approveDraft,
   denyDraft,
@@ -385,9 +388,17 @@ function DraftCard({
 
   function handleDuplicate() {
     startTransition(async () => {
-      await duplicateDraft(draft.id);
-      toast.success("Duplicated. Find the copy in the In Review tab.");
-      onAction();
+      try {
+        await duplicateDraft(draft.id);
+        toast.success(
+          duplicateDraftSuccessToast({
+            possibleLiveWrite: draftHasPossibleLiveWrite(draft.reviewNotes),
+          })
+        );
+        onAction();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not copy draft.");
+      }
     });
   }
 
