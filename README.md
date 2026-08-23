@@ -146,6 +146,8 @@ Generate → Guard → Review → Approve → Schedule → Publish
 
 ## Review Queue
 
+Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes. Approve / Hold / Deny never publish.
+
 All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. None of those actions publish.
 
 | Action | Description |
