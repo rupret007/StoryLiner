@@ -320,6 +320,51 @@ export function isCleanPendingScheduleJob(options: {
   return options.jobStatus === "PENDING" && !options.adapterWriteStarted;
 }
 
+/**
+ * Calendar / Dashboard / the Scheduled Posts count must not treat a
+ * FAILED + adapterWriteStarted row as still queued. The worker will not
+ * pick it up, and Facebook / Instagram / YouTube may already have a post.
+ */
+export function isQueuedUpcomingSchedule(options: {
+  jobStatus: string | null | undefined;
+  adapterWriteStarted: boolean;
+}): boolean {
+  return isCleanPendingScheduleJob(options);
+}
+
+export function scheduleQueueHeadline(counts: {
+  queued: number;
+  failedWriteStarted: number;
+}): string {
+  const queued = `${counts.queued} post${counts.queued !== 1 ? "s" : ""} queued`;
+  if (counts.failedWriteStarted <= 0) return queued;
+  const failed =
+    `${counts.failedWriteStarted} failed write` +
+    `${counts.failedWriteStarted !== 1 ? "s" : ""} — check Facebook / Instagram / YouTube`;
+  return `${queued} · ${failed}`;
+}
+
+export function upcomingScheduleBadge(options: {
+  jobStatus: string | null | undefined;
+  adapterWriteStarted: boolean;
+}): { label: string; variant: "info" | "warning" | "destructive" } {
+  if (options.jobStatus === "RUNNING") {
+    return { label: "Publishing", variant: "warning" };
+  }
+  if (options.adapterWriteStarted || options.jobStatus === "FAILED") {
+    return { label: "Publish failed", variant: "destructive" };
+  }
+  return { label: "Post", variant: "info" };
+}
+
+export function dashboardFailedWriteStartedNote(failedWriteStarted: number): string | null {
+  if (failedWriteStarted <= 0) return null;
+  return (
+    `${failedWriteStarted} failed write${failedWriteStarted !== 1 ? "s" : ""} ` +
+    `may already be live. Open Scheduled Posts. This is not a queued publish.`
+  );
+}
+
 export function returnScheduleButtonLabel(options: {
   jobStatus: string | null | undefined;
   adapterWriteStarted: boolean;

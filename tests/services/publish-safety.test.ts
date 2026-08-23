@@ -18,6 +18,10 @@ import {
   hasYouTubeVideoUrl,
   isCleanPendingScheduleJob,
   isLiveDestinationPlatform,
+  isQueuedUpcomingSchedule,
+  scheduleQueueHeadline,
+  upcomingScheduleBadge,
+  dashboardFailedWriteStartedNote,
   mergeReviewNotesPreservingPossibleLiveWrite,
   POSSIBLE_LIVE_WRITE_NOTE,
   returnScheduleButtonLabel,
@@ -520,6 +524,71 @@ describe("Unschedule vs write-started copy", () => {
     expect(
       returnScheduleButtonLabel({ jobStatus: "FAILED", adapterWriteStarted: true })
     ).toBe("Return to Approved");
+  });
+
+  it("does not count FAILED + write-started as a queued upcoming post", () => {
+    expect(
+      isQueuedUpcomingSchedule({
+        jobStatus: "FAILED",
+        adapterWriteStarted: true,
+      })
+    ).toBe(false);
+    expect(
+      isQueuedUpcomingSchedule({
+        jobStatus: "PENDING",
+        adapterWriteStarted: true,
+      })
+    ).toBe(false);
+    expect(
+      isQueuedUpcomingSchedule({
+        jobStatus: "PENDING",
+        adapterWriteStarted: false,
+      })
+    ).toBe(true);
+    expect(
+      isQueuedUpcomingSchedule({
+        jobStatus: "FAILED",
+        adapterWriteStarted: false,
+      })
+    ).toBe(false);
+
+    expect(
+      scheduleQueueHeadline({ queued: 2, failedWriteStarted: 0 })
+    ).toBe("2 posts queued");
+    expect(
+      scheduleQueueHeadline({ queued: 1, failedWriteStarted: 2 })
+    ).toMatch(/1 post queued/);
+    expect(
+      scheduleQueueHeadline({ queued: 1, failedWriteStarted: 2 })
+    ).toMatch(/2 failed writes — check Facebook \/ Instagram \/ YouTube/);
+    expect(
+      scheduleQueueHeadline({ queued: 0, failedWriteStarted: 1 })
+    ).toBe(
+      "0 posts queued · 1 failed write — check Facebook / Instagram / YouTube"
+    );
+
+    expect(
+      upcomingScheduleBadge({
+        jobStatus: "FAILED",
+        adapterWriteStarted: true,
+      })
+    ).toEqual({ label: "Publish failed", variant: "destructive" });
+    expect(
+      upcomingScheduleBadge({
+        jobStatus: "PENDING",
+        adapterWriteStarted: false,
+      })
+    ).toEqual({ label: "Post", variant: "info" });
+    expect(
+      upcomingScheduleBadge({
+        jobStatus: "RUNNING",
+        adapterWriteStarted: true,
+      })
+    ).toEqual({ label: "Publishing", variant: "warning" });
+
+    expect(dashboardFailedWriteStartedNote(0)).toBeNull();
+    expect(dashboardFailedWriteStartedNote(1)).toMatch(/may already be live/i);
+    expect(dashboardFailedWriteStartedNote(1)).toMatch(/not a queued publish/i);
   });
 
   it("never claims nothing was published after a write started", () => {

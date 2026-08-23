@@ -9,6 +9,8 @@ import { formatRelative } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import {
   honestJobFailureMessage,
+  isQueuedUpcomingSchedule,
+  scheduleQueueHeadline,
   writeStartedQueueWarning,
 } from "@/lib/services/publish/safety";
 import { RescheduleButton, ReturnScheduleButton } from "./client";
@@ -36,11 +38,29 @@ export default async function ScheduledPostsPage() {
     take: 10,
   });
 
+  let queued = 0;
+  let failedWriteStarted = 0;
+  for (const post of posts) {
+    const writeStarted = post.job
+      ? jobMayHaveStartedAdapterWrite(post.job.payload)
+      : false;
+    if (
+      isQueuedUpcomingSchedule({
+        jobStatus: post.job?.status ?? null,
+        adapterWriteStarted: writeStarted,
+      })
+    ) {
+      queued += 1;
+    } else if (writeStarted) {
+      failedWriteStarted += 1;
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          {posts.length} post{posts.length !== 1 ? "s" : ""} queued
+          {scheduleQueueHeadline({ queued, failedWriteStarted })}
         </p>
         <p className="text-xs text-muted-foreground">
           Worker jobs only. Unschedule a pending job, or return a failed write —
