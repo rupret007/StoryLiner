@@ -1,6 +1,6 @@
 # Voice facts and Jeff locks
 
-StoryLiner has two band voices: **Stalemate** and **Rad Dad**. Jeff owns feel and live posts. Nothing auto-publishes. Trailer Swift is not a voice in this product.
+StoryLiner has two band voices: **Stalemate** and **Rad Dad**. Jeff talks to Bob (front door). StoryLiner is the promo engine. Jeff owns feel and live posts. Nothing auto-publishes. Trailer Swift is not a voice in this product.
 
 ## Locks (do not invent around these)
 

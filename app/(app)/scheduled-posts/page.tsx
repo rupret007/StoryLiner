@@ -5,8 +5,8 @@ import { BandChip } from "@/components/storyliner/band-chip";
 import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { EmptyState } from "@/components/storyliner/empty-state";
 import { Clock } from "lucide-react";
-import { formatDateTime, formatRelative } from "@/lib/utils";
-import { RescheduleButton } from "./client";
+import { formatRelative } from "@/lib/utils";
+import { RescheduleButton, ReturnFailedScheduleButton } from "./client";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Scheduled Posts" };
@@ -19,6 +19,7 @@ export default async function ScheduledPostsPage() {
       band: true,
       draft: true,
       platformAccount: true,
+      job: true,
     },
     orderBy: { scheduledFor: "asc" },
   });
@@ -32,9 +33,12 @@ export default async function ScheduledPostsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {posts.length} post{posts.length !== 1 ? "s" : ""} queued
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Worker jobs only. A failed write stays visible here — it is never marked published.
         </p>
       </div>
 
@@ -42,44 +46,60 @@ export default async function ScheduledPostsPage() {
         <EmptyState
           icon={Clock}
           title="Nothing scheduled"
-          description="Approve drafts in the review queue, then schedule them here."
+          description="Approve a Bob draft in the review queue, then schedule it here. Scheduling is not publish."
         />
       ) : (
         <div className="space-y-3">
-          {posts.map((post) => (
-            <Card key={post.id}>
-              <CardContent className="p-4 flex items-start gap-4">
-                <div className="flex flex-col items-center gap-1 shrink-0 w-16 text-center">
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(post.scheduledFor).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          {posts.map((post) => {
+            const jobFailed = post.job?.status === "FAILED";
+            return (
+              <Card key={post.id}>
+                <CardContent className="p-4 flex items-start gap-4">
+                  <div className="flex flex-col items-center gap-1 shrink-0 w-16 text-center">
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(post.scheduledFor).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </div>
+                    <div className="text-lg font-bold text-foreground">
+                      {new Date(post.scheduledFor).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </div>
                   </div>
-                  <div className="text-lg font-bold text-foreground">
-                    {new Date(post.scheduledFor).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  <div className="h-12 w-px bg-border shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <PlatformIcon platform={post.draft.platform} showLabel />
+                      <BandChip name={post.band.name} color={post.band.coverColor} />
+                      {jobFailed ? (
+                        <Badge variant="destructive" className="text-xs">Publish failed</Badge>
+                      ) : (
+                        <Badge variant="info" className="text-xs">Scheduled</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-foreground line-clamp-2">{post.draft.caption}</p>
+                    {post.draft.hashtags.length > 0 && (
+                      <p className="text-xs text-primary mt-1 line-clamp-1">
+                        {post.draft.hashtags.join(" ")}
+                      </p>
+                    )}
+                    {jobFailed && post.job?.errorMessage && (
+                      <p className="text-xs text-rose-300 mt-2">
+                        {post.job.errorMessage}
+                      </p>
+                    )}
                   </div>
-                </div>
-                <div className="h-12 w-px bg-border shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <PlatformIcon platform={post.draft.platform} showLabel />
-                    <BandChip name={post.band.name} color={post.band.coverColor} />
-                    <Badge variant="info" className="text-xs">Scheduled</Badge>
+                  <div className="shrink-0 flex flex-col gap-2">
+                    {jobFailed ? (
+                      <ReturnFailedScheduleButton scheduledPostId={post.id} />
+                    ) : (
+                      <RescheduleButton
+                        scheduledPostId={post.id}
+                        currentScheduledFor={post.scheduledFor}
+                      />
+                    )}
                   </div>
-                  <p className="text-sm text-foreground line-clamp-2">{post.draft.caption}</p>
-                  {post.draft.hashtags.length > 0 && (
-                    <p className="text-xs text-primary mt-1 line-clamp-1">
-                      {post.draft.hashtags.join(" ")}
-                    </p>
-                  )}
-                </div>
-                <div className="shrink-0">
-                  <RescheduleButton
-                    scheduledPostId={post.id}
-                    currentScheduledFor={post.scheduledFor}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

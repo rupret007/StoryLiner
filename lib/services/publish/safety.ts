@@ -194,11 +194,14 @@ export function assertReadyForLivePublish(options: {
 /**
  * Adapter results that did not go live must never flip a draft or scheduled
  * post to PUBLISHED. Draft-only / unsuccessful writes fail closed.
+ * A live success also requires a non-empty external post id — empty ids
+ * are treated as a failed write, not a silent publish.
  */
 export function assertLivePublishResult(options: {
   success: boolean;
   isDraftOnly?: boolean;
   errorMessage?: string | null;
+  externalPostId?: string | null;
 }): LivePublishSafety {
   if (!options.success) {
     return {
@@ -213,6 +216,16 @@ export function assertLivePublishResult(options: {
       reason:
         "Adapter returned draft-only. Refusing to mark the post as published. " +
         "Attach required media or publish manually in the platform.",
+    };
+  }
+
+  const externalPostId = options.externalPostId?.trim();
+  if (!externalPostId) {
+    return {
+      ok: false,
+      reason:
+        "Adapter reported success without an external post id. " +
+        "Refusing to mark the post as published.",
     };
   }
 
@@ -283,5 +296,63 @@ export function assertCanResumeHeldDraft(options: { status: string }): LivePubli
       reason: "Only held drafts can be returned to review.",
     };
   }
+  return { ok: true };
+}
+
+const MUTABLE_CAPTION_STATUSES = new Set(["IN_REVIEW", "HELD", "APPROVED"]);
+
+/**
+ * Caption edit / rewrite must not pull SCHEDULED or PUBLISHED drafts
+ * back into review while a worker job still exists.
+ */
+export function assertCanMutateDraftCaption(options: {
+  status: string;
+}): LivePublishSafety {
+  if (!MUTABLE_CAPTION_STATUSES.has(options.status)) {
+    return {
+      ok: false,
+      reason: `Caption cannot be changed from status ${options.status}.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * After a failed live write, Jeff can return the draft to Approved
+ * and schedule again. Never allowed for published or in-flight jobs.
+ */
+export function assertCanReturnFailedSchedule(options: {
+  scheduledStatus: string;
+  draftStatus: string;
+  jobStatus: string | null | undefined;
+}): LivePublishSafety {
+  if (options.scheduledStatus === "PUBLISHED" || options.draftStatus === "PUBLISHED") {
+    return {
+      ok: false,
+      reason: "Cannot unschedule a published post.",
+    };
+  }
+
+  if (options.jobStatus === "RUNNING" || options.jobStatus === "DONE") {
+    return {
+      ok: false,
+      reason: "Cannot return a post that is publishing or already completed.",
+    };
+  }
+
+  if (options.jobStatus !== "FAILED") {
+    return {
+      ok: false,
+      reason: "Only a failed publish job can return to Approved. This does not publish.",
+    };
+  }
+
+  if (options.scheduledStatus !== "SCHEDULED") {
+    return {
+      ok: false,
+      reason: `Cannot return a ${options.scheduledStatus} scheduled post.`,
+    };
+  }
+
   return { ok: true };
 }

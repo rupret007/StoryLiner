@@ -21,5 +21,20 @@ export default async function ReviewQueuePage() {
     orderBy: { createdAt: "desc" },
   });
 
-  return <ReviewQueueClient drafts={drafts} />;
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-1">
+        <p className="text-sm font-medium text-foreground">
+          Jeff talks to Bob. StoryLiner is the promo engine.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Bob&apos;s drafts land here. Approve, Hold, and Deny are review
+          decisions only — none of them go live. Live posts still need Approve
+          → Schedule → a connected Facebook, Instagram, or YouTube account →
+          worker. Nothing auto-publishes.
+        </p>
+      </div>
+      <ReviewQueueClient drafts={drafts} />
+    </div>
+  );
 }

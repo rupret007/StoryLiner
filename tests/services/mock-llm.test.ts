@@ -108,6 +108,22 @@ describe("MockLlmAdapter", () => {
 
       expect(result.ctaText).not.toMatch(/before they're gone/i);
       expect(result.ctaText).not.toMatch(/grab your tickets now/i);
+      expect(result.caption).not.toMatch(/grab a ticket/i);
+      expect(result.fanReplies.join(" ")).not.toMatch(/excited/i);
+    });
+
+    it("does not give an unknown band Stalemate or Rad Dad pool copy", async () => {
+      const result = await adapter.generateContent({
+        band: { ...mockStalemate, name: "Unknown Cover Band", slug: "unknown" },
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform: "FACEBOOK",
+        contentLength: "SHORT",
+        context: { venue: "Lincoln Hall", showDate: "Saturday" },
+      });
+
+      expect(result.caption).not.toMatch(/Basket Case/i);
+      expect(result.caption).not.toMatch(/tuning too slow/i);
+      expect(result.caption).not.toMatch(/we won't beg/i);
     });
 
     it("returns a valid GeneratedContent object for Rad Dad", async () => {
@@ -199,7 +215,19 @@ describe("MockLlmAdapter", () => {
         platform: "INSTAGRAM",
       });
 
-      expect(rewritten).toContain("Link in bio");
+      expect(rewritten).toContain("Tickets if you want them");
+    });
+
+    it("does not add FOMO urgency to Stalemate rewrites", async () => {
+      const rewritten = await adapter.rewriteContent({
+        originalCaption,
+        directive: "moreUrgency",
+        band: mockStalemate,
+        platform: "INSTAGRAM",
+      });
+
+      expect(rewritten).toContain("If you're coming, come.");
+      expect(rewritten).not.toMatch(/don't wait on this/i);
     });
 
     it("reduces exclamations with cleaner directive", async () => {

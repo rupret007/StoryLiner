@@ -15,7 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { CalendarClock, Loader2 } from "lucide-react";
 import { formatDatetimeLocalValue } from "@/lib/utils";
-import { reschedulePost } from "@/app/(app)/review-queue/actions";
+import {
+  reschedulePost,
+  returnFailedScheduleToApproved,
+} from "@/app/(app)/review-queue/actions";
 
 interface RescheduleButtonProps {
   scheduledPostId: string;
@@ -83,5 +86,32 @@ export function RescheduleButton({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+export function ReturnFailedScheduleButton({
+  scheduledPostId,
+}: {
+  scheduledPostId: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function handleReturn() {
+    startTransition(async () => {
+      try {
+        await returnFailedScheduleToApproved(scheduledPostId);
+        toast.success("Returned to Approved. Nothing was published. Schedule again after the fix.");
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not return to Approved.");
+      }
+    });
+  }
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleReturn} disabled={isPending}>
+      {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Return to Approved"}
+    </Button>
   );
 }

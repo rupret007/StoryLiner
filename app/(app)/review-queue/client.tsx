@@ -128,7 +128,9 @@ function ScheduleDialog({
           platformAccountId,
           scheduledFor: new Date(scheduledFor).toISOString(),
         });
-        toast.success("Post scheduled.");
+        toast.success(
+          "Scheduled. Still not live until the worker runs against a connected Facebook, Instagram, or YouTube account."
+        );
         onClose();
         onScheduled();
       } catch (err) {
@@ -141,7 +143,7 @@ function ScheduleDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Schedule Post</DialogTitle>
+          <DialogTitle>Schedule — separate yes from Bob&apos;s draft</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -184,7 +186,9 @@ function ScheduleDialog({
               onChange={(e) => setScheduledFor(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Local time. Must be in the future. Worker processes jobs every 5 seconds.
+              Jeff talks to Bob; this queue is the engine. Local time, must be
+              in the future. Scheduling creates a worker job — it does not
+              publish until that job is due.
             </p>
             {draft.platform === "INSTAGRAM" && draft.mediaUrls.length === 0 && (
               <p className="text-xs text-amber-300">
@@ -435,7 +439,7 @@ function DraftCard({
       <ConfirmDialog
         open={confirmArchive}
         title="Archive this draft?"
-        description="The draft will be removed from the active queue. You can still find it in the Published Posts section if it was previously live."
+        description="Removes this draft from the review queue. Archive does not publish, and it does not move the caption to Published Posts."
         confirmLabel="Archive"
         onConfirm={handleArchive}
         onCancel={() => setConfirmArchive(false)}
@@ -692,7 +696,8 @@ function DraftCard({
           {/* Action buttons — Approve / Hold / Deny never publish */}
           <div className="space-y-2 pt-1 border-t border-border">
             <p className="text-[11px] text-muted-foreground">
-              Approve, Hold, and Deny are review decisions only. None of them publish.
+              Bob drafted this. Approve, Hold, and Deny are Jeff&apos;s review
+              decisions only. None of them publish.
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               {(draft.status === "IN_REVIEW" || draft.status === "HELD") && (
@@ -830,7 +835,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           <Badge variant="destructive">{denied.length} denied</Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          Approve / Hold / Deny never publish. Scheduling is a separate yes.
+          Bob drafts. Jeff decides here. Approve / Hold / Deny never publish.
         </p>
       </div>
 
@@ -855,7 +860,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
             <EmptyState
               icon={ClipboardList}
               title="Queue is clear"
-              description="No drafts waiting for review. Generate content in the Content Studio."
+              description="No Bob drafts waiting for Jeff. Generate in Content Studio, or talk to Bob at the front door."
             />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -887,7 +892,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
             <EmptyState
               icon={Check}
               title="No approved drafts"
-              description="Approve drafts from Needs Review, then schedule them here. Approve is not publish."
+              description="Approve a Bob draft from Needs Review, then schedule it here. Approve is not publish."
             />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

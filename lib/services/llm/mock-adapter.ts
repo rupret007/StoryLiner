@@ -6,7 +6,7 @@ import type {
   RewriteOptions,
   RiskAssessment,
 } from "./types";
-import { campaignTypeLabel, platformLabel } from "@/lib/utils";
+import { hashtagCapForVoice, resolveStoryLinerVoice } from "./voice";
 
 // Realistic mock content pools per band archetype
 const stalematePool = {
@@ -15,7 +15,7 @@ const stalematePool = {
     "We're at {venue} {date}. Come through if you need it.",
     "{date} at {venue}. Doors at {time}. We'll be the ones tuning too slow.",
     "Show at {venue} this {date}. No opener. Just us and your Thursday night.",
-    "Back at {venue} {date}. Grab a ticket. We won't beg.",
+    "Back at {venue} {date}. Come if you want.",
   ],
   recap: [
     "Last night was the kind of room that makes you forget you have a day job. Thanks {city}.",
@@ -55,9 +55,21 @@ const radDadPool = {
   hashtags: ["#covermusicband", "#popunk2000s", "#coverband", "#nostalgiafest", "#altrocklives", "#singalong", "#livecovers"],
 };
 
-function isRadDad(bandName: string): boolean {
-  return bandName.toLowerCase().includes("rad dad");
-}
+const unknownPool = {
+  show: [
+    "Playing {venue} on {date}.",
+    "{date} at {venue}. Doors at {time}.",
+  ],
+  recap: [
+    "Thanks {city}.",
+    "{city} showed up. Thank you.",
+  ],
+  general: [
+    "Practice. More soon.",
+    "Working on the next set.",
+  ],
+  hashtags: ["#livemusic", "#band"],
+};
 
 function fillTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `[${key}]`);
@@ -72,8 +84,9 @@ export class MockLlmAdapter implements LLMAdapter {
 
   async generateContent(options: GenerateContentOptions): Promise<GeneratedContent> {
     const { band, campaignType, platform, contentLength, context } = options;
-    const isRD = isRadDad(band.name);
-    const pool = isRD ? radDadPool : stalematePool;
+    const voice = resolveStoryLinerVoice(band.name);
+    const isRD = voice === "rad-dad";
+    const pool = isRD ? radDadPool : voice === "stalemate" ? stalematePool : unknownPool;
 
     const vars: Record<string, string> = {
       venue: context?.venue ?? "the venue",
@@ -108,7 +121,7 @@ export class MockLlmAdapter implements LLMAdapter {
 
     const hashtags = pool.hashtags
       .sort(() => 0.5 - Math.random())
-      .slice(0, platform === "INSTAGRAM" ? 8 : 4);
+      .slice(0, hashtagCapForVoice(voice, platform));
 
     const voiceProfile = band.voiceProfile;
     const brandFitScore = voiceProfile ? Math.floor(Math.random() * 20) + 78 : 70;
@@ -123,11 +136,16 @@ export class MockLlmAdapter implements LLMAdapter {
         : undefined,
       altText: `${band.name} performing live on stage`,
       imagePrompt: `${band.name} live performance photo, dark moody lighting, ${isRD ? "energetic crowd" : "intimate venue"}, concert photography style`,
-      fanReplies: [
-        "Excited to see you there!",
-        isRD ? "I know every word to every song you play" : "I've been waiting for you to come back",
-        "Already got my ticket",
-      ],
+      fanReplies:
+        voice === "rad-dad"
+          ? [
+              "I know every word to every song you play",
+              "Already got my ticket",
+              "Shorts are on",
+            ]
+          : voice === "stalemate"
+          ? ["I'll be there", "Been waiting for this room", "See you if I can"]
+          : ["See you there", "Thanks for posting", "Noted"],
       brandFitScore,
       confidenceNotes: `Generated using mock adapter. Voice profile ${voiceProfile ? "applied" : "not configured"}.`,
       riskFlags: [],
@@ -136,13 +154,16 @@ export class MockLlmAdapter implements LLMAdapter {
 
   async rewriteContent(options: RewriteOptions): Promise<string> {
     const { originalCaption, directive, band } = options;
-    const isRD = isRadDad(band.name);
+    const voice = resolveStoryLinerVoice(band.name);
+    const isRD = voice === "rad-dad";
 
     const transformations: Record<string, (text: string) => string> = {
       funnier: (t) =>
         isRD
           ? t + " (We will absolutely take requests for Mr. Brightside.)"
-          : t + " We're very normal people who are definitely fine.",
+          : voice === "stalemate"
+          ? t + " We're very normal people who are definitely fine."
+          : t + " Keep it simple.",
       lessCheesy: (t) =>
         t.replace(/!/g, ".").replace(/amazing|incredible|awesome/gi, "good"),
       morePunk: (t) =>
@@ -154,14 +175,16 @@ export class MockLlmAdapter implements LLMAdapter {
         return lines[0] + (lines.length > 1 ? "\n\n" + lines.slice(1).join("\n") : "");
       },
       moreConcise: (t) => t.split("\n")[0],
-      moreUrgency: (t) => t + " Don't wait on this.",
+      moreUrgency: (t) =>
+        isRD ? t + " Don't wait on this." : t + " If you're coming, come.",
       moreAuthentic: (t) =>
         isRD
           ? t.replace(/We're|We are/g, "We're still")
           : t.replace(/We're|We are/g, "Still"),
       shorterHashtags: (t) => t.replace(/#\w{15,}/g, ""),
       noHashtags: (t) => t.replace(/#\w+/g, "").trim(),
-      addCTA: (t) => t + "\n\nLink in bio.",
+      addCTA: (t) =>
+        isRD ? t + "\n\nTickets in bio." : t + "\n\nTickets if you want them.",
     };
 
     const transform = transformations[directive];
@@ -249,7 +272,7 @@ export class MockLlmAdapter implements LLMAdapter {
     runOfShowItems: string[];
   }): Promise<string[]> {
     const { livestreamTitle, bandName, runOfShowItems } = options;
-    const isRD = isRadDad(bandName);
+    const isRD = resolveStoryLinerVoice(bandName) === "rad-dad";
 
     const base = [
       `Welcome everyone, this is ${bandName}`,
@@ -278,8 +301,8 @@ export class MockLlmAdapter implements LLMAdapter {
     bandName: string;
     platform: Platform;
   }): Promise<string[]> {
-    const { bandName, platform } = options;
-    const isRD = isRadDad(bandName);
+    const { bandName } = options;
+    const isRD = resolveStoryLinerVoice(bandName) === "rad-dad";
 
     const prompts = isRD
       ? [

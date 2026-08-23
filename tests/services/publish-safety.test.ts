@@ -2,7 +2,9 @@ import {
   assertCanApproveDraft,
   assertCanDenyDraft,
   assertCanHoldDraft,
+  assertCanMutateDraftCaption,
   assertCanResumeHeldDraft,
+  assertCanReturnFailedSchedule,
   assertLivePublishResult,
   assertReadyForLivePublish,
   assertSafeToLivePublish,
@@ -213,10 +215,28 @@ describe("assertLivePublishResult", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("allows only successful non-draft writes", () => {
-    expect(assertLivePublishResult({ success: true, isDraftOnly: false })).toEqual({
+  it("allows only successful non-draft writes that include an external post id", () => {
+    expect(
+      assertLivePublishResult({
+        success: true,
+        isDraftOnly: false,
+        externalPostId: "ext_1",
+      })
+    ).toEqual({
       ok: true,
     });
+  });
+
+  it("refuses success without an external post id", () => {
+    const result = assertLivePublishResult({
+      success: true,
+      isDraftOnly: false,
+      externalPostId: "   ",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/external post id/i);
+    }
   });
 });
 
@@ -269,6 +289,38 @@ describe("review decisions do not publish", () => {
   it("only resumes HELD drafts", () => {
     expect(assertCanResumeHeldDraft({ status: "HELD" })).toEqual({ ok: true });
     expect(assertCanResumeHeldDraft({ status: "IN_REVIEW" }).ok).toBe(false);
+  });
+
+  it("blocks caption edits on SCHEDULED and PUBLISHED drafts", () => {
+    expect(assertCanMutateDraftCaption({ status: "IN_REVIEW" })).toEqual({ ok: true });
+    expect(assertCanMutateDraftCaption({ status: "HELD" })).toEqual({ ok: true });
+    expect(assertCanMutateDraftCaption({ status: "APPROVED" })).toEqual({ ok: true });
+    expect(assertCanMutateDraftCaption({ status: "SCHEDULED" }).ok).toBe(false);
+    expect(assertCanMutateDraftCaption({ status: "PUBLISHED" }).ok).toBe(false);
+  });
+
+  it("only returns a failed schedule to Approved", () => {
+    expect(
+      assertCanReturnFailedSchedule({
+        scheduledStatus: "SCHEDULED",
+        draftStatus: "SCHEDULED",
+        jobStatus: "FAILED",
+      })
+    ).toEqual({ ok: true });
+    expect(
+      assertCanReturnFailedSchedule({
+        scheduledStatus: "SCHEDULED",
+        draftStatus: "SCHEDULED",
+        jobStatus: "PENDING",
+      }).ok
+    ).toBe(false);
+    expect(
+      assertCanReturnFailedSchedule({
+        scheduledStatus: "PUBLISHED",
+        draftStatus: "PUBLISHED",
+        jobStatus: "DONE",
+      }).ok
+    ).toBe(false);
   });
 });
 

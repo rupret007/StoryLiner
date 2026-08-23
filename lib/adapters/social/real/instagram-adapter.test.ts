@@ -73,6 +73,26 @@ describe("InstagramRealAdapter", () => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
+    it("fails closed when publish returns no post id", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "container_123" }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+        });
+
+      const result = await adapter.publish(mockPayload);
+
+      expect(result.success).toBe(false);
+      expect(result.externalPostId).toBeUndefined();
+      expect(result.errorMessage).toMatch(/without a post id/i);
+    });
+
     it("should handle container creation errors gracefully", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
