@@ -17,7 +17,7 @@ import { CalendarClock, Loader2 } from "lucide-react";
 import { formatDatetimeLocalValue } from "@/lib/utils";
 import {
   reschedulePost,
-  returnFailedScheduleToApproved,
+  returnScheduleToApproved,
 } from "@/app/(app)/review-queue/actions";
 
 interface RescheduleButtonProps {
@@ -69,7 +69,7 @@ export function RescheduleButton({
               min={formatDatetimeLocalValue(new Date())}
               onChange={(e) => setNewTime(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">Must be in the future.</p>
+            <p className="text-xs text-muted-foreground">Must be in the future. This does not publish.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
@@ -89,19 +89,33 @@ export function RescheduleButton({
   );
 }
 
-export function ReturnFailedScheduleButton({
+export function ReturnScheduleButton({
   scheduledPostId,
+  jobStatus,
+  adapterWriteStarted,
 }: {
   scheduledPostId: string;
+  jobStatus: string | null;
+  adapterWriteStarted: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [checkedPlatform, setCheckedPlatform] = useState(false);
 
-  function handleReturn() {
+  const isPendingJob = jobStatus === "PENDING";
+  const label = isPendingJob ? "Unschedule" : "Return to Approved";
+
+  function submit(confirmCheckedPlatform: boolean) {
     startTransition(async () => {
       try {
-        await returnFailedScheduleToApproved(scheduledPostId);
-        toast.success("Returned to Approved. Nothing was published. Schedule again after the fix.");
+        await returnScheduleToApproved(scheduledPostId, confirmCheckedPlatform);
+        toast.success(
+          isPendingJob
+            ? "Unscheduled. Nothing was published."
+            : "Returned to Approved. Nothing was published. Schedule again after the fix."
+        );
+        setConfirmOpen(false);
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not return to Approved.");
@@ -109,9 +123,68 @@ export function ReturnFailedScheduleButton({
     });
   }
 
+  function handleClick() {
+    if (adapterWriteStarted) {
+      setCheckedPlatform(false);
+      setConfirmOpen(true);
+      return;
+    }
+    submit(false);
+  }
+
   return (
-    <Button variant="outline" size="sm" onClick={handleReturn} disabled={isPending}>
-      {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Return to Approved"}
-    </Button>
+    <>
+      <Button variant="outline" size="sm" onClick={handleClick} disabled={isPending}>
+        {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : label}
+      </Button>
+
+      <Dialog open={confirmOpen} onOpenChange={(o) => !o && setConfirmOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Check the platform first</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            A live write may have already reached Facebook / Instagram / YouTube.
+            Returning to Approved does not publish, but scheduling again without
+            checking can double-post.
+          </p>
+          <label className="flex items-start gap-2 text-xs text-amber-200">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={checkedPlatform}
+              onChange={(e) => setCheckedPlatform(e.target.checked)}
+            />
+            I checked the platform. No live post. Return to Approved is not publish.
+          </label>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => submit(true)}
+              disabled={isPending || !checkedPlatform}
+            >
+              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Return to Approved"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** @deprecated Use ReturnScheduleButton. */
+export function ReturnFailedScheduleButton({
+  scheduledPostId,
+}: {
+  scheduledPostId: string;
+}) {
+  return (
+    <ReturnScheduleButton
+      scheduledPostId={scheduledPostId}
+      jobStatus="FAILED"
+      adapterWriteStarted={false}
+    />
   );
 }

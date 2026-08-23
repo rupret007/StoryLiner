@@ -177,7 +177,10 @@ The Postgres job queue uses a simple poll model:
 ```
 Job table: id, type, status, payload, runAt, retryCount, maxRetries, nextRetryAt
 Worker: findMany(status=PENDING, runAt<=now) → updateMany(status=RUNNING) → execute → update(status=DONE|FAILED)
-Retry: exponential backoff (30s * 2^retryCount), up to maxRetries
+Retry: exponential backoff (30s * 2^retryCount), up to maxRetries.
+        After the Facebook / Instagram / YouTube write starts, retries are refused
+        (clearing that claim was a double-post). Stale RUNNING jobs fail closed
+        instead of resetting to PENDING.
 ```
 
 For production, consider:

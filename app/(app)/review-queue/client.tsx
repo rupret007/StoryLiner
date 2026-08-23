@@ -45,6 +45,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
+import { draftHasPossibleLiveWrite } from "@/lib/services/publish/safety";
 import {
   approveDraft,
   denyDraft,
@@ -105,6 +106,8 @@ function ScheduleDialog({
   const [isPending, startTransition] = useTransition();
   const [platformAccountId, setPlatformAccountId] = useState("");
   const [scheduledFor, setScheduledFor] = useState(defaultScheduleLocalValue);
+  const [checkedNoLivePost, setCheckedNoLivePost] = useState(false);
+  const possibleLiveWrite = draftHasPossibleLiveWrite(draft.reviewNotes);
 
   // Only accounts matching draft platform
   const compatibleAccounts = draft.band.platformAccounts.filter(
@@ -120,6 +123,10 @@ function ScheduleDialog({
       toast.error("Choose a time to schedule.");
       return;
     }
+    if (possibleLiveWrite && !checkedNoLivePost) {
+      toast.error("Check Facebook / Instagram / YouTube first. A previous write may already be live.");
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -127,6 +134,7 @@ function ScheduleDialog({
           draftId: draft.id,
           platformAccountId,
           scheduledFor: new Date(scheduledFor).toISOString(),
+          confirmCheckedNoLivePost: possibleLiveWrite ? checkedNoLivePost : undefined,
         });
         toast.success(
           "Scheduled. Still not live until the worker runs against a connected Facebook, Instagram, or YouTube account."
@@ -200,6 +208,17 @@ function ScheduleDialog({
                 Real YouTube will not live-publish a text post. Description updates stay opt-in.
               </p>
             )}
+            {possibleLiveWrite && (
+              <label className="flex items-start gap-2 text-xs text-amber-200">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={checkedNoLivePost}
+                  onChange={(e) => setCheckedNoLivePost(e.target.checked)}
+                />
+                I checked Facebook / Instagram / YouTube. No live post. Schedule is still not publish.
+              </label>
+            )}
             {(draft.platform === "TWITTER" ||
               draft.platform === "TIKTOK" ||
               draft.platform === "BLUESKY" ||
@@ -217,7 +236,13 @@ function ScheduleDialog({
           </Button>
           <Button
             onClick={handleSchedule}
-            disabled={isPending || !platformAccountId || !scheduledFor || compatibleAccounts.length === 0}
+            disabled={
+              isPending ||
+              !platformAccountId ||
+              !scheduledFor ||
+              compatibleAccounts.length === 0 ||
+              (possibleLiveWrite && !checkedNoLivePost)
+            }
           >
             {isPending ? (
               <>
@@ -532,6 +557,12 @@ function DraftCard({
                   No media URL — real Instagram will fail closed.
                 </p>
               ) : null}
+              {draftHasPossibleLiveWrite(draft.reviewNotes) && (
+                <p className="text-xs text-amber-200 mt-2">
+                  A previous Facebook / Instagram / YouTube write may already be live.
+                  Check the platform before scheduling again.
+                </p>
+              )}
             </div>
           )}
 

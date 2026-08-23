@@ -9,11 +9,16 @@ import {
   assertCanHoldDraft,
   assertCanMutateDraftCaption,
   assertCanResumeHeldDraft,
-  assertCanReturnFailedSchedule,
+  assertCanReturnScheduleToApproved,
+  assertCanScheduleAfterPossibleLiveWrite,
   assertReadyForLivePublish,
   canRescheduleJob,
+  draftHasPossibleLiveWrite,
   sanitizeMediaUrls,
+  stripPossibleLiveWriteNote,
+  withPossibleLiveWriteNote,
 } from "@/lib/services/publish/safety";
+import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 import { rewriteDraft } from "@/lib/services/content/rewrite";
 import { attachDraftMediaSchema, scheduleDraftSchema } from "@/lib/schemas/content";
@@ -181,6 +186,23 @@ export async function scheduleApprovedDraft(rawInput: ScheduleDraftInput) {
     throw new Error("Draft must be approved before scheduling.");
   }
 
+  const alreadyScheduled = await prisma.scheduledPost.findUnique({
+    where: { draftId: draft.id },
+  });
+  if (alreadyScheduled) {
+    throw new Error(
+      "This draft already has a scheduled post. Unschedule or return it first. This does not publish."
+    );
+  }
+
+  const liveWriteGate = assertCanScheduleAfterPossibleLiveWrite({
+    possibleLiveWrite: draftHasPossibleLiveWrite(draft.reviewNotes),
+    confirmCheckedNoLivePost: input.confirmCheckedNoLivePost,
+  });
+  if (!liveWriteGate.ok) {
+    throw new Error(liveWriteGate.reason);
+  }
+
   // Validate platform content limits
   const validation = validateDraftForPlatform(draft);
   if (!validation.isValid) {
@@ -246,11 +268,17 @@ export async function scheduleApprovedDraft(rawInput: ScheduleDraftInput) {
       data: { payload: { scheduledPostId: post.id } },
     });
 
-    // Update draft status
-    await tx.draft.update({
-      where: { id: draft.id },
-      data: { status: "SCHEDULED" },
+    // Claim APPROVED → SCHEDULED so a concurrent schedule cannot win twice.
+    const moved = await tx.draft.updateMany({
+      where: { id: draft.id, status: "APPROVED" },
+      data: {
+        status: "SCHEDULED",
+        reviewNotes: stripPossibleLiveWriteNote(draft.reviewNotes),
+      },
     });
+    if (moved.count === 0) {
+      throw new Error("Draft is no longer approved. Nothing was published.");
+    }
 
     return post;
   });
@@ -338,35 +366,74 @@ export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
   return updated;
 }
 
-export async function returnFailedScheduleToApproved(scheduledPostId: string) {
+export async function returnScheduleToApproved(
+  scheduledPostId: string,
+  confirmCheckedPlatform = false
+) {
   const existing = await prisma.scheduledPost.findUniqueOrThrow({
     where: { id: scheduledPostId },
     include: { job: true, draft: true },
   });
 
-  const allowed = assertCanReturnFailedSchedule({
+  const adapterWriteStarted = existing.job
+    ? jobMayHaveStartedAdapterWrite(existing.job.payload)
+    : false;
+  const allowed = assertCanReturnScheduleToApproved({
     scheduledStatus: existing.status,
     draftStatus: existing.draft.status,
     jobStatus: existing.job?.status,
+    adapterWriteStarted,
+    confirmCheckedPlatform,
   });
   if (!allowed.ok) {
     throw new Error(allowed.reason);
   }
 
   await prisma.$transaction(async (tx) => {
+    if (existing.jobId && existing.job?.status === "PENDING") {
+      const claimed = await tx.job.updateMany({
+        where: { id: existing.jobId, status: "PENDING" },
+        data: {
+          status: "FAILED",
+          failedAt: new Date(),
+          errorMessage: "Unscheduled by operator. Nothing was published.",
+          retryCount: existing.job.maxRetries,
+        },
+      });
+      if (claimed.count === 0) {
+        throw new Error(
+          "Cannot unschedule a post that is already publishing. This does not publish."
+        );
+      }
+    }
+
     await tx.scheduledPost.delete({ where: { id: scheduledPostId } });
+
+    const reviewNotes = adapterWriteStarted
+      ? withPossibleLiveWriteNote(existing.draft.reviewNotes)
+      : existing.job?.status === "PENDING"
+        ? "Unscheduled. Approve is not publish."
+        : "Returned from a failed publish job. Approve is not publish. Schedule again after the fix.";
+
     await tx.draft.update({
       where: { id: existing.draftId },
       data: {
         status: "APPROVED",
-        reviewNotes:
-          "Returned from a failed publish job. Approve is not publish. Schedule again after the fix.",
+        reviewNotes,
       },
     });
   });
 
   revalidatePath("/review-queue");
   revalidatePath("/scheduled-posts");
+}
+
+/** @deprecated Use returnScheduleToApproved. Kept so existing callers keep working. */
+export async function returnFailedScheduleToApproved(
+  scheduledPostId: string,
+  confirmCheckedPlatform = false
+) {
+  return returnScheduleToApproved(scheduledPostId, confirmCheckedPlatform);
 }
 
 export async function updateDraftCaption(draftId: string, caption: string) {

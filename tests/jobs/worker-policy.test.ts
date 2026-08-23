@@ -1,6 +1,9 @@
 import {
+  STALE_RUNNING_MS,
   UNIMPLEMENTED_JOB_TYPES,
+  isStaleRunningJob,
   isUnimplementedJobType,
+  staleRunningJobError,
   unimplementedJobError,
 } from "@/lib/jobs/worker-policy";
 
@@ -22,5 +25,14 @@ describe("worker-policy", () => {
 
   it("fails closed with a clear error instead of marking DONE", () => {
     expect(unimplementedJobError("GENERATE_RECAP")).toMatch(/not implemented/i);
+  });
+
+  it("treats a RUNNING job older than the stale window as dead", () => {
+    const now = new Date("2026-08-23T12:00:00.000Z");
+    const stale = new Date(now.getTime() - STALE_RUNNING_MS);
+    expect(isStaleRunningJob(stale, now)).toBe(true);
+    expect(isStaleRunningJob(new Date(now.getTime() - 60_000), now)).toBe(false);
+    expect(isStaleRunningJob(null, now)).toBe(false);
+    expect(staleRunningJobError()).toMatch(/will not reset it to PENDING/i);
   });
 });

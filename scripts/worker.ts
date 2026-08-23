@@ -8,15 +8,53 @@
 
 import { PrismaClient } from "@prisma/client";
 import { handlePublishPost } from "../lib/jobs/handlers/publish-post";
-import { isUnimplementedJobType, unimplementedJobError } from "../lib/jobs/worker-policy";
+import { isAdapterRetryRefusedError } from "../lib/jobs/publish-attempt";
+import {
+  STALE_RUNNING_MS,
+  isStaleRunningJob,
+  isUnimplementedJobType,
+  staleRunningJobError,
+  unimplementedJobError,
+} from "../lib/jobs/worker-policy";
 
 const prisma = new PrismaClient();
 
 const POLL_INTERVAL_MS = 5000;
 const WORKER_ID = `worker_${process.pid}`;
 
+async function failStaleRunningJobs(): Promise<void> {
+  const staleBefore = new Date(Date.now() - STALE_RUNNING_MS);
+  const stale = await prisma.job.findMany({
+    where: {
+      status: "RUNNING",
+      startedAt: { lte: staleBefore },
+    },
+    take: 20,
+  });
+
+  for (const job of stale) {
+    if (!isStaleRunningJob(job.startedAt)) continue;
+    const marked = await prisma.job.updateMany({
+      where: { id: job.id, status: "RUNNING" },
+      data: {
+        status: "FAILED",
+        failedAt: new Date(),
+        errorMessage: staleRunningJobError(),
+        retryCount: job.maxRetries,
+      },
+    });
+    if (marked.count > 0) {
+      console.warn(
+        `[${WORKER_ID}] Job ${job.id} marked FAILED (stale RUNNING). Not reset to PENDING.`
+      );
+    }
+  }
+}
+
 async function processDueJobs(): Promise<void> {
   const now = new Date();
+
+  await failStaleRunningJobs();
 
   // Claim pending jobs that are due. Retry timing is written to runAt.
   // Do not use prisma.job.fields.maxRetries here — that is DMMF metadata, not a number.
@@ -75,9 +113,10 @@ async function processDueJobs(): Promise<void> {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`[${WORKER_ID}] Job ${job.id} failed: ${errorMessage}`);
 
-      const retryCount = job.retryCount + 1;
+      const failWithoutRetry = isAdapterRetryRefusedError(errorMessage);
+      const retryCount = failWithoutRetry ? job.maxRetries : job.retryCount + 1;
       const maxRetries = job.maxRetries;
-      const shouldRetry = retryCount < maxRetries;
+      const shouldRetry = !failWithoutRetry && retryCount < maxRetries;
       const nextRetryAt = shouldRetry
         ? new Date(Date.now() + Math.pow(2, retryCount) * 1000 * 30) // exponential backoff
         : undefined;

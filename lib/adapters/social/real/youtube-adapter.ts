@@ -32,6 +32,7 @@ import {
   type SocialAdapterCapabilities,
 } from "../base";
 import { getYouTubeCredentials, hasYouTubeCredentials } from "./credentials";
+import { extractYouTubeVideoId } from "@/lib/services/publish/youtube-url";
 
 const YT_API_BASE = "https://www.googleapis.com/youtube/v3";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -85,7 +86,7 @@ export class YouTubeRealAdapter extends SocialProviderAdapter {
 
     // If a video URL or YouTube video ID is provided in mediaUrls, attempt to update
     // the video description (the one real write action available to us).
-    const videoId = this.extractYouTubeVideoId(payload.mediaUrls);
+    const videoId = extractYouTubeVideoId(payload.mediaUrls);
 
     if (videoId) {
       // Live video description writes are destructive. Require an explicit yes
@@ -206,6 +207,23 @@ export class YouTubeRealAdapter extends SocialProviderAdapter {
         };
       }
 
+      const updateData = (await updateResponse.json()) as Record<string, unknown>;
+      const updatedId =
+        typeof updateData.id === "string" && updateData.id.trim()
+          ? updateData.id.trim()
+          : "";
+      if (updatedId !== videoId) {
+        return {
+          success: false,
+          isDraftOnly: false,
+          errorMessage:
+            "YouTube update returned success without a matching video id. " +
+            "Nothing was marked published.",
+          responseCode: updateResponse.status,
+          durationMs: Date.now() - start,
+        };
+      }
+
       return {
         success: true,
         isDraftOnly: false,
@@ -222,26 +240,6 @@ export class YouTubeRealAdapter extends SocialProviderAdapter {
         durationMs: Date.now() - start,
       };
     }
-  }
-
-  /**
-   * Extract a YouTube video ID from mediaUrls if one looks like a YouTube URL or bare ID.
-   * Returns null if none found — indicating this is a text post (no direct publish path).
-   */
-  private extractYouTubeVideoId(mediaUrls?: string[]): string | null {
-    if (!mediaUrls || mediaUrls.length === 0) return null;
-
-    for (const url of mediaUrls) {
-      // Match youtube.com/watch?v=ID or youtu.be/ID or bare 11-char ID
-      const match =
-        url.match(/[?&]v=([a-zA-Z0-9_-]{11})/) ??
-        url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/) ??
-        (url.length === 11 && /^[a-zA-Z0-9_-]+$/.test(url) ? [null, url] : null);
-
-      if (match) return match[1];
-    }
-
-    return null;
   }
 
   async deletePost(_externalPostId: string): Promise<boolean> {

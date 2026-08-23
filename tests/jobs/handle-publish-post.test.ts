@@ -252,6 +252,11 @@ describe("handlePublishPost fail-closed", () => {
     await expect(handlePublishPost(job())).rejects.toThrow(/Graph API/i);
     expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
     expect(prismaMock.job.update).toHaveBeenCalled();
+    const payloads = prismaMock.job.update.mock.calls.map(
+      (call) => (call[0] as { data: { payload?: { adapterWriteStarted?: boolean } } }).data.payload
+    );
+    expect(payloads.some((payload) => payload?.adapterWriteStarted === true)).toBe(true);
+    expect(payloads.some((payload) => payload?.adapterWriteStarted === false)).toBe(false);
   });
 
   it("fails closed when the adapter reports success without an external post id", async () => {
