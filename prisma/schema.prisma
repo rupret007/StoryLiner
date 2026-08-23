@@ -45,6 +45,7 @@ enum CampaignType {
 enum ContentStatus {
   DRAFT
   IN_REVIEW
+  HELD
   APPROVED
   REJECTED
   SCHEDULED

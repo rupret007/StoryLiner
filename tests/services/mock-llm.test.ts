@@ -80,6 +80,23 @@ describe("MockLlmAdapter", () => {
       expect(Array.isArray(result.fanReplies)).toBe(true);
     });
 
+    it("never invents a Trailer Swift voice", async () => {
+      const stalemate = await adapter.generateContent({
+        band: mockStalemate,
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform: "INSTAGRAM",
+        contentLength: "MEDIUM",
+      });
+      const radDad = await adapter.generateContent({
+        band: mockRadDad,
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform: "FACEBOOK",
+        contentLength: "MEDIUM",
+      });
+      expect(stalemate.caption).not.toMatch(/trailer\s*swift/i);
+      expect(radDad.caption).not.toMatch(/trailer\s*swift/i);
+    });
+
     it("does not use FOMO ticket CTAs that conflict with Stalemate voice locks", async () => {
       const result = await adapter.generateContent({
         band: mockStalemate,

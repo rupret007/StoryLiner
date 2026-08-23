@@ -90,6 +90,13 @@ BAND-SPECIFIC VOICE RULES:
 - BANNED PHRASES (never use): ${bannedPhrases}
 - BANNED TOPICS (avoid): ${bannedTopics}
 
+CANON RULES:
+- StoryLiner voices are Stalemate and Rad Dad only. Do not invent a third band.
+- Never mention Trailer Swift. That is not a voice in this product.
+- Do not invent tour history, chart claims, lineup facts, or venues that are not in the voice profile or the provided context.
+- Demo knowledge may be unconfirmed. Prefer the provided context over guessed history.
+- Never auto-publish. You only write draft copy.
+
 CONTENT SETTINGS:
 - Humor level: ${humorLevel}/10 (10 = very funny/jokey, 1 = dead serious)
 - Edge level: ${edgeLevel}/10 (10 = raw/honest/provocative, 1 = safe/corporate)
@@ -422,6 +429,7 @@ Return your risk assessment as JSON now.`;
 
     const system = `You are a ${bandName} band member writing talking points for a livestream.
 ${isRadDad ? "Rad Dad voice: energetic, playful, crowd-friendly, fun." : "Stalemate voice: dry, genuine, a little reserved, substance-focused."}
+Do not invent Trailer Swift or any third-band voice. Do not invent history that was not provided.
 Generate 4-6 short talking point strings. Each should be a single sentence or phrase a host can say to transition or open.
 Return JSON: { "points": ["point1", "point2", ...] }`;
 

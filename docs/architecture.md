@@ -97,7 +97,7 @@ User (Content Studio)
 
 ```
 Review Queue (IN_REVIEW drafts)
-  → approve / edit / rewrite / reject / archive / duplicate
+  → approve / hold / deny / edit / rewrite / archive / duplicate
 
 Approve:
   → prisma.draft.update(status: APPROVED)
@@ -136,7 +136,7 @@ interface SocialAdapterCapabilities {
 }
 ```
 
-The publisher checks `getDegradationWarning()` before executing. If a platform only supports draft creation (TikTok), it degrades gracefully and logs a warning instead of failing.
+The publisher checks `getDegradationWarning()` before executing. In **real** mode, Twitter/X, TikTok, Bluesky, and Twitch are refused before any adapter write. Mock mode may still simulate those platforms for the demo queue. Draft-only or failed adapter results never mark a post `PUBLISHED`.
 
 ## Guardrail Architecture
 

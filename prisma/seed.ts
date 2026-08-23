@@ -112,42 +112,50 @@ async function main() {
     update: {},
   });
 
+  const DEMO_FACT_PREFIX =
+    "[DEMO — unconfirmed. Jeff owns canon. Do not treat as a live fact.] ";
+
   // Stalemate knowledge entries
   const stalemateKnowledge = [
     {
       type: "BAND_HISTORY" as const,
       title: "How Stalemate started",
       content:
+        DEMO_FACT_PREFIX +
         "Formed in 2019 when three people who'd been in other bands separately decided to stop waiting for the right lineup. Started playing basements. Eventually moved to bars. Never played a festival. Prefer it that way.",
-      tags: ["origin", "diy"],
+      tags: ["origin", "diy", "demo-unconfirmed"],
     },
     {
       type: "MEMBER_INFO" as const,
       title: "Current lineup",
       content:
+        DEMO_FACT_PREFIX +
         "Three members. Everyone sings. Roles have never been formally assigned. Everyone's played everything at some point.",
-      tags: ["members"],
+      tags: ["members", "demo-unconfirmed"],
     },
     {
       type: "RUNNING_JOKE" as const,
       title: "The amp situation",
       content:
+        DEMO_FACT_PREFIX +
         "One amp has been borrowed since 2020 and nobody talks about it. This is fine to reference obliquely.",
-      tags: ["gear", "inside-joke"],
+      tags: ["gear", "inside-joke", "demo-unconfirmed"],
     },
     {
       type: "SHOW_HISTORY" as const,
       title: "Burlington Bar residency",
       content:
+        DEMO_FACT_PREFIX +
         "Played Burlington Bar six times in 2023. It's the room they play best. The sound guy there is good. Mentioning this venue lands.",
-      tags: ["venues", "chicago"],
+      tags: ["venues", "chicago", "demo-unconfirmed"],
     },
     {
       type: "AUDIENCE_NOTE" as const,
       title: "Core audience behavior",
       content:
+        DEMO_FACT_PREFIX +
         "A lot of the core audience finds out about shows through word of mouth. They tend to share posts without commenting. Don't mistake silence for indifference.",
-      tags: ["audience", "engagement"],
+      tags: ["audience", "engagement", "demo-unconfirmed"],
     },
   ];
 
@@ -276,36 +284,41 @@ async function main() {
       type: "BAND_HISTORY" as const,
       title: "Rad Dad origin",
       content:
+        DEMO_FACT_PREFIX +
         "Started as a one-off party set in 2021. The crowd reaction was too good to walk away from. Became a regular thing within three months. Never intended to be permanent. Here we are.",
-      tags: ["origin"],
+      tags: ["origin", "demo-unconfirmed"],
     },
     {
       type: "RUNNING_JOKE" as const,
       title: "Mr. Brightside",
       content:
+        DEMO_FACT_PREFIX +
         "They always play Mr. Brightside. This is a known thing. Audiences expect it. It always goes off. Feel free to reference this in posts — the audience knows.",
-      tags: ["setlist", "inside-joke"],
+      tags: ["setlist", "inside-joke", "demo-unconfirmed"],
     },
     {
       type: "RUNNING_JOKE" as const,
       title: "The shorts policy",
       content:
+        DEMO_FACT_PREFIX +
         "Shorts are encouraged at every show. This started as a joke in a post and stuck. It's part of the identity now.",
-      tags: ["crowd", "inside-joke"],
+      tags: ["crowd", "inside-joke", "demo-unconfirmed"],
     },
     {
       type: "AUDIENCE_NOTE" as const,
       title: "Audience engagement style",
       content:
+        DEMO_FACT_PREFIX +
         "This audience WANTS to be engaged. They'll take the mic if you let them. Polls, questions, requests — all of it works. They are enthusiastic participants, not passive observers.",
-      tags: ["audience", "engagement"],
+      tags: ["audience", "engagement", "demo-unconfirmed"],
     },
     {
       type: "SHOW_HISTORY" as const,
       title: "Best rooms",
       content:
+        DEMO_FACT_PREFIX +
         "Lincoln Hall and Subterranean are the best rooms. Both have good sound and an audience that's already in the right headspace.",
-      tags: ["venues", "chicago"],
+      tags: ["venues", "chicago", "demo-unconfirmed"],
     },
   ];
 
@@ -415,6 +428,7 @@ async function main() {
       contentLength: "SHORT" as const,
       caption: "Burlington Bar. Two weeks.",
       hashtags: ["#chicago", "#livemusic"],
+      mediaUrls: ["https://example.com/demo/stalemate-burlington.jpg"],
       brandFitScore: 94,
       confidenceNotes: "High brand fit. Stalemate's core voice. No fluff.",
       riskLevel: "LOW" as const,
@@ -432,6 +446,19 @@ async function main() {
       confidenceNotes: "Very on-brand. Bluesky audience will respond to the directness.",
       riskLevel: "LOW" as const,
       riskFlags: [],
+    },
+    {
+      platform: "FACEBOOK" as const,
+      status: "HELD" as const,
+      toneVariant: "AUTHENTIC" as const,
+      contentLength: "SHORT" as const,
+      caption: "Rehearsal ran long. We'll keep the short version.",
+      hashtags: ["#rehearsal"],
+      brandFitScore: 89,
+      confidenceNotes: "Demo hold. Parked so the On Hold tab is visible. Not a live fact.",
+      riskLevel: "LOW" as const,
+      riskFlags: [],
+      reviewNotes: "Held as a demo of Approve/Hold/Deny. Nothing published.",
     },
     {
       platform: "INSTAGRAM" as const,

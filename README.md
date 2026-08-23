@@ -60,9 +60,13 @@ psql -c "CREATE DATABASE storyliner;"
 ### 4. Push the schema and generate Prisma client
 
 ```bash
-npm run db:push
 npx prisma generate
+npm run db:push
 ```
+
+`db:push` is the supported schema path (see [`prisma/README.md`](prisma/README.md)). It applies `Draft.mediaUrls` and `ContentStatus.HELD`. It does not publish anything.
+
+If a local database was created before `mediaUrls` existed, `db:push` (or `prisma/sql/0001_draft_media_urls.sql`) adds the column. Empty `mediaUrls` means caption-only.
 
 ### 5. Seed the database
 
@@ -72,7 +76,7 @@ npm run db:seed
 
 Seed creates:
 - Stalemate and Rad Dad with full voice profiles, tone rules, and banned phrases
-- Knowledge entries for each band
+- Knowledge entries for each band (tagged `demo-unconfirmed` — Jeff owns canon)
 - Platform accounts (mock/disconnected)
 - Upcoming events and show campaigns
 - Realistic drafts in the review queue at various stages
@@ -118,7 +122,7 @@ App runs at [http://localhost:3000](http://localhost:3000)
 | `/content-studio` | Generate platform-specific content with band voice, tone, and context |
 | `/campaign-builder` | View and manage campaign groupings |
 | `/calendar` | Upcoming posts, events, and streams in one view |
-| `/review-queue` | Approve / reject / edit / rewrite / schedule / archive drafts |
+| `/review-queue` | Approve / Hold / Deny / edit / rewrite / schedule / archive drafts |
 | `/scheduled-posts` | Posts queued for publishing with reschedule support |
 | `/published-posts` | Published post history with engagement metrics |
 | `/livestreams` | Livestream events, run-of-show, AI banter prompts, gear checklist |
@@ -134,7 +138,7 @@ Generate → Guard → Review → Approve → Schedule → Publish
 
 1. **Generate** — Content Studio calls `lib/services/content/generate.ts` → LLM adapter → draft created with `IN_REVIEW` status
 2. **Guard** — Hard guardrails run on every generated caption (`lib/services/guardrails/policy.ts`)
-3. **Review** — All drafts land in `/review-queue` — approve, reject, edit, rewrite, or archive
+3. **Review** — All drafts land in `/review-queue` — approve, hold, deny, edit, rewrite, or archive
 4. **Rewrite** — Apply directives (`funnier`, `morePunk`, `noHashtags`, etc.) via `lib/services/content/rewrite.ts` — creates new version, recomputes risk, back to review
 5. **Approve** — Sets status to `APPROVED`, draft moves to the Approved tab for scheduling
 6. **Schedule** — Select a platform account and future datetime; creates `ScheduledPost` + `Job` in a single transaction
@@ -142,16 +146,17 @@ Generate → Guard → Review → Approve → Schedule → Publish
 
 ## Review Queue
 
-All review actions use `router.refresh()` (no hard page reloads). Destructive actions (reject, archive) require confirmation dialogs.
+All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. None of those actions publish.
 
 | Action | Description |
 |---|---|
-| Approve | Marks draft as APPROVED, ready to schedule |
+| Approve | Marks draft as APPROVED, ready to schedule. Does **not** publish. |
+| Hold | Parks the draft (`HELD`). Does **not** schedule or publish. |
+| Deny | Requires confirmation; marks as REJECTED. Does **not** publish. |
 | Schedule | Opens account + datetime picker (approved drafts only) |
-| Reject | Requires confirmation; marks as REJECTED |
 | Edit | Direct caption edit inline, creates new version |
 | Rewrite | Apply a tone directive, recomputes risk signals, creates new version |
-| Duplicate | Creates a copy back in review for variant testing |
+| Duplicate | Creates a copy back in review for variant testing (copies `mediaUrls`) |
 | Archive | Requires confirmation; removes from active queue |
 
 Scheduling validation enforces:
@@ -179,7 +184,7 @@ Controlled by `SOCIAL_ADAPTER` in `.env.local`:
 | Value | Behavior |
 |---|---|
 | `mock` (default) | Full simulated publish flow, capability flags per platform, no real API calls |
-| `real` | Returns real adapters for Facebook, Instagram, YouTube; other platforms fall back to mock |
+| `real` | Real adapters for Facebook, Instagram, YouTube only. Twitter/X, TikTok, Bluesky, and Twitch are refused in the live path |
 
 #### Real adapter platforms (as of current sprint)
 
@@ -188,9 +193,10 @@ Controlled by `SOCIAL_ADAPTER` in `.env.local`:
 | Facebook | `lib/adapters/social/real/facebook-adapter.ts` | `POST /{pageId}/feed` via Meta Graph API v18.0 |
 | Instagram | `lib/adapters/social/real/instagram-adapter.ts` | Two-step media container publish via Meta Content Publishing API. Requires image/video. |
 | YouTube | `lib/adapters/social/real/youtube-adapter.ts` | Text posts → `isDraftOnly=true` (community post API removed). Video URL → updates video description. |
-| Bluesky | Mock fallback | Real adapter planned next sprint |
-| TikTok | Mock fallback | Video required for real publish |
-| Twitch | Mock fallback | Helix API planned |
+| Bluesky | Refused | Not a live destination |
+| TikTok | Refused | Not a live destination |
+| Twitch | Refused | Not a live destination |
+| Twitter/X | Refused | Schema leftover. No real X adapter |
 
 #### Setting up real adapters
 
@@ -281,6 +287,11 @@ Jest is required in CI. Suites include:
 | `tests/adapters/real-social.test.ts` | Real adapter contract shape, isDraftOnly semantics, credential validation |
 | `tests/workflow/schedule-approved-draft.test.ts` | Scheduling schema validation, future-time gates |
 | `tests/jobs/publish-post.test.ts` | Draft-only adapter publish result semantics |
+| `tests/jobs/handle-publish-post.test.ts` | Worker fail-closed: Twitter/TikTok/Bluesky, draft-only, no PublishedPost |
+| `tests/jobs/worker-policy.test.ts` | Unimplemented jobs fail and never mark DONE |
+| `tests/workflow/review-decisions.test.ts` | Approve / Hold / Deny status gates |
+| `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
+| `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |
 
 ## Project Structure
 

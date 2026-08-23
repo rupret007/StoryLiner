@@ -7,6 +7,20 @@ export const REAL_LIVE_PLATFORMS: ReadonlySet<Platform> = new Set([
   "YOUTUBE",
 ]);
 
+export const REFUSED_LIVE_PLATFORMS: ReadonlySet<Platform> = new Set([
+  "TWITTER",
+  "TIKTOK",
+  "BLUESKY",
+  "TWITCH",
+]);
+
+export const LIVE_DESTINATION_REFUSAL =
+  "Refusing live publish: StoryLiner live destinations are Facebook, Instagram, and YouTube only.";
+
+export function isLiveDestinationPlatform(platform: Platform): boolean {
+  return REAL_LIVE_PLATFORMS.has(platform);
+}
+
 export type LivePublishSafety =
   | { ok: true }
   | { ok: false; reason: string };
@@ -33,7 +47,10 @@ export function assertSafeToLivePublish(options: {
   }
 
   if (!REAL_LIVE_PLATFORMS.has(options.platform)) {
-    return { ok: true };
+    return {
+      ok: false,
+      reason: `${LIVE_DESTINATION_REFUSAL} ${options.platform} is refused in the live path.`,
+    };
   }
 
   if (!options.accountIsActive) {
@@ -145,9 +162,7 @@ export function assertReadyForLivePublish(options: {
   if (mode === "real" && !REAL_LIVE_PLATFORMS.has(options.platform)) {
     return {
       ok: false,
-      reason:
-        `Refusing live ${options.platform} publish: StoryLiner live destinations are ` +
-        "Facebook, Instagram, and YouTube only.",
+      reason: `${LIVE_DESTINATION_REFUSAL} ${options.platform} is refused in the live path.`,
     };
   }
 
@@ -204,12 +219,16 @@ export function assertLivePublishResult(options: {
   return { ok: true };
 }
 
+const APPROVABLE_STATUSES = new Set(["IN_REVIEW", "HELD"]);
+const HOLDABLE_STATUSES = new Set(["IN_REVIEW", "APPROVED"]);
+const DENIABLE_STATUSES = new Set(["IN_REVIEW", "HELD"]);
+
 export function assertCanApproveDraft(options: {
   status: string;
   riskLevel: string;
   confirmHighRisk?: boolean;
 }): LivePublishSafety {
-  if (options.status !== "IN_REVIEW") {
+  if (!APPROVABLE_STATUSES.has(options.status)) {
     return {
       ok: false,
       reason: `Draft cannot be approved from status ${options.status}.`,
@@ -228,4 +247,41 @@ export function assertCanApproveDraft(options: {
 
 export function canRescheduleJob(jobStatus: string | null | undefined): boolean {
   return jobStatus == null || jobStatus === "PENDING";
+}
+
+/**
+ * Hold parks a draft. It does not schedule or publish.
+ * Allowed from IN_REVIEW (not ready yet) or APPROVED (not ready to schedule).
+ */
+export function assertCanHoldDraft(options: { status: string }): LivePublishSafety {
+  if (!HOLDABLE_STATUSES.has(options.status)) {
+    return {
+      ok: false,
+      reason: `Draft cannot be held from status ${options.status}.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Deny rejects a draft. It does not publish. Allowed from IN_REVIEW or HELD.
+ */
+export function assertCanDenyDraft(options: { status: string }): LivePublishSafety {
+  if (!DENIABLE_STATUSES.has(options.status)) {
+    return {
+      ok: false,
+      reason: `Draft cannot be denied from status ${options.status}.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function assertCanResumeHeldDraft(options: { status: string }): LivePublishSafety {
+  if (options.status !== "HELD") {
+    return {
+      ok: false,
+      reason: "Only held drafts can be returned to review.",
+    };
+  }
+  return { ok: true };
 }

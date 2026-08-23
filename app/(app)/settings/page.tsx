@@ -69,7 +69,7 @@ export default function SettingsPage() {
             <Switch checked={false} disabled />
           </div>
           <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-            These settings are enforced at the service layer and cannot be overridden from the UI. See <code className="text-xs bg-muted px-1 rounded">lib/services/guardrails/policy.ts</code>.
+            Live destinations are Facebook, Instagram, and YouTube only. Twitter/X, TikTok, Bluesky, and Twitch are refused. These settings are enforced at the service layer and cannot be overridden from the UI. See <code className="text-xs bg-muted px-1 rounded">lib/services/guardrails/policy.ts</code>.
           </p>
         </CardContent>
       </Card>

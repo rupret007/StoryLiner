@@ -3,6 +3,7 @@ import {
   checkBandVoiceSeparation,
   checkAutoPublishGuard,
   checkEmojiOveruse,
+  checkInventedVoiceFacts,
   evaluateGuardrails,
 } from "@/lib/services/guardrails/policy";
 
@@ -142,6 +143,16 @@ describe("evaluateGuardrails", () => {
     expect(violations.some((v) => v.rule === "no-auto-publish")).toBe(true);
   });
 
+  it("flags Trailer Swift as invented-band voice", () => {
+    const violations = evaluateGuardrails({
+      caption: "Trailer Swift cover night at Lincoln Hall.",
+      bandName: "Rad Dad",
+      otherBandNames: ["Stalemate"],
+      isAutoPublish: false,
+    });
+    expect(violations.some((v) => v.rule === "no-invented-band-voice")).toBe(true);
+  });
+
   it("does not flag auto-publish when explicitly false", () => {
     const violations = evaluateGuardrails({
       caption: "Playing Burlington Bar on Saturday.",
@@ -150,6 +161,20 @@ describe("evaluateGuardrails", () => {
       isAutoPublish: false,
     });
     expect(violations).toHaveLength(0);
+  });
+});
+
+describe("checkInventedVoiceFacts", () => {
+  it("flags Trailer Swift leakage without inventing a third-band voice", () => {
+    const violations = checkInventedVoiceFacts(
+      "Trailer Swift would smash this chorus at Lincoln Hall."
+    );
+    expect(violations.some((v) => v.rule === "no-invented-band-voice")).toBe(true);
+  });
+
+  it("does not flag Stalemate or Rad Dad copy", () => {
+    expect(checkInventedVoiceFacts("Playing Burlington Bar on Saturday.")).toHaveLength(0);
+    expect(checkInventedVoiceFacts("We will play Mr. Brightside. We always do.")).toHaveLength(0);
   });
 });
 
