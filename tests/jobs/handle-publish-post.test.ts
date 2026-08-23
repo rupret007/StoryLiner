@@ -15,10 +15,15 @@ const prismaMock = {
   },
   publishedPost: {
     create: jest.fn(),
+    findUnique: jest.fn(),
   },
   draft: {
     update: jest.fn(),
   },
+  job: {
+    update: jest.fn(),
+  },
+  $transaction: jest.fn(),
 };
 
 const getSocialAdapter = jest.fn();
@@ -116,6 +121,7 @@ function scheduledRow(overrides: {
       id: "band_1",
       name: "Stalemate",
     },
+    publishedPost: null,
   };
 }
 
@@ -128,21 +134,48 @@ describe("handlePublishPost fail-closed", () => {
     prismaMock.publishLog.create.mockResolvedValue({ id: "log_1" });
     prismaMock.publishLog.update.mockResolvedValue({ id: "log_1" });
     prismaMock.publishedPost.create.mockResolvedValue({ id: "pub_1" });
+    prismaMock.publishedPost.findUnique.mockResolvedValue(null);
     prismaMock.scheduledPost.update.mockResolvedValue({ id: "sched_1" });
     prismaMock.draft.update.mockResolvedValue({ id: "draft_1" });
+    prismaMock.job.update.mockResolvedValue({ id: "job_1" });
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
+      fn(prismaMock)
+    );
   });
 
   afterEach(() => {
     process.env.SOCIAL_ADAPTER = originalAdapter;
   });
 
-  it("skips rows that are no longer SCHEDULED without touching adapters", async () => {
+  it("reconciles an already-published row without calling the adapter", async () => {
+    prismaMock.scheduledPost.findUniqueOrThrow.mockResolvedValue({
+      ...scheduledRow({ status: "PUBLISHED" }),
+      publishedPost: { id: "pub_existing" },
+    });
+
+    await expect(handlePublishPost(job())).resolves.toBe("already-published");
+
+    expect(getSocialAdapter).not.toHaveBeenCalled();
+    expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
+  });
+
+  it("throws when the scheduled row is not SCHEDULED and nothing was published", async () => {
     prismaMock.scheduledPost.findUniqueOrThrow.mockResolvedValue(
-      scheduledRow({ status: "PUBLISHED" })
+      scheduledRow({ status: "FAILED" })
     );
 
-    await handlePublishPost(job());
+    await expect(handlePublishPost(job())).rejects.toThrow(/not SCHEDULED/i);
+    expect(getSocialAdapter).not.toHaveBeenCalled();
+    expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
+  });
 
+  it("refuses a retry after the adapter write already started", async () => {
+    prismaMock.scheduledPost.findUniqueOrThrow.mockResolvedValue(scheduledRow());
+
+    const retryJob = job();
+    retryJob.payload = { scheduledPostId: "sched_1", adapterWriteStarted: true };
+
+    await expect(handlePublishPost(retryJob)).rejects.toThrow(/will not double-publish/i);
     expect(getSocialAdapter).not.toHaveBeenCalled();
     expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
   });
@@ -218,6 +251,24 @@ describe("handlePublishPost fail-closed", () => {
 
     await expect(handlePublishPost(job())).rejects.toThrow(/Graph API/i);
     expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
+    expect(prismaMock.job.update).toHaveBeenCalled();
+  });
+
+  it("fails closed when the adapter reports success without an external post id", async () => {
+    prismaMock.scheduledPost.findUniqueOrThrow.mockResolvedValue(scheduledRow());
+    getSocialAdapter.mockResolvedValue({
+      adapterName: "real-facebook",
+      getDegradationWarning: () => null,
+      publish: jest.fn().mockResolvedValue({
+        success: true,
+        isDraftOnly: false,
+        durationMs: 8,
+        externalPostId: "",
+      }),
+    });
+
+    await expect(handlePublishPost(job())).rejects.toThrow(/external post id/i);
+    expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
   });
 
   it("creates a PublishedPost only after a successful non-draft write", async () => {
@@ -235,7 +286,7 @@ describe("handlePublishPost fail-closed", () => {
       }),
     });
 
-    await handlePublishPost(job());
+    await expect(handlePublishPost(job())).resolves.toBe("published");
 
     expect(prismaMock.publishedPost.create).toHaveBeenCalled();
     expect(prismaMock.draft.update).toHaveBeenCalledWith({

@@ -56,9 +56,11 @@ async function processDueJobs(): Promise<void> {
       }
 
       switch (job.type) {
-        case "PUBLISH_POST":
-          await handlePublishPost(job);
+        case "PUBLISH_POST": {
+          const outcome = await handlePublishPost(job);
+          console.log(`[${WORKER_ID}] Job ${job.id} publish outcome: ${outcome}`);
           break;
+        }
         default:
           throw new Error(`Unknown job type: ${job.type}`);
       }

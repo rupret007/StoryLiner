@@ -7,7 +7,9 @@ import {
   assertCanApproveDraft,
   assertCanDenyDraft,
   assertCanHoldDraft,
+  assertCanMutateDraftCaption,
   assertCanResumeHeldDraft,
+  assertCanReturnFailedSchedule,
   assertReadyForLivePublish,
   canRescheduleJob,
   sanitizeMediaUrls,
@@ -313,8 +315,12 @@ export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
     where: { id: input.draftId },
   });
 
-  if (draft.status !== "IN_REVIEW" && draft.status !== "APPROVED") {
-    throw new Error("Media can only be attached while the draft is in review or approved.");
+  if (
+    draft.status !== "IN_REVIEW" &&
+    draft.status !== "APPROVED" &&
+    draft.status !== "HELD"
+  ) {
+    throw new Error("Media can only be attached while the draft is in review, held, or approved.");
   }
 
   const mediaUrls = sanitizeMediaUrls(input.mediaUrls);
@@ -332,11 +338,47 @@ export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
   return updated;
 }
 
+export async function returnFailedScheduleToApproved(scheduledPostId: string) {
+  const existing = await prisma.scheduledPost.findUniqueOrThrow({
+    where: { id: scheduledPostId },
+    include: { job: true, draft: true },
+  });
+
+  const allowed = assertCanReturnFailedSchedule({
+    scheduledStatus: existing.status,
+    draftStatus: existing.draft.status,
+    jobStatus: existing.job?.status,
+  });
+  if (!allowed.ok) {
+    throw new Error(allowed.reason);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.scheduledPost.delete({ where: { id: scheduledPostId } });
+    await tx.draft.update({
+      where: { id: existing.draftId },
+      data: {
+        status: "APPROVED",
+        reviewNotes:
+          "Returned from a failed publish job. Approve is not publish. Schedule again after the fix.",
+      },
+    });
+  });
+
+  revalidatePath("/review-queue");
+  revalidatePath("/scheduled-posts");
+}
+
 export async function updateDraftCaption(draftId: string, caption: string) {
   const draft = await prisma.draft.findUniqueOrThrow({
     where: { id: draftId },
     include: { band: { include: { voiceProfile: true } } },
   });
+  const mutable = assertCanMutateDraftCaption({ status: draft.status });
+  if (!mutable.ok) {
+    throw new Error(mutable.reason);
+  }
+
   const newVersion = draft.currentVersion + 1;
 
   const otherBands = await prisma.band.findMany({

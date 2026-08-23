@@ -72,10 +72,6 @@ export class FacebookRealAdapter extends SocialProviderAdapter {
         body: JSON.stringify(body),
       });
 
-      if (!response) {
-        throw new Error("No response from Facebook API");
-      }
-
       const data = (await response.json()) as Record<string, unknown>;
 
       if (!response.ok) {
@@ -91,7 +87,18 @@ export class FacebookRealAdapter extends SocialProviderAdapter {
         };
       }
 
-      const postId = data.id as string;
+      const postId = typeof data.id === "string" ? data.id.trim() : "";
+      if (!postId) {
+        return {
+          success: false,
+          isDraftOnly: false,
+          errorMessage:
+            "Facebook Graph API returned success without a post id. Nothing was marked published.",
+          responseCode: response.status,
+          durationMs: Date.now() - start,
+        };
+      }
+
       // Facebook post IDs are in the form {page-id}_{post-id}
       const [, shortId] = postId.includes("_") ? postId.split("_") : ["", postId];
       const externalPostUrl = `https://www.facebook.com/permalink.php?story_fbid=${shortId}&id=${pageId}`;

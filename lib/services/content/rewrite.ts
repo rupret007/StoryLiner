@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getLlmAdapter } from "@/lib/services/llm";
 import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 import { deriveHashtags, HASHTAG_DIRECTIVES } from "@/lib/services/content/hashtags";
+import { assertCanMutateDraftCaption } from "@/lib/services/publish/safety";
 import type { RewriteDraftInput } from "@/lib/schemas/content";
 import type { Draft } from "@prisma/client";
 
@@ -14,6 +15,11 @@ export async function rewriteDraft(input: RewriteDraftInput): Promise<Draft> {
       band: { include: { voiceProfile: true } },
     },
   });
+
+  const mutable = assertCanMutateDraftCaption({ status: draft.status });
+  if (!mutable.ok) {
+    throw new Error(mutable.reason);
+  }
 
   const llm = getLlmAdapter();
 

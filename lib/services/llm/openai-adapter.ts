@@ -18,6 +18,7 @@ import type {
   RiskAssessment,
 } from "./types";
 import { campaignTypeLabel, platformLabel } from "@/lib/utils";
+import { resolveStoryLinerVoice } from "./voice";
 
 // ---------------------------------------------------------------------------
 // Client bootstrap
@@ -46,7 +47,8 @@ function buildGenerateSystemPrompt(
   platform: Platform
 ): string {
   const vp = band.voiceProfile;
-  const isRadDad = band.name.toLowerCase().includes("rad dad");
+  const voice = resolveStoryLinerVoice(band.name);
+  const isRadDad = voice === "rad-dad";
 
   const platformNoteMap = vp
     ? { FACEBOOK: vp.facebookNotes, INSTAGRAM: vp.instagramNotes, YOUTUBE: vp.youtubeNotes, BLUESKY: vp.blueskyNotes, TIKTOK: vp.tiktokNotes, TWITCH: vp.twitchNotes }
@@ -56,14 +58,18 @@ function buildGenerateSystemPrompt(
   const toneDescription = vp?.toneDescription ?? (
     isRadDad
       ? "Pop-punk cover band energy -- nostalgic, crowd-first, fun, self-aware, not too serious."
-      : "Dry indie rock -- scene-rooted, honest, a little distant, values substance over flash."
+      : voice === "stalemate"
+      ? "Dry indie rock -- scene-rooted, honest, a little distant, values substance over flash."
+      : "Use only the configured voice profile. Do not borrow another band. Do not invent a third band."
   );
 
   const personalityTraits = vp?.personalityTraits?.length
     ? vp.personalityTraits.join(", ")
     : isRadDad
     ? "energetic, playful, crowd-driven, self-aware, fun-loving"
-    : "reserved, genuine, a bit distant, substance-focused, low-ego";
+    : voice === "stalemate"
+    ? "reserved, genuine, a bit distant, substance-focused, low-ego"
+    : "match the voice profile; do not invent personality";
 
   const bannedPhrases = vp?.bannedPhrases?.length
     ? vp.bannedPhrases.join(", ")
@@ -73,8 +79,8 @@ function buildGenerateSystemPrompt(
     ? vp.bannedTopics.join(", ")
     : "none specified";
 
-  const humorLevel = vp?.humorLevel ?? (isRadDad ? 8 : 5);
-  const edgeLevel = vp?.edgeLevel ?? (isRadDad ? 5 : 7);
+  const humorLevel = vp?.humorLevel ?? (isRadDad ? 8 : voice === "stalemate" ? 5 : 4);
+  const edgeLevel = vp?.edgeLevel ?? (isRadDad ? 5 : voice === "stalemate" ? 7 : 4);
   const emojiTolerance = vp?.emojiTolerance ?? 3;
   const isExplicitOk = vp?.isExplicitOk ?? false;
 
@@ -131,7 +137,8 @@ function buildGenerateUserPrompt(
   options: GenerateContentOptions
 ): string {
   const { band, campaignType, platform, contentLength, toneVariant, context } = options;
-  const isRadDad = band.name.toLowerCase().includes("rad dad");
+  const voice = resolveStoryLinerVoice(band.name);
+  const isRadDad = voice === "rad-dad";
 
   const typeLabel = campaignTypeLabel(campaignType).toLowerCase();
   const platformLabelStr = platformLabel(platform);
@@ -220,7 +227,16 @@ function buildGenerateUserPrompt(
     UNSPECIFIED: "Write a natural, in-character band post.",
   };
 
-  const campaignGuidance = isRadDad ? radDadGuidance : stalemateGuidance;
+  const genericGuidance: Record<string, string> = {
+    UNSPECIFIED:
+      "Write a natural, in-character band post using only the voice profile. Do not invent a third band. Never mention Trailer Swift.",
+  };
+
+  const campaignGuidance = isRadDad
+    ? radDadGuidance
+    : voice === "stalemate"
+    ? stalemateGuidance
+    : genericGuidance;
   const campaignInstruction = campaignGuidance[typeLabel] ?? campaignGuidance.UNSPECIFIED;
 
   return `${campaignInstruction}
@@ -240,12 +256,15 @@ function buildRewriteSystemPrompt(
   band: Band & { voiceProfile: BandVoiceProfile | null }
 ): string {
   const vp = band.voiceProfile;
-  const isRadDad = band.name.toLowerCase().includes("rad dad");
+  const voice = resolveStoryLinerVoice(band.name);
+  const isRadDad = voice === "rad-dad";
 
   const toneDescription = vp?.toneDescription ?? (
     isRadDad
       ? "Pop-punk cover band energy -- nostalgic, crowd-first, fun, self-aware."
-      : "Dry indie rock -- scene-rooted, honest, a little distant."
+      : voice === "stalemate"
+      ? "Dry indie rock -- scene-rooted, honest, a little distant."
+      : "Use only the configured voice profile. Do not invent a third band."
   );
 
   const bannedPhrases = vp?.bannedPhrases?.length
@@ -278,7 +297,8 @@ function buildRiskSystemPrompt(
   band: Band & { voiceProfile: BandVoiceProfile | null }
 ): string {
   const vp = band.voiceProfile;
-  const isRadDad = band.name.toLowerCase().includes("rad dad");
+  const voice = resolveStoryLinerVoice(band.name);
+  const isRadDad = voice === "rad-dad";
 
   const bannedPhrases = vp?.bannedPhrases?.length
     ? vp.bannedPhrases.join(", ")
@@ -289,7 +309,7 @@ function buildRiskSystemPrompt(
   return `You are a brand safety reviewer for ${band.name}.
 
 BAND VOICE PROFILE:
-- Tone: ${vp?.toneDescription ?? (isRadDad ? "pop-punk, fun, crowd-first" : "dry indie rock, honest, scene-rooted")}
+- Tone: ${vp?.toneDescription ?? (isRadDad ? "pop-punk, fun, crowd-first" : voice === "stalemate" ? "dry indie rock, honest, scene-rooted" : "voice profile only — do not invent a third band")}
 - BANNED PHRASES: ${bannedPhrases}
 - Emoji tolerance: ${emojiTolerance}/10
 
@@ -425,10 +445,16 @@ Return your risk assessment as JSON now.`;
     runOfShowItems: string[];
   }): Promise<string[]> {
     const { livestreamTitle, bandName, runOfShowItems } = options;
-    const isRadDad = bandName.toLowerCase().includes("rad dad");
+    const voice = resolveStoryLinerVoice(bandName);
+    const voiceLine =
+      voice === "rad-dad"
+        ? "Rad Dad voice: energetic, playful, crowd-friendly, fun."
+        : voice === "stalemate"
+        ? "Stalemate voice: dry, genuine, a little reserved, substance-focused."
+        : "Use only this band's voice profile. Do not borrow Stalemate or Rad Dad. Never mention Trailer Swift.";
 
     const system = `You are a ${bandName} band member writing talking points for a livestream.
-${isRadDad ? "Rad Dad voice: energetic, playful, crowd-friendly, fun." : "Stalemate voice: dry, genuine, a little reserved, substance-focused."}
+${voiceLine}
 Do not invent Trailer Swift or any third-band voice. Do not invent history that was not provided.
 Generate 4-6 short talking point strings. Each should be a single sentence or phrase a host can say to transition or open.
 Return JSON: { "points": ["point1", "point2", ...] }`;
@@ -452,7 +478,6 @@ Return JSON now.`;
     platform: Platform;
   }): Promise<string[]> {
     const { bandName, platform } = options;
-    const isRadDad = bandName.toLowerCase().includes("rad dad");
 
     const system = `You are a social media strategist for ${bandName}.
 Generate 5 short engagement prompts (1-2 sentences each) that a ${platformLabel(platform).toLowerCase()} post from this band should ask fans.

@@ -6,11 +6,30 @@ import {
   assertReadyForLivePublish,
   sanitizeMediaUrls,
 } from "@/lib/services/publish/safety";
+import {
+  adapterRetryRefusedReason,
+  parsePublishJobPayload,
+  shouldClearAdapterWriteStarted,
+  withAdapterWriteStarted,
+} from "@/lib/jobs/publish-attempt";
 import type { Job } from "@prisma/client";
 
-export async function handlePublishPost(job: Job): Promise<void> {
-  const payload = job.payload as { scheduledPostId: string };
-  const { scheduledPostId } = payload;
+export type PublishHandlerOutcome = "published" | "already-published";
+
+async function reconcileAlreadyPublished(scheduledPostId: string, draftId: string): Promise<void> {
+  await prisma.scheduledPost.update({
+    where: { id: scheduledPostId },
+    data: { status: "PUBLISHED" },
+  });
+  await prisma.draft.update({
+    where: { id: draftId },
+    data: { status: "PUBLISHED" },
+  });
+}
+
+export async function handlePublishPost(job: Job): Promise<PublishHandlerOutcome> {
+  const parsed = parsePublishJobPayload(job.payload);
+  const { scheduledPostId } = parsed;
 
   const scheduledPost = await prisma.scheduledPost.findUniqueOrThrow({
     where: { id: scheduledPostId },
@@ -18,12 +37,36 @@ export async function handlePublishPost(job: Job): Promise<void> {
       draft: true,
       platformAccount: true,
       band: true,
+      publishedPost: true,
     },
   });
 
+  const existingPublished =
+    scheduledPost.publishedPost ??
+    (await prisma.publishedPost.findUnique({
+      where: { scheduledPostId },
+    }));
+
+  if (existingPublished) {
+    await reconcileAlreadyPublished(scheduledPost.id, scheduledPost.draftId);
+    return "already-published";
+  }
+
+  if (scheduledPost.status === "PUBLISHED") {
+    throw new Error(
+      "Scheduled post is PUBLISHED but no PublishedPost row exists. " +
+        "Refusing to call the adapter."
+    );
+  }
+
   if (scheduledPost.status !== "SCHEDULED") {
-    console.log(`[worker] Skipping ${scheduledPostId}: status is ${scheduledPost.status}`);
-    return;
+    throw new Error(
+      `Refusing to publish: scheduled post status is ${scheduledPost.status}, not SCHEDULED.`
+    );
+  }
+
+  if (parsed.adapterWriteStarted) {
+    throw new Error(adapterRetryRefusedReason());
   }
 
   const mediaUrls = sanitizeMediaUrls(scheduledPost.draft.mediaUrls);
@@ -50,13 +93,18 @@ export async function handlePublishPost(job: Job): Promise<void> {
     console.warn(`[worker] ${degradationWarning}`);
   }
 
+  // Mark the write attempt before the network call so a crash after a live
+  // adapter success cannot retry into a second Facebook/Instagram/YouTube post.
+  await prisma.job.update({
+    where: { id: job.id },
+    data: { payload: withAdapterWriteStarted(job.payload, true) },
+  });
+
   const result = await adapter.publish({
     caption: scheduledPost.draft.caption,
     hashtags: scheduledPost.draft.hashtags,
     mediaUrls,
     scheduledFor: scheduledPost.scheduledFor,
-    // Forward platform-account metadata so real adapters can resolve the correct
-    // account ID (e.g. Facebook page ID, Instagram user ID, YouTube channel ID).
     accountMetadata:
       scheduledPost.platformAccount.metadata != null
         ? (scheduledPost.platformAccount.metadata as Record<string, unknown>)
@@ -67,9 +115,16 @@ export async function handlePublishPost(job: Job): Promise<void> {
     success: result.success,
     isDraftOnly: result.isDraftOnly,
     errorMessage: result.errorMessage,
+    externalPostId: result.externalPostId,
   });
 
-  // Record publish log. Draft-only / failed writes stay failed — never "published".
+  if (!liveResult.ok && shouldClearAdapterWriteStarted(result)) {
+    await prisma.job.update({
+      where: { id: job.id },
+      data: { payload: withAdapterWriteStarted(job.payload, false) },
+    });
+  }
+
   const publishLog = await prisma.publishLog.create({
     data: {
       platform: scheduledPost.draft.platform,
@@ -85,37 +140,37 @@ export async function handlePublishPost(job: Job): Promise<void> {
     throw new Error(liveResult.reason);
   }
 
-  // Create published post record for fully published content
-  const publishedPost = await prisma.publishedPost.create({
-    data: {
-      bandId: scheduledPost.bandId,
-      scheduledPostId: scheduledPost.id,
-      platformAccountId: scheduledPost.platformAccountId,
-      platform: scheduledPost.draft.platform,
-      externalPostId: result.externalPostId,
-      externalPostUrl: result.externalPostUrl,
-      publishedAt: new Date(),
-      caption: scheduledPost.draft.caption,
-      hashtags: scheduledPost.draft.hashtags,
-    },
+  await prisma.$transaction(async (tx) => {
+    const publishedPost = await tx.publishedPost.create({
+      data: {
+        bandId: scheduledPost.bandId,
+        scheduledPostId: scheduledPost.id,
+        platformAccountId: scheduledPost.platformAccountId,
+        platform: scheduledPost.draft.platform,
+        externalPostId: result.externalPostId,
+        externalPostUrl: result.externalPostUrl,
+        publishedAt: new Date(),
+        caption: scheduledPost.draft.caption,
+        hashtags: scheduledPost.draft.hashtags,
+      },
+    });
+
+    await tx.publishLog.update({
+      where: { id: publishLog.id },
+      data: { publishedPostId: publishedPost.id },
+    });
+
+    await tx.scheduledPost.update({
+      where: { id: scheduledPost.id },
+      data: { status: "PUBLISHED" },
+    });
+
+    await tx.draft.update({
+      where: { id: scheduledPost.draftId },
+      data: { status: "PUBLISHED" },
+    });
   });
 
-  // Link publish log to published post
-  await prisma.publishLog.update({
-    where: { id: publishLog.id },
-    data: { publishedPostId: publishedPost.id },
-  });
-
-  // Mark as fully published
-  await prisma.scheduledPost.update({
-    where: { id: scheduledPost.id },
-    data: { status: "PUBLISHED" },
-  });
-
-  await prisma.draft.update({
-    where: { id: scheduledPost.draftId },
-    data: { status: "PUBLISHED" },
-  });
-
-  console.log(`[worker] Published post ${publishedPost.id} to ${scheduledPost.draft.platform}`);
+  console.log(`[worker] Published post to ${scheduledPost.draft.platform}`);
+  return "published";
 }

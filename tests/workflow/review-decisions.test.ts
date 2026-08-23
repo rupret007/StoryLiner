@@ -3,6 +3,7 @@ import {
   assertCanApproveDraft,
   assertCanDenyDraft,
   assertCanHoldDraft,
+  assertCanMutateDraftCaption,
 } from "@/lib/services/publish/safety";
 
 describe("reviewDraftSchema", () => {
@@ -39,5 +40,10 @@ describe("Approve / Hold / Deny never imply publish", () => {
   it("cannot Hold or Deny a post that is already publishing", () => {
     expect(assertCanHoldDraft({ status: "SCHEDULED" }).ok).toBe(false);
     expect(assertCanDenyDraft({ status: "PUBLISHED" }).ok).toBe(false);
+  });
+
+  it("cannot rewrite or edit a scheduled or published draft", () => {
+    expect(assertCanMutateDraftCaption({ status: "SCHEDULED" }).ok).toBe(false);
+    expect(assertCanMutateDraftCaption({ status: "PUBLISHED" }).ok).toBe(false);
   });
 });

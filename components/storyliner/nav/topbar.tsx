@@ -47,7 +47,7 @@ export function Topbar({ reviewCount = 0 }: TopbarProps) {
           asChild
           className="relative h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
         >
-          <Link href="/review-queue" title="Review Queue">
+          <Link href="/review-queue" title="Bob drafts waiting for Jeff">
             <ClipboardList className="h-4 w-4" />
             {reviewCount > 0 ? (
               <>

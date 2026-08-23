@@ -58,6 +58,26 @@ describe("FacebookRealAdapter", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
+    it("fails closed when Graph API omits a post id", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+      });
+
+      const result = await adapter.publish({
+        caption: "No id",
+        mediaUrls: [],
+        hashtags: [],
+        accountMetadata: { pageId: "123" },
+        scheduledFor: undefined,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.externalPostId).toBeUndefined();
+      expect(result.errorMessage).toMatch(/without a post id/i);
+    });
+
     it("should handle API errors gracefully", async () => {
       mockFetch.mockResolvedValue({
         ok: false,

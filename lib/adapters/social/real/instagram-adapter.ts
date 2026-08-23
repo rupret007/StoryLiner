@@ -151,7 +151,18 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
         };
       }
 
-      const postId = publishData.id as string;
+      const postId = typeof publishData.id === "string" ? publishData.id.trim() : "";
+      if (!postId) {
+        return {
+          success: false,
+          isDraftOnly: false,
+          errorMessage:
+            "Instagram publish returned success without a post id. Nothing was marked published.",
+          responseCode: publishResponse.status,
+          durationMs: Date.now() - start,
+        };
+      }
+
       return {
         success: true,
         isDraftOnly: false,
