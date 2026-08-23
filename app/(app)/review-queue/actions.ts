@@ -19,6 +19,7 @@ import {
   reviewNotesForDuplicateDraft,
   sanitizeMediaUrls,
   stripPossibleLiveWriteNote,
+  unscheduleJobErrorMessage,
   withPossibleLiveWriteNote,
 } from "@/lib/services/publish/safety";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
@@ -415,7 +416,7 @@ export async function returnScheduleToApproved(
         data: {
           status: "FAILED",
           failedAt: new Date(),
-          errorMessage: "Unscheduled by operator. Nothing was published.",
+          errorMessage: unscheduleJobErrorMessage(adapterWriteStarted),
           retryCount: existing.job.maxRetries,
         },
       });
