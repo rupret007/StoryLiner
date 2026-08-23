@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 /**
  * PUBLISH_POST job payload helpers.
  * Used so a retry after a live adapter write cannot silently post twice.
@@ -52,10 +54,10 @@ export function shouldClearAdapterWriteStarted(result: {
 export function withAdapterWriteStarted(
   payload: unknown,
   started: boolean
-): Record<string, unknown> {
+): Prisma.InputJsonObject {
   const base =
     payload && typeof payload === "object" && !Array.isArray(payload)
       ? { ...(payload as Record<string, unknown>) }
       : {};
-  return { ...base, adapterWriteStarted: started };
+  return { ...base, adapterWriteStarted: started } as Prisma.InputJsonObject;
 }
