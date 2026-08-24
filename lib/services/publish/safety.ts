@@ -332,6 +332,18 @@ export function isQueuedUpcomingSchedule(options: {
   return isCleanPendingScheduleJob(options);
 }
 
+/**
+ * A RUNNING job may already have set adapterWriteStarted while its adapter
+ * request is still in flight. Keep that row out of the queue without calling
+ * an active publish a failed write.
+ */
+export function isFailedWriteStartedSchedule(options: {
+  jobStatus: string | null | undefined;
+  adapterWriteStarted: boolean;
+}): boolean {
+  return options.adapterWriteStarted && options.jobStatus !== "RUNNING";
+}
+
 export function scheduleQueueHeadline(counts: {
   queued: number;
   failedWriteStarted: number;

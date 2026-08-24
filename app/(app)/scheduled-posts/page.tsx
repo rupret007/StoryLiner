@@ -9,6 +9,7 @@ import { formatRelative } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import {
   honestJobFailureMessage,
+  isFailedWriteStartedSchedule,
   isQueuedUpcomingSchedule,
   scheduleQueueHeadline,
   writeStartedQueueWarning,
@@ -51,7 +52,12 @@ export default async function ScheduledPostsPage() {
       })
     ) {
       queued += 1;
-    } else if (writeStarted) {
+    } else if (
+      isFailedWriteStartedSchedule({
+        jobStatus: post.job?.status ?? null,
+        adapterWriteStarted: writeStarted,
+      })
+    ) {
       failedWriteStarted += 1;
     }
   }

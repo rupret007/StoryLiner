@@ -17,6 +17,7 @@ import {
   canRescheduleJob,
   hasYouTubeVideoUrl,
   isCleanPendingScheduleJob,
+  isFailedWriteStartedSchedule,
   isLiveDestinationPlatform,
   isQueuedUpcomingSchedule,
   scheduleQueueHeadline,
@@ -549,6 +550,25 @@ describe("Unschedule vs write-started copy", () => {
       isQueuedUpcomingSchedule({
         jobStatus: "FAILED",
         adapterWriteStarted: false,
+      })
+    ).toBe(false);
+
+    expect(
+      isFailedWriteStartedSchedule({
+        jobStatus: "FAILED",
+        adapterWriteStarted: true,
+      })
+    ).toBe(true);
+    expect(
+      isFailedWriteStartedSchedule({
+        jobStatus: "PENDING",
+        adapterWriteStarted: true,
+      })
+    ).toBe(true);
+    expect(
+      isFailedWriteStartedSchedule({
+        jobStatus: "RUNNING",
+        adapterWriteStarted: true,
       })
     ).toBe(false);
 

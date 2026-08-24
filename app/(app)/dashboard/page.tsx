@@ -18,6 +18,7 @@ import { formatRelative, formatDateTime } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import {
   dashboardFailedWriteStartedNote,
+  isFailedWriteStartedSchedule,
   isQueuedUpcomingSchedule,
 } from "@/lib/services/publish/safety";
 import type { Metadata } from "next";
@@ -63,9 +64,15 @@ export default async function DashboardPage() {
         : false,
     })
   );
-  const failedWriteStartedCount = scheduled.filter((post) =>
-    post.job ? jobMayHaveStartedAdapterWrite(post.job.payload) : false
-  ).length;
+  const failedWriteStartedCount = scheduled.filter((post) => {
+    const adapterWriteStarted = post.job
+      ? jobMayHaveStartedAdapterWrite(post.job.payload)
+      : false;
+    return isFailedWriteStartedSchedule({
+      jobStatus: post.job?.status ?? null,
+      adapterWriteStarted,
+    });
+  }).length;
   const failedWriteNote = dashboardFailedWriteStartedNote(failedWriteStartedCount);
   const totalScheduledCount = queuedUpcoming.length;
   const upcomingScheduled = queuedUpcoming.slice(0, 5);
