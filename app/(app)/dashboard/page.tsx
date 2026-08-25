@@ -15,6 +15,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatRelative, formatDateTime } from "@/lib/utils";
+import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
+import {
+  dashboardFailedWriteStartedNote,
+  isFailedWriteStartedSchedule,
+  isQueuedUpcomingSchedule,
+} from "@/lib/services/publish/safety";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -33,9 +39,8 @@ export default async function DashboardPage() {
       }),
       prisma.scheduledPost.findMany({
         where: { status: "SCHEDULED" },
-        include: { band: true, draft: true, platformAccount: true },
+        include: { band: true, draft: true, platformAccount: true, job: true },
         orderBy: { scheduledFor: "asc" },
-        take: 5,
       }),
       prisma.publishedPost.findMany({
         include: { band: true },
@@ -51,7 +56,26 @@ export default async function DashboardPage() {
     ]);
 
   const totalReviewCount = await prisma.draft.count({ where: { status: "IN_REVIEW" } });
-  const totalScheduledCount = await prisma.scheduledPost.count({ where: { status: "SCHEDULED" } });
+  const queuedUpcoming = scheduled.filter((post) =>
+    isQueuedUpcomingSchedule({
+      jobStatus: post.job?.status ?? null,
+      adapterWriteStarted: post.job
+        ? jobMayHaveStartedAdapterWrite(post.job.payload)
+        : false,
+    })
+  );
+  const failedWriteStartedCount = scheduled.filter((post) => {
+    const adapterWriteStarted = post.job
+      ? jobMayHaveStartedAdapterWrite(post.job.payload)
+      : false;
+    return isFailedWriteStartedSchedule({
+      jobStatus: post.job?.status ?? null,
+      adapterWriteStarted,
+    });
+  }).length;
+  const failedWriteNote = dashboardFailedWriteStartedNote(failedWriteStartedCount);
+  const totalScheduledCount = queuedUpcoming.length;
+  const upcomingScheduled = queuedUpcoming.slice(0, 5);
   const totalPublishedCount = await prisma.publishedPost.count();
   const totalBandCount = await prisma.band.count({ where: { isActive: true } });
 
@@ -141,12 +165,17 @@ export default async function DashboardPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
-            {scheduled.length === 0 ? (
+            {failedWriteNote && (
+              <p className="text-xs text-amber-200">{failedWriteNote}</p>
+            )}
+            {upcomingScheduled.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                Nothing scheduled yet.
+                {failedWriteStartedCount > 0
+                  ? "No queued publishes. Failed writes are on Scheduled Posts."
+                  : "Nothing scheduled yet."}
               </p>
             ) : (
-              scheduled.map((post) => (
+              upcomingScheduled.map((post) => (
                 <div key={post.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
                   <PlatformIcon platform={post.draft.platform} />
                   <div className="flex-1 min-w-0">

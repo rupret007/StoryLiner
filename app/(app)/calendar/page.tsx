@@ -6,6 +6,11 @@ import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { EmptyState } from "@/components/storyliner/empty-state";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { formatDateTime, formatDate } from "@/lib/utils";
+import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
+import {
+  upcomingScheduleBadge,
+  writeStartedQueueWarning,
+} from "@/lib/services/publish/safety";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Calendar" };
@@ -21,7 +26,7 @@ export default async function CalendarPage() {
         status: "SCHEDULED",
         scheduledFor: { gte: now, lte: thirtyDaysOut },
       },
-      include: { band: true, draft: true },
+      include: { band: true, draft: true, job: true },
       orderBy: { scheduledFor: "asc" },
     }),
     prisma.event.findMany({
@@ -86,20 +91,37 @@ export default async function CalendarPage() {
                 <div className="h-px flex-1 bg-border" />
               </div>
               <div className="space-y-2">
-                {items.map((item, i) => {
+                {items.map((item) => {
                   if (item.type === "post") {
                     const post = item.data as typeof scheduledPosts[0];
+                    const writeStarted = post.job
+                      ? jobMayHaveStartedAdapterWrite(post.job.payload)
+                      : false;
+                    const jobStatus = post.job?.status ?? null;
+                    const badge = upcomingScheduleBadge({
+                      jobStatus,
+                      adapterWriteStarted: writeStarted,
+                    });
                     return (
                       <div key={`post-${post.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
                         <PlatformIcon platform={post.draft.platform} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-foreground line-clamp-1">{post.draft.caption}</p>
                           <BandChip name={post.band.name} color={post.band.coverColor} />
+                          {writeStarted && (
+                            <p className="text-xs text-amber-200 mt-1">
+                              {writeStartedQueueWarning({
+                                jobFailed: jobStatus === "FAILED",
+                              })}
+                            </p>
+                          )}
                         </div>
                         <span className="text-xs text-muted-foreground shrink-0">
                           {formatDateTime(post.scheduledFor).split(",")[1]?.trim()}
                         </span>
-                        <Badge variant="info" className="text-xs shrink-0">Post</Badge>
+                        <Badge variant={badge.variant} className="text-xs shrink-0">
+                          {badge.label}
+                        </Badge>
                       </div>
                     );
                   }
