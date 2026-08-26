@@ -30,6 +30,8 @@ import { getInstagramCredentials, hasInstagramCredentials } from "./credentials"
 import { sanitizeMediaUrls } from "@/lib/services/publish/safety";
 
 const GRAPH_API_BASE = "https://graph.facebook.com/v18.0";
+const UNCERTAIN_PUBLISH_SUFFIX =
+  "StoryLiner did not mark this published. Check Instagram before scheduling again.";
 
 export class InstagramRealAdapter extends SocialProviderAdapter {
   readonly platform: Platform = "INSTAGRAM";
@@ -122,7 +124,7 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
           success: false,
           isDraftOnly: false,
           errorMessage:
-            "Instagram media container was created without an id. Nothing was published.",
+            `Instagram media container was created without an id. ${UNCERTAIN_PUBLISH_SUFFIX}`,
           responseCode: containerResponse.status,
           durationMs: Date.now() - start,
         };
@@ -173,7 +175,7 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
           success: false,
           isDraftOnly: false,
           errorMessage:
-            "Instagram publish returned success without a post id. Nothing was marked published.",
+            `Instagram publish returned success without a post id. ${UNCERTAIN_PUBLISH_SUFFIX}`,
           responseCode: publishResponse.status,
           durationMs: Date.now() - start,
         };
@@ -219,8 +221,7 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
         success: false,
         isDraftOnly: false,
         errorMessage:
-          "Instagram video container is still processing. Nothing was published. " +
-          "Wait for Instagram to finish, then schedule again after you confirm nothing went live.",
+          `Instagram video container is still processing. ${UNCERTAIN_PUBLISH_SUFFIX}`,
         durationMs: Date.now() - start,
       };
     }
@@ -230,8 +231,8 @@ export class InstagramRealAdapter extends SocialProviderAdapter {
       isDraftOnly: false,
       errorMessage:
         status === "ERROR" || status === "EXPIRED"
-          ? `Instagram video container ${status.toLowerCase()}. Nothing was published.`
-          : "Instagram video container is not ready. Nothing was published.",
+          ? `Instagram video container ${status.toLowerCase()}. ${UNCERTAIN_PUBLISH_SUFFIX}`
+          : `Instagram video container is not ready. ${UNCERTAIN_PUBLISH_SUFFIX}`,
       durationMs: Date.now() - start,
     };
   }

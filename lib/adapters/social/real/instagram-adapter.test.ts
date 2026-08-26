@@ -84,6 +84,8 @@ describe("InstagramRealAdapter", () => {
 
       expect(result.success).toBe(false);
       expect(result.errorMessage).toMatch(/without an id/i);
+      expect(result.errorMessage).toMatch(/StoryLiner did not mark this published/i);
+      expect(result.errorMessage).not.toMatch(/nothing was published/i);
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
@@ -112,6 +114,8 @@ describe("InstagramRealAdapter", () => {
 
       expect(result.success).toBe(false);
       expect(result.errorMessage).toMatch(/still processing/i);
+      expect(result.errorMessage).toMatch(/check Instagram before scheduling again/i);
+      expect(result.errorMessage).not.toMatch(/nothing was published/i);
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
@@ -133,6 +137,8 @@ describe("InstagramRealAdapter", () => {
       expect(result.success).toBe(false);
       expect(result.externalPostId).toBeUndefined();
       expect(result.errorMessage).toMatch(/without a post id/i);
+      expect(result.errorMessage).toMatch(/StoryLiner did not mark this published/i);
+      expect(result.errorMessage).not.toMatch(/nothing was published/i);
     });
 
     it("should handle container creation errors gracefully", async () => {
