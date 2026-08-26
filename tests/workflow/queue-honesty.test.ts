@@ -20,6 +20,9 @@ const prismaMock = {
   job: {
     updateMany: jest.fn(),
   },
+  band: {
+    findMany: jest.fn(),
+  },
   $transaction: jest.fn(),
 };
 
@@ -37,6 +40,7 @@ import {
   holdDraft,
   reschedulePost,
   returnScheduleToApproved,
+  updateDraftCaption,
 } from "@/app/(app)/review-queue/actions";
 import { POSSIBLE_LIVE_WRITE_MARKER } from "@/lib/services/publish/safety";
 
@@ -249,6 +253,40 @@ describe("queue honesty after a possible live write", () => {
 
     await expect(duplicateDraft("draft_1")).rejects.toThrow(/scheduled or published/i);
     expect(prismaMock.draft.create).not.toHaveBeenCalled();
+  });
+
+  it("Edit of an approved draft returns it to review and keeps POSSIBLE_LIVE_WRITE", async () => {
+    prismaMock.draft.findUniqueOrThrow.mockResolvedValue({
+      id: "draft_1",
+      status: "APPROVED",
+      bandId: "band_1",
+      currentVersion: 1,
+      hashtags: [],
+      ctaText: null,
+      reviewNotes: `${POSSIBLE_LIVE_WRITE_MARKER} check Facebook first`,
+      caption: "old caption",
+      band: { name: "Stalemate", voiceProfile: { emojiTolerance: 2 } },
+    });
+    prismaMock.band.findMany.mockResolvedValue([]);
+    prismaMock.draftVersion.create.mockResolvedValue({ id: "ver_2" });
+    prismaMock.draft.update.mockResolvedValue({ id: "draft_1", status: "IN_REVIEW" });
+
+    await updateDraftCaption("draft_1", "Thursday at The Hive.");
+
+    expect(prismaMock.draft.update).toHaveBeenCalledWith({
+      where: { id: "draft_1" },
+      data: expect.objectContaining({
+        status: "IN_REVIEW",
+        caption: "Thursday at The Hive.",
+      }),
+    });
+    expect(prismaMock.draft.update.mock.calls[0][0].data.status).not.toBe(
+      "APPROVED"
+    );
+    expect(prismaMock.draft.update.mock.calls[0][0].data.status).not.toBe(
+      "PUBLISHED"
+    );
+    expect(prismaMock.draft.update.mock.calls[0][0].data.reviewNotes).toBeUndefined();
   });
 
   it("refuses Copy of a PUBLISHED draft", async () => {

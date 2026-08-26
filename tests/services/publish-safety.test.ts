@@ -8,6 +8,9 @@ import {
   assertCanReturnFailedSchedule,
   assertCanReturnScheduleToApproved,
   assertCanScheduleAfterPossibleLiveWrite,
+  approveHighRiskConfirmDescription,
+  approveSuccessToast,
+  approvedQueueTabLabel,
   assertLivePublishResult,
   draftHasPossibleLiveWrite,
   stripPossibleLiveWriteNote,
@@ -15,6 +18,7 @@ import {
   assertReadyForLivePublish,
   assertSafeToLivePublish,
   canRescheduleJob,
+  captionMutationSuccessToast,
   hasYouTubeVideoUrl,
   isCleanPendingScheduleJob,
   isFailedWriteStartedSchedule,
@@ -719,6 +723,85 @@ describe("queue notes after a possible live write", () => {
     expect(writeStartedQueueWarning({ jobFailed: false })).toMatch(
       /Cannot Unschedule or Reschedule/i
     );
+  });
+});
+
+describe("Review → Approve → Schedule leftover copy", () => {
+  it("Approve after a possible live write is not a clean ready-to-schedule", () => {
+    const writeStarted = approveSuccessToast({ possibleLiveWrite: true });
+    expect(writeStarted).not.toMatch(/Ready to Schedule/i);
+    expect(writeStarted).not.toMatch(/schedule it from the Approved tab/i);
+    expect(writeStarted).toMatch(/may already be live/i);
+    expect(writeStarted).toMatch(/does not publish/i);
+    expect(writeStarted).toMatch(/Check the platform/i);
+
+    expect(approveSuccessToast({ possibleLiveWrite: false })).toMatch(
+      /schedule it from the Approved tab/i
+    );
+  });
+
+  it("high-risk Approve dialog keeps the platform check after a possible live write", () => {
+    expect(approveHighRiskConfirmDescription({ possibleLiveWrite: true })).toMatch(
+      /may already be live/i
+    );
+    expect(approveHighRiskConfirmDescription({ possibleLiveWrite: true })).toMatch(
+      /check the platform/i
+    );
+    expect(approveHighRiskConfirmDescription({ possibleLiveWrite: false })).toMatch(
+      /schedule it separately/i
+    );
+    expect(approveHighRiskConfirmDescription({ possibleLiveWrite: false })).not.toMatch(
+      /may already be live/i
+    );
+  });
+
+  it("Approved tab does not say Ready to Schedule when a write may already be live", () => {
+    expect(
+      approvedQueueTabLabel({ count: 2, possibleLiveWriteCount: 0 })
+    ).toBe("Approved — Ready to Schedule (2)");
+    expect(
+      approvedQueueTabLabel({ count: 2, possibleLiveWriteCount: 1 })
+    ).toBe("Approved — Check platform before schedule (2)");
+    expect(
+      approvedQueueTabLabel({ count: 1, possibleLiveWriteCount: 1 })
+    ).not.toMatch(/Ready to Schedule/i);
+  });
+
+  it("Edit / Rewrite of an approved draft is not still-approved and is not publish", () => {
+    const editApproved = captionMutationSuccessToast({
+      kind: "edit",
+      fromApproved: true,
+      possibleLiveWrite: false,
+    });
+    expect(editApproved).toMatch(/Back in Needs Review/i);
+    expect(editApproved).toMatch(/approve again/i);
+    expect(editApproved).toMatch(/does not publish/i);
+    expect(editApproved).not.toMatch(/Ready to Schedule/i);
+
+    const rewriteLive = captionMutationSuccessToast({
+      kind: "rewrite",
+      fromApproved: true,
+      possibleLiveWrite: true,
+    });
+    expect(rewriteLive).toMatch(/Rewrite applied/i);
+    expect(rewriteLive).toMatch(/Back in Needs Review/i);
+    expect(rewriteLive).toMatch(/may already be live/i);
+    expect(rewriteLive).toMatch(/does not publish/i);
+
+    expect(
+      captionMutationSuccessToast({
+        kind: "edit",
+        fromApproved: false,
+        possibleLiveWrite: false,
+      })
+    ).toBe("Caption updated.");
+    expect(
+      captionMutationSuccessToast({
+        kind: "rewrite",
+        fromApproved: false,
+        possibleLiveWrite: false,
+      })
+    ).toMatch(/Review the updated caption/i);
   });
 });
 

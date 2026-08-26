@@ -589,6 +589,79 @@ export function duplicateDraftSuccessToast(options: {
   return "Duplicated. Find the copy in the In Review tab.";
 }
 
+/**
+ * Approve is Jeff's yes to schedule, not a live post.
+ * After POSSIBLE_LIVE_WRITE the next step is a platform check, not a
+ * clean "ready to schedule."
+ */
+export function approveSuccessToast(options: { possibleLiveWrite: boolean }): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Approved. This does not publish. " +
+      "A Facebook / Instagram / YouTube write may already be live. " +
+      "Check the platform before scheduling."
+    );
+  }
+  return "Approved. This does not publish — schedule it from the Approved tab.";
+}
+
+export function approveHighRiskConfirmDescription(options: {
+  possibleLiveWrite: boolean;
+}): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Guardrails flagged this caption. Approving does not publish it. " +
+      "A Facebook / Instagram / YouTube write may already be live. " +
+      "You still have to check the platform, then schedule separately."
+    );
+  }
+  return (
+    "Guardrails flagged this caption. Approving does not publish it. " +
+    "You still have to schedule it separately."
+  );
+}
+
+/**
+ * Write-started returns land in Approved with POSSIBLE_LIVE_WRITE.
+ * Calling those "Ready to Schedule" skips the platform check.
+ */
+export function approvedQueueTabLabel(options: {
+  count: number;
+  possibleLiveWriteCount: number;
+}): string {
+  if (options.possibleLiveWriteCount > 0) {
+    return `Approved — Check platform before schedule (${options.count})`;
+  }
+  return `Approved — Ready to Schedule (${options.count})`;
+}
+
+/**
+ * Edit / Rewrite of an approved draft sets status IN_REVIEW.
+ * That undoes Jeff's yes. Copy must not sound like the caption
+ * changed in place and is still ready to schedule.
+ */
+export function captionMutationSuccessToast(options: {
+  kind: "edit" | "rewrite";
+  fromApproved: boolean;
+  possibleLiveWrite: boolean;
+}): string {
+  const head = options.kind === "edit" ? "Caption updated." : "Rewrite applied.";
+
+  if (options.fromApproved) {
+    const live = options.possibleLiveWrite
+      ? " A Facebook / Instagram / YouTube write may already be live."
+      : "";
+    return (
+      `${head} Back in Needs Review — approve again before scheduling.` +
+      `${live} This does not publish.`
+    );
+  }
+
+  return options.kind === "edit"
+    ? "Caption updated."
+    : "Rewrite applied. Review the updated caption.";
+}
+
 export function holdSuccessToast(options: { possibleLiveWrite: boolean }): string {
   if (options.possibleLiveWrite) {
     return (
