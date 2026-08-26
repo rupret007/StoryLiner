@@ -662,6 +662,92 @@ export function captionMutationSuccessToast(options: {
     : "Rewrite applied. Review the updated caption.";
 }
 
+/**
+ * Needs Review empty copy. That tab must not say the promo queue is
+ * done while Approved still needs a schedule yes.
+ */
+export function needsReviewEmptyState(options: {
+  approvedCount: number;
+  heldCount: number;
+  possibleLiveWriteCount: number;
+}): { title: string; description: string } {
+  if (options.approvedCount > 0) {
+    const n = options.approvedCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      options.possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return {
+      title: "Needs Review is empty",
+      description:
+        `${n} approved ${drafts} still waiting for a schedule yes.` +
+        `${live} Open the Approved tab. This does not publish.`,
+    };
+  }
+
+  if (options.heldCount > 0) {
+    const n = options.heldCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    return {
+      title: "Needs Review is empty",
+      description: `${n} ${drafts} on hold. Hold is not schedule and is not publish.`,
+    };
+  }
+
+  return {
+    title: "Nothing needs review",
+    description:
+      "No Bob drafts waiting for a review yes. Generate in Content Studio, or talk to Bob at the front door.",
+  };
+}
+
+/**
+ * After the last Needs Review yes, open Approved so Jeff is not left
+ * on an empty review tab. Stay put from On Hold, or when more review remains.
+ */
+export function shouldOpenApprovedTabAfterApprove(options: {
+  currentTab: string;
+  remainingNeedsReviewCount: number;
+}): boolean {
+  return options.currentTab === "review" && options.remainingNeedsReviewCount === 0;
+}
+
+/**
+ * Approved tab helper when drafts are waiting. Schedule is a separate yes.
+ */
+export function approvedScheduleHelp(options: {
+  possibleLiveWriteCount: number;
+}): string {
+  if (options.possibleLiveWriteCount > 0) {
+    return (
+      "Schedule is a separate yes. Check Facebook / Instagram / YouTube first. " +
+      "This does not publish."
+    );
+  }
+  return (
+    "Schedule is a separate yes. It does not publish until the worker runs " +
+    "against a connected Facebook, Instagram, or YouTube account."
+  );
+}
+
+/**
+ * Schedule queues a worker job. It is not a live post.
+ * After POSSIBLE_LIVE_WRITE, "still not live" skips the previous write.
+ */
+export function scheduleSuccessToast(options: {
+  possibleLiveWrite: boolean;
+}): string {
+  if (options.possibleLiveWrite) {
+    return (
+      "Scheduled. This job does not publish until the worker runs. " +
+      "A previous Facebook / Instagram / YouTube write may already be live. " +
+      "This action did not publish."
+    );
+  }
+  return "Scheduled. Still not live until the worker runs against a connected Facebook, Instagram, or YouTube account.";
+}
+
 export function holdSuccessToast(options: { possibleLiveWrite: boolean }): string {
   if (options.possibleLiveWrite) {
     return (

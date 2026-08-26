@@ -11,6 +11,7 @@ import {
   approveHighRiskConfirmDescription,
   approveSuccessToast,
   approvedQueueTabLabel,
+  approvedScheduleHelp,
   assertLivePublishResult,
   draftHasPossibleLiveWrite,
   stripPossibleLiveWriteNote,
@@ -19,6 +20,9 @@ import {
   assertSafeToLivePublish,
   canRescheduleJob,
   captionMutationSuccessToast,
+  needsReviewEmptyState,
+  scheduleSuccessToast,
+  shouldOpenApprovedTabAfterApprove,
   hasYouTubeVideoUrl,
   isCleanPendingScheduleJob,
   isFailedWriteStartedSchedule,
@@ -802,6 +806,103 @@ describe("Review → Approve → Schedule leftover copy", () => {
         possibleLiveWrite: false,
       })
     ).toMatch(/Review the updated caption/i);
+  });
+});
+
+describe("Review → Approve → Schedule handoff after #14", () => {
+  it("Needs Review empty is not Queue is clear while Approved still needs a schedule yes", () => {
+    const waiting = needsReviewEmptyState({
+      approvedCount: 2,
+      heldCount: 0,
+      possibleLiveWriteCount: 0,
+    });
+    expect(waiting.title).toBe("Needs Review is empty");
+    expect(waiting.description).toMatch(/2 approved drafts still waiting for a schedule yes/i);
+    expect(waiting.description).toMatch(/Open the Approved tab/i);
+    expect(waiting.description).toMatch(/does not publish/i);
+    expect(waiting.title).not.toMatch(/Queue is clear/i);
+    expect(waiting.description).not.toMatch(/No Bob drafts waiting for Jeff/i);
+
+    const writeStarted = needsReviewEmptyState({
+      approvedCount: 1,
+      heldCount: 0,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted.description).toMatch(/1 approved draft still waiting for a schedule yes/i);
+    expect(writeStarted.description).toMatch(/Check Facebook \/ Instagram \/ YouTube/i);
+    expect(writeStarted.description).not.toMatch(/Queue is clear/i);
+
+    const heldOnly = needsReviewEmptyState({
+      approvedCount: 0,
+      heldCount: 1,
+      possibleLiveWriteCount: 0,
+    });
+    expect(heldOnly.title).toBe("Needs Review is empty");
+    expect(heldOnly.description).toMatch(/on hold/i);
+    expect(heldOnly.description).toMatch(/is not publish/i);
+    expect(heldOnly.title).not.toMatch(/Queue is clear/i);
+
+    const idle = needsReviewEmptyState({
+      approvedCount: 0,
+      heldCount: 0,
+      possibleLiveWriteCount: 0,
+    });
+    expect(idle.title).toBe("Nothing needs review");
+    expect(idle.description).toMatch(/review yes/i);
+    expect(idle.title).not.toMatch(/Queue is clear/i);
+  });
+
+  it("Approved tab says Schedule is a separate yes and is not publish", () => {
+    expect(approvedScheduleHelp({ possibleLiveWriteCount: 0 })).toMatch(
+      /Schedule is a separate yes/i
+    );
+    expect(approvedScheduleHelp({ possibleLiveWriteCount: 0 })).toMatch(
+      /does not publish/i
+    );
+    expect(approvedScheduleHelp({ possibleLiveWriteCount: 0 })).not.toMatch(
+      /Queue is clear/i
+    );
+
+    const writeStarted = approvedScheduleHelp({ possibleLiveWriteCount: 1 });
+    expect(writeStarted).toMatch(/Check Facebook \/ Instagram \/ YouTube/i);
+    expect(writeStarted).toMatch(/does not publish/i);
+    expect(writeStarted).not.toMatch(/Ready to Schedule/i);
+  });
+
+  it("Schedule after a possible live write is not still not live", () => {
+    const writeStarted = scheduleSuccessToast({ possibleLiveWrite: true });
+    expect(writeStarted).not.toMatch(/Still not live/i);
+    expect(writeStarted).toMatch(/may already be live/i);
+    expect(writeStarted).toMatch(/did not publish/i);
+    expect(writeStarted).toMatch(/does not publish until the worker runs/i);
+
+    expect(scheduleSuccessToast({ possibleLiveWrite: false })).toMatch(
+      /Still not live until the worker runs/i
+    );
+    expect(scheduleSuccessToast({ possibleLiveWrite: false })).not.toMatch(
+      /may already be live/i
+    );
+  });
+
+  it("opens Approved after the last review yes and stays when more review remains", () => {
+    expect(
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: "review",
+        remainingNeedsReviewCount: 0,
+      })
+    ).toBe(true);
+    expect(
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: "review",
+        remainingNeedsReviewCount: 1,
+      })
+    ).toBe(false);
+    expect(
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: "held",
+        remainingNeedsReviewCount: 0,
+      })
+    ).toBe(false);
   });
 });
 
