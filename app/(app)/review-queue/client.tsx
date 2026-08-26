@@ -344,6 +344,10 @@ function DraftCard({
   const [confirmHighRisk, setConfirmHighRisk] = useState(false);
   const [mediaUrlInput, setMediaUrlInput] = useState(draft.mediaUrls[0] ?? "");
   const possibleLiveWrite = draftHasPossibleLiveWrite(draft.reviewNotes);
+  const captionMutationSourceStatus =
+    draft.status === "APPROVED" || draft.status === "HELD"
+      ? draft.status
+      : "IN_REVIEW";
 
   function handleApprove(confirmHighRiskApprove = false) {
     startTransition(async () => {
@@ -438,7 +442,7 @@ function DraftCard({
       toast.success(
         captionMutationSuccessToast({
           kind: "rewrite",
-          fromApproved: draft.status === "APPROVED",
+          fromStatus: captionMutationSourceStatus,
           possibleLiveWrite,
         })
       );
@@ -453,7 +457,7 @@ function DraftCard({
       toast.success(
         captionMutationSuccessToast({
           kind: "edit",
-          fromApproved: draft.status === "APPROVED",
+          fromStatus: captionMutationSourceStatus,
           possibleLiveWrite,
         })
       );

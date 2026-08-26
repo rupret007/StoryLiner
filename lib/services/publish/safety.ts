@@ -636,23 +636,27 @@ export function approvedQueueTabLabel(options: {
 }
 
 /**
- * Edit / Rewrite of an approved draft sets status IN_REVIEW.
- * That undoes Jeff's yes. Copy must not sound like the caption
- * changed in place and is still ready to schedule.
+ * Edit / Rewrite from Approved or On Hold sets status IN_REVIEW.
+ * Copy must name that move so the caption does not appear to remain
+ * approved or parked after it leaves the current tab.
  */
 export function captionMutationSuccessToast(options: {
   kind: "edit" | "rewrite";
-  fromApproved: boolean;
+  fromStatus: "IN_REVIEW" | "HELD" | "APPROVED";
   possibleLiveWrite: boolean;
 }): string {
   const head = options.kind === "edit" ? "Caption updated." : "Rewrite applied.";
 
-  if (options.fromApproved) {
+  if (options.fromStatus === "APPROVED" || options.fromStatus === "HELD") {
+    const nextStep =
+      options.fromStatus === "APPROVED"
+        ? "approve again before scheduling."
+        : "review it there before approving.";
     const live = options.possibleLiveWrite
       ? " A Facebook / Instagram / YouTube write may already be live."
       : "";
     return (
-      `${head} Back in Needs Review — approve again before scheduling.` +
+      `${head} Back in Needs Review — ${nextStep}` +
       `${live} This does not publish.`
     );
   }
