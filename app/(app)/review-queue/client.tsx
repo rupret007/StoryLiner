@@ -46,6 +46,10 @@ import {
 } from "lucide-react";
 import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
 import {
+  approveHighRiskConfirmDescription,
+  approveSuccessToast,
+  approvedQueueTabLabel,
+  captionMutationSuccessToast,
   denyConfirmDescription,
   denySuccessToast,
   draftHasPossibleLiveWrite,
@@ -337,7 +341,7 @@ function DraftCard({
     startTransition(async () => {
       try {
         await approveDraft(draft.id, undefined, confirmHighRiskApprove);
-        toast.success("Approved. This does not publish — schedule it from the Approved tab.");
+        toast.success(approveSuccessToast({ possibleLiveWrite }));
         onAction();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Approve failed.");
@@ -415,7 +419,13 @@ function DraftCard({
         directive:
           directive as Parameters<typeof rewriteDraftAction>[0]["directive"],
       });
-      toast.success("Rewrite applied. Review the updated caption.");
+      toast.success(
+        captionMutationSuccessToast({
+          kind: "rewrite",
+          fromApproved: draft.status === "APPROVED",
+          possibleLiveWrite,
+        })
+      );
       onAction();
     });
   }
@@ -424,7 +434,13 @@ function DraftCard({
     startTransition(async () => {
       await updateDraftCaption(draft.id, editedCaption);
       setEditingCaption(false);
-      toast.success("Caption updated.");
+      toast.success(
+        captionMutationSuccessToast({
+          kind: "edit",
+          fromApproved: draft.status === "APPROVED",
+          possibleLiveWrite,
+        })
+      );
       onAction();
     });
   }
@@ -490,7 +506,7 @@ function DraftCard({
       <ConfirmDialog
         open={confirmHighRisk}
         title="Approve this high-risk draft?"
-        description="Guardrails flagged this caption. Approving does not publish it. You still have to schedule it separately."
+        description={approveHighRiskConfirmDescription({ possibleLiveWrite })}
         confirmLabel="Approve anyway"
         confirmVariant="destructive"
         onConfirm={() => {
@@ -824,6 +840,11 @@ function DraftCard({
                 variant="outline"
                 onClick={() => setEditingCaption(!editingCaption)}
                 disabled={isPending || draft.status === "REJECTED"}
+                title={
+                  draft.status === "APPROVED"
+                    ? "Saving an edit returns this to Needs Review. This does not publish."
+                    : undefined
+                }
               >
                 Edit
               </Button>
@@ -896,7 +917,12 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
             On Hold ({held.length})
           </TabsTrigger>
           <TabsTrigger value="approved">
-            Approved — Ready to Schedule ({approved.length})
+            {approvedQueueTabLabel({
+              count: approved.length,
+              possibleLiveWriteCount: approved.filter((d) =>
+                draftHasPossibleLiveWrite(d.reviewNotes)
+              ).length,
+            })}
           </TabsTrigger>
           <TabsTrigger value="denied">
             Denied ({denied.length})
