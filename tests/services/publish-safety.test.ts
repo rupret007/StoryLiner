@@ -776,7 +776,7 @@ describe("Review → Approve → Schedule leftover copy", () => {
   it("Edit / Rewrite of an approved draft is not still-approved and is not publish", () => {
     const editApproved = captionMutationSuccessToast({
       kind: "edit",
-      fromApproved: true,
+      fromStatus: "APPROVED",
       possibleLiveWrite: false,
     });
     expect(editApproved).toMatch(/Back in Needs Review/i);
@@ -786,7 +786,7 @@ describe("Review → Approve → Schedule leftover copy", () => {
 
     const rewriteLive = captionMutationSuccessToast({
       kind: "rewrite",
-      fromApproved: true,
+      fromStatus: "APPROVED",
       possibleLiveWrite: true,
     });
     expect(rewriteLive).toMatch(/Rewrite applied/i);
@@ -797,17 +797,39 @@ describe("Review → Approve → Schedule leftover copy", () => {
     expect(
       captionMutationSuccessToast({
         kind: "edit",
-        fromApproved: false,
+        fromStatus: "IN_REVIEW",
         possibleLiveWrite: false,
       })
     ).toBe("Caption updated.");
     expect(
       captionMutationSuccessToast({
         kind: "rewrite",
-        fromApproved: false,
+        fromStatus: "IN_REVIEW",
         possibleLiveWrite: false,
       })
     ).toMatch(/Review the updated caption/i);
+  });
+
+  it("Edit / Rewrite of a held draft says it moved back to Needs Review", () => {
+    const editHeld = captionMutationSuccessToast({
+      kind: "edit",
+      fromStatus: "HELD",
+      possibleLiveWrite: false,
+    });
+    expect(editHeld).toMatch(/Caption updated/i);
+    expect(editHeld).toMatch(/Back in Needs Review/i);
+    expect(editHeld).toMatch(/does not publish/i);
+    expect(editHeld).not.toMatch(/Ready to Schedule/i);
+
+    const rewriteHeldLive = captionMutationSuccessToast({
+      kind: "rewrite",
+      fromStatus: "HELD",
+      possibleLiveWrite: true,
+    });
+    expect(rewriteHeldLive).toMatch(/Rewrite applied/i);
+    expect(rewriteHeldLive).toMatch(/Back in Needs Review/i);
+    expect(rewriteHeldLive).toMatch(/may already be live/i);
+    expect(rewriteHeldLive).toMatch(/does not publish/i);
   });
 });
 
