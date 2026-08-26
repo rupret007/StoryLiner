@@ -356,6 +356,32 @@ export function scheduleQueueHeadline(counts: {
   return `${queued} · ${failed}`;
 }
 
+/**
+ * Empty Scheduled Posts copy must describe the queue Jeff is looking at.
+ * A completed schedule below does not need another Approve or schedule yes.
+ */
+export function scheduledPostsEmptyState(options: {
+  recentlyPublishedCount: number;
+}): { title: string; description: string } {
+  if (options.recentlyPublishedCount > 0) {
+    const posts = options.recentlyPublishedCount === 1 ? "post" : "posts";
+    const verb = options.recentlyPublishedCount === 1 ? "is" : "are";
+    return {
+      title: "No worker jobs waiting",
+      description:
+        `${options.recentlyPublishedCount} scheduled ${posts} ${verb} in Recently published below. ` +
+        "No second Approve or schedule yes is needed. Opening this page does not publish.",
+    };
+  }
+
+  return {
+    title: "No worker jobs waiting",
+    description:
+      "No scheduled worker jobs are waiting. New schedules start from the Approved tab. " +
+      "Opening this page does not approve, schedule, or publish.",
+  };
+}
+
 export function upcomingScheduleBadge(options: {
   jobStatus: string | null | undefined;
   adapterWriteStarted: boolean;

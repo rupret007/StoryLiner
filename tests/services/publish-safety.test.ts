@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   assertCanApproveDraft,
   assertCanDenyDraft,
@@ -31,6 +33,7 @@ import {
   isLiveDestinationPlatform,
   isQueuedUpcomingSchedule,
   scheduleQueueHeadline,
+  scheduledPostsEmptyState,
   upcomingScheduleBadge,
   dashboardFailedWriteStartedNote,
   mergeReviewNotesPreservingPossibleLiveWrite,
@@ -1012,6 +1015,51 @@ describe("Approved empty after last schedule after #15", () => {
         remainingApprovedCount: 0,
       })
     ).toBe(false);
+  });
+});
+
+describe("Scheduled Posts empty after the last schedule yes", () => {
+  it("names the completed post below instead of asking for another Approve", () => {
+    const completed = scheduledPostsEmptyState({ recentlyPublishedCount: 1 });
+
+    expect(completed.title).toBe("No worker jobs waiting");
+    expect(completed.description).toMatch(
+      /1 scheduled post is in Recently published below/i
+    );
+    expect(completed.description).toMatch(
+      /No second Approve or schedule yes is needed/i
+    );
+    expect(completed.description).toMatch(/does not publish/i);
+    expect(completed.description).not.toMatch(/Approve a Bob draft/i);
+    expect(completed.description).not.toMatch(/then schedule it here/i);
+
+    const completedPair = scheduledPostsEmptyState({
+      recentlyPublishedCount: 2,
+    });
+    expect(completedPair.description).toMatch(
+      /2 scheduled posts are in Recently published below/i
+    );
+  });
+
+  it("keeps a fresh queue neutral and wires the visible page to this contract", () => {
+    const fresh = scheduledPostsEmptyState({ recentlyPublishedCount: 0 });
+
+    expect(fresh.title).toBe("No worker jobs waiting");
+    expect(fresh.description).toMatch(/New schedules start from the Approved tab/i);
+    expect(fresh.description).toMatch(/does not approve, schedule, or publish/i);
+    expect(fresh.description).not.toMatch(/Approve a Bob draft/i);
+    expect(fresh.description).not.toMatch(/then schedule it here/i);
+
+    const pageSource = readFileSync(
+      join(__dirname, "../../app/(app)/scheduled-posts/page.tsx"),
+      "utf8"
+    );
+    expect(pageSource).toMatch(
+      /scheduledPostsEmptyState\(\{\s*recentlyPublishedCount: past\.length,\s*\}\)/
+    );
+    expect(pageSource).not.toMatch(
+      /Approve a Bob draft in the review queue, then schedule it here/i
+    );
   });
 });
 
