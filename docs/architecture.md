@@ -43,7 +43,7 @@ lib/
     llm/               LLM service abstraction
       types.ts         Interface definitions
       mock-adapter.ts  Local development adapter
-      openai-adapter.ts Real adapter stub
+      openai-adapter.ts Opt-in OpenAI implementation
       index.ts         Adapter factory
     content/
       generate.ts      Content generation pipeline
@@ -220,13 +220,14 @@ Platform-specific notes:
 
 ### Wiring the OpenAI adapter
 
-1. Open `lib/services/llm/openai-adapter.ts`
-2. Install the SDK: `npm install openai`
-3. Build system prompts using `BandVoiceProfile.toneDescription`, `toneRules`, `bannedPhrases`, and `campaignType`
-4. Parse JSON response and map to `GeneratedContent` interface
-5. Set `LLM_ADAPTER=openai` and `OPENAI_API_KEY` in `.env.local`
+The implementation is already wired through `lib/services/llm/index.ts`.
+Set `LLM_ADAPTER=openai` and `OPENAI_API_KEY` in `.env.local`; optionally set
+`OPENAI_MODEL` (the current default is `gpt-4o`). Unknown adapter names and a
+missing key fail closed. OpenAI mode sends the bounded band voice, content,
+rewrite, risk, or livestream context needed for the selected operation to the
+provider and may incur usage charges. Mock mode stays offline.
 
-Recommended prompt structure:
+The implementation uses this prompt structure:
 ```
 SYSTEM: You are a social media operator for {band.name}. 
   Voice: {voiceProfile.toneDescription}

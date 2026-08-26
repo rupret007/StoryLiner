@@ -20,9 +20,13 @@ export function getLlmAdapter(): LLMAdapter {
       _adapter = new OpenAiLlmAdapter();
       break;
     case "mock":
-    default:
       _adapter = new MockLlmAdapter();
       break;
+    default:
+      throw new Error(
+        `[StoryLiner] Unsupported LLM_ADAPTER=${JSON.stringify(adapterName)}. ` +
+          'Use "mock" or "openai".'
+      );
   }
 
   return _adapter;
