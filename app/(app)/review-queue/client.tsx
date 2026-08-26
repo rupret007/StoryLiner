@@ -49,6 +49,7 @@ import {
   approveHighRiskConfirmDescription,
   approveSuccessToast,
   approvedQueueTabLabel,
+  approvedScheduleHelp,
   captionMutationSuccessToast,
   denyConfirmDescription,
   denySuccessToast,
@@ -56,7 +57,10 @@ import {
   duplicateDraftSuccessToast,
   holdConfirmDescription,
   holdSuccessToast,
+  needsReviewEmptyState,
   resumeHeldSuccessToast,
+  scheduleSuccessToast,
+  shouldOpenApprovedTabAfterApprove,
 } from "@/lib/services/publish/safety";
 import {
   approveDraft,
@@ -148,9 +152,7 @@ function ScheduleDialog({
           scheduledFor: new Date(scheduledFor).toISOString(),
           confirmCheckedNoLivePost: possibleLiveWrite ? checkedNoLivePost : undefined,
         });
-        toast.success(
-          "Scheduled. Still not live until the worker runs against a connected Facebook, Instagram, or YouTube account."
-        );
+        toast.success(scheduleSuccessToast({ possibleLiveWrite }));
         onClose();
         onScheduled();
       } catch (err) {
@@ -320,9 +322,11 @@ function ConfirmDialog({
 function DraftCard({
   draft,
   onAction,
+  onApproved,
 }: {
   draft: DraftWithRelations;
   onAction: () => void;
+  onApproved?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -342,7 +346,11 @@ function DraftCard({
       try {
         await approveDraft(draft.id, undefined, confirmHighRiskApprove);
         toast.success(approveSuccessToast({ possibleLiveWrite }));
-        onAction();
+        if (onApproved) {
+          onApproved();
+        } else {
+          onAction();
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Approve failed.");
       }
@@ -884,14 +892,36 @@ interface ReviewQueueClientProps {
 
 export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
   const router = useRouter();
+  const [tab, setTab] = useState("review");
 
   const inReview = drafts.filter((d) => d.status === "IN_REVIEW");
   const held = drafts.filter((d) => d.status === "HELD");
   const approved = drafts.filter((d) => d.status === "APPROVED");
   const denied = drafts.filter((d) => d.status === "REJECTED");
+  const approvedPossibleLiveWriteCount = approved.filter((d) =>
+    draftHasPossibleLiveWrite(d.reviewNotes)
+  ).length;
+  const reviewEmpty = needsReviewEmptyState({
+    approvedCount: approved.length,
+    heldCount: held.length,
+    possibleLiveWriteCount: approvedPossibleLiveWriteCount,
+  });
 
   function refresh() {
     router.refresh();
+  }
+
+  function handleApproved(draftId: string) {
+    const remainingReview = inReview.filter((d) => d.id !== draftId);
+    if (
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: tab,
+        remainingNeedsReviewCount: remainingReview.length,
+      })
+    ) {
+      setTab("approved");
+    }
+    refresh();
   }
 
   return (
@@ -908,7 +938,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
         </p>
       </div>
 
-      <Tabs defaultValue="review">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="review">
             Needs Review ({inReview.length})
@@ -919,9 +949,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           <TabsTrigger value="approved">
             {approvedQueueTabLabel({
               count: approved.length,
-              possibleLiveWriteCount: approved.filter((d) =>
-                draftHasPossibleLiveWrite(d.reviewNotes)
-              ).length,
+              possibleLiveWriteCount: approvedPossibleLiveWriteCount,
             })}
           </TabsTrigger>
           <TabsTrigger value="denied">
@@ -933,13 +961,18 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           {inReview.length === 0 ? (
             <EmptyState
               icon={ClipboardList}
-              title="Queue is clear"
-              description="No Bob drafts waiting for Jeff. Generate in Content Studio, or talk to Bob at the front door."
+              title={reviewEmpty.title}
+              description={reviewEmpty.description}
             />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {inReview.map((draft) => (
-                <DraftCard key={draft.id} draft={draft} onAction={refresh} />
+                <DraftCard
+                  key={draft.id}
+                  draft={draft}
+                  onAction={refresh}
+                  onApproved={() => handleApproved(draft.id)}
+                />
               ))}
             </div>
           )}
@@ -955,7 +988,12 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {held.map((draft) => (
-                <DraftCard key={draft.id} draft={draft} onAction={refresh} />
+                <DraftCard
+                  key={draft.id}
+                  draft={draft}
+                  onAction={refresh}
+                  onApproved={() => handleApproved(draft.id)}
+                />
               ))}
             </div>
           )}
@@ -969,10 +1007,17 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
               description="Approve a Bob draft from Needs Review, then schedule it here. Approve is not publish."
             />
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {approved.map((draft) => (
-                <DraftCard key={draft.id} draft={draft} onAction={refresh} />
-              ))}
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {approvedScheduleHelp({
+                  possibleLiveWriteCount: approvedPossibleLiveWriteCount,
+                })}
+              </p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {approved.map((draft) => (
+                  <DraftCard key={draft.id} draft={draft} onAction={refresh} />
+                ))}
+              </div>
             </div>
           )}
         </TabsContent>
