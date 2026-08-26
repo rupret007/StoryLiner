@@ -20,7 +20,7 @@ Everything lands in a review queue before it can be published. Nothing auto-publ
 | Database | PostgreSQL via Prisma ORM |
 | Validation | Zod |
 | Jobs | Postgres-backed job queue + in-process worker |
-| LLM | Mock adapter (default) / OpenAI adapter (stubbed) |
+| LLM | Mock adapter (default) / opt-in OpenAI adapter |
 | Social | Mock adapter (default) / Real adapters for Facebook, Instagram, YouTube |
 
 ## Requirements
@@ -177,7 +177,15 @@ Controlled by `LLM_ADAPTER` in `.env.local`:
 | Value | Behavior |
 |---|---|
 | `mock` (default) | Uses per-band realistic content pools with distinct Stalemate / Rad Dad voices |
-| `openai` | Stubbed in `lib/services/llm/openai-adapter.ts` — implement prompt assembly to enable |
+| `openai` | Uses the configured OpenAI model for generation, rewrites, risk assessment, talking points, and engagement prompts; requires `OPENAI_API_KEY` |
+
+Any other `LLM_ADAPTER` value fails closed instead of silently selecting mock
+mode. Mock mode makes no provider calls. OpenAI mode sends the relevant band
+name, voice-profile rules, draft text, and supplied post or livestream context
+to the configured provider and may incur usage charges; keep unpublished or
+private context out unless it is intentionally part of that request. Model
+output always returns to StoryLiner as a draft and does not bypass review or
+publish controls.
 
 ### Social Provider Adapters
 
@@ -322,7 +330,7 @@ lib/
         youtube-adapter.ts
     livestream/        Livestream provider abstraction
   services/
-    llm/               LLM service (mock + OpenAI stub)
+    llm/               LLM service (offline mock + opt-in OpenAI implementation)
     content/           generate.ts, rewrite.ts pipelines
     guardrails/        policy.ts hard guardrail enforcement
     publish/           Platform validation
@@ -473,7 +481,6 @@ See [`docs/architecture.md`](docs/architecture.md) for:
 
 ## Roadmap
 
-- [ ] OpenAI real LLM adapter with band-specific prompt templates
 - [ ] Bluesky real adapter (AT Protocol, app password auth)
 - [ ] TikTok real adapter (video draft creation)
 - [ ] OAuth connect-account flow for social platforms in `/integrations`
