@@ -10,6 +10,7 @@ import {
   assertCanScheduleAfterPossibleLiveWrite,
   approveHighRiskConfirmDescription,
   approveSuccessToast,
+  approvedEmptyState,
   approvedQueueTabLabel,
   approvedScheduleHelp,
   assertLivePublishResult,
@@ -23,6 +24,7 @@ import {
   needsReviewEmptyState,
   scheduleSuccessToast,
   shouldOpenApprovedTabAfterApprove,
+  shouldOpenHeldTabAfterHold,
   hasYouTubeVideoUrl,
   isCleanPendingScheduleJob,
   isFailedWriteStartedSchedule,
@@ -901,6 +903,91 @@ describe("Review → Approve → Schedule handoff after #14", () => {
       shouldOpenApprovedTabAfterApprove({
         currentTab: "held",
         remainingNeedsReviewCount: 0,
+      })
+    ).toBe(false);
+  });
+});
+
+describe("Approved empty after last schedule after #15", () => {
+  it("Approved empty is not approve-then-schedule while Needs Review still has work", () => {
+    const waiting = approvedEmptyState({
+      inReviewCount: 2,
+      heldCount: 0,
+      possibleLiveWriteCount: 0,
+    });
+    expect(waiting.title).toBe("Approved is empty");
+    expect(waiting.description).toMatch(/2 Bob drafts still waiting for a review yes/i);
+    expect(waiting.description).toMatch(/Open Needs Review/i);
+    expect(waiting.description).toMatch(/Approve is not publish/i);
+    expect(waiting.description).not.toMatch(/then schedule it here/i);
+    expect(waiting.title).not.toMatch(/No approved drafts/i);
+    expect(waiting.title).not.toMatch(/Queue is clear/i);
+
+    const writeStarted = approvedEmptyState({
+      inReviewCount: 1,
+      heldCount: 0,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted.description).toMatch(/1 Bob draft still waiting for a review yes/i);
+    expect(writeStarted.description).toMatch(/Check Facebook \/ Instagram \/ YouTube/i);
+    expect(writeStarted.description).not.toMatch(/then schedule it here/i);
+  });
+
+  it("Approved empty names On Hold when a hold is what emptied the tab", () => {
+    const heldOnly = approvedEmptyState({
+      inReviewCount: 0,
+      heldCount: 1,
+      possibleLiveWriteCount: 0,
+    });
+    expect(heldOnly.title).toBe("Approved is empty");
+    expect(heldOnly.description).toMatch(/on hold/i);
+    expect(heldOnly.description).toMatch(/is not publish/i);
+    expect(heldOnly.description).toMatch(/On Hold tab/i);
+    expect(heldOnly.description).not.toMatch(/then schedule it here/i);
+
+    const writeStarted = approvedEmptyState({
+      inReviewCount: 0,
+      heldCount: 2,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted.description).toMatch(/2 drafts on hold/i);
+    expect(writeStarted.description).toMatch(/Check Facebook \/ Instagram \/ YouTube/i);
+  });
+
+  it("idle Approved empty points at Scheduled Posts and is not a clean approve-then-schedule", () => {
+    const idle = approvedEmptyState({
+      inReviewCount: 0,
+      heldCount: 0,
+      possibleLiveWriteCount: 0,
+    });
+    expect(idle.title).toBe("Nothing waiting to schedule");
+    expect(idle.description).toMatch(/schedule yes/i);
+    expect(idle.description).toMatch(/Scheduled Posts/i);
+    expect(idle.description).toMatch(/does not publish/i);
+    expect(idle.title).not.toMatch(/No approved drafts/i);
+    expect(idle.description).not.toMatch(/then schedule it here/i);
+    expect(idle.description).not.toMatch(/Queue is clear/i);
+    expect(idle.description).not.toMatch(/Ready to Schedule/i);
+    expect(idle.description).not.toMatch(/Still not live/i);
+  });
+
+  it("opens On Hold after the last Approved hold and stays when more approved remain", () => {
+    expect(
+      shouldOpenHeldTabAfterHold({
+        currentTab: "approved",
+        remainingApprovedCount: 0,
+      })
+    ).toBe(true);
+    expect(
+      shouldOpenHeldTabAfterHold({
+        currentTab: "approved",
+        remainingApprovedCount: 1,
+      })
+    ).toBe(false);
+    expect(
+      shouldOpenHeldTabAfterHold({
+        currentTab: "review",
+        remainingApprovedCount: 0,
       })
     ).toBe(false);
   });

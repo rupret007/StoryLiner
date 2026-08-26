@@ -48,6 +48,7 @@ import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
 import {
   approveHighRiskConfirmDescription,
   approveSuccessToast,
+  approvedEmptyState,
   approvedQueueTabLabel,
   approvedScheduleHelp,
   captionMutationSuccessToast,
@@ -61,6 +62,7 @@ import {
   resumeHeldSuccessToast,
   scheduleSuccessToast,
   shouldOpenApprovedTabAfterApprove,
+  shouldOpenHeldTabAfterHold,
 } from "@/lib/services/publish/safety";
 import {
   approveDraft,
@@ -323,10 +325,12 @@ function DraftCard({
   draft,
   onAction,
   onApproved,
+  onHeld,
 }: {
   draft: DraftWithRelations;
   onAction: () => void;
   onApproved?: () => void;
+  onHeld?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -363,7 +367,11 @@ function DraftCard({
       try {
         await holdDraft(draft.id);
         toast.success(holdSuccessToast({ possibleLiveWrite }));
-        onAction();
+        if (onHeld) {
+          onHeld();
+        } else {
+          onAction();
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Hold failed.");
       }
@@ -906,6 +914,14 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
     heldCount: held.length,
     possibleLiveWriteCount: approvedPossibleLiveWriteCount,
   });
+  const approvedEmpty = approvedEmptyState({
+    inReviewCount: inReview.length,
+    heldCount: held.length,
+    possibleLiveWriteCount:
+      inReview.length > 0
+        ? inReview.filter((d) => draftHasPossibleLiveWrite(d.reviewNotes)).length
+        : held.filter((d) => draftHasPossibleLiveWrite(d.reviewNotes)).length,
+  });
 
   function refresh() {
     router.refresh();
@@ -920,6 +936,19 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
       })
     ) {
       setTab("approved");
+    }
+    refresh();
+  }
+
+  function handleHeld(draftId: string) {
+    const remainingApproved = approved.filter((d) => d.id !== draftId);
+    if (
+      shouldOpenHeldTabAfterHold({
+        currentTab: tab,
+        remainingApprovedCount: remainingApproved.length,
+      })
+    ) {
+      setTab("held");
     }
     refresh();
   }
@@ -1003,8 +1032,8 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           {approved.length === 0 ? (
             <EmptyState
               icon={Check}
-              title="No approved drafts"
-              description="Approve a Bob draft from Needs Review, then schedule it here. Approve is not publish."
+              title={approvedEmpty.title}
+              description={approvedEmpty.description}
             />
           ) : (
             <div className="space-y-3">
@@ -1015,7 +1044,12 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
               </p>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {approved.map((draft) => (
-                  <DraftCard key={draft.id} draft={draft} onAction={refresh} />
+                  <DraftCard
+                    key={draft.id}
+                    draft={draft}
+                    onAction={refresh}
+                    onHeld={() => handleHeld(draft.id)}
+                  />
                 ))}
               </div>
             </div>

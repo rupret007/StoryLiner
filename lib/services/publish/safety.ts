@@ -714,6 +714,64 @@ export function shouldOpenApprovedTabAfterApprove(options: {
 }
 
 /**
+ * After the last Approved hold, open On Hold so Jeff is not left on an
+ * empty Approved tab that still talks like the next step is a schedule.
+ * Stay put from Needs Review. Stay put when more approved drafts remain.
+ */
+export function shouldOpenHeldTabAfterHold(options: {
+  currentTab: string;
+  remainingApprovedCount: number;
+}): boolean {
+  return options.currentTab === "approved" && options.remainingApprovedCount === 0;
+}
+
+/**
+ * Approved empty copy. That tab must not talk as if the next step is
+ * another Approve — or as if nothing is waiting — after a schedule yes.
+ */
+export function approvedEmptyState(options: {
+  inReviewCount: number;
+  heldCount: number;
+  possibleLiveWriteCount: number;
+}): { title: string; description: string } {
+  if (options.inReviewCount > 0) {
+    const n = options.inReviewCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      options.possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return {
+      title: "Approved is empty",
+      description:
+        `${n} Bob ${drafts} still waiting for a review yes.` +
+        `${live} Open Needs Review. Approve is not publish.`,
+    };
+  }
+
+  if (options.heldCount > 0) {
+    const n = options.heldCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      options.possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return {
+      title: "Approved is empty",
+      description:
+        `${n} ${drafts} on hold. Hold is not schedule and is not publish.` +
+        `${live} Open the On Hold tab.`,
+    };
+  }
+
+  return {
+    title: "Nothing waiting to schedule",
+    description:
+      "No approved drafts waiting for a schedule yes. Worker jobs are on Scheduled Posts. This does not publish.",
+  };
+}
+
+/**
  * Approved tab helper when drafts are waiting. Schedule is a separate yes.
  */
 export function approvedScheduleHelp(options: {
