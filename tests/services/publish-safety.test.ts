@@ -542,11 +542,12 @@ describe("possible live write notes", () => {
   it("never claims Copy is a clean new draft after a possible live write", () => {
     const writeStarted = duplicateDraftSuccessToast({ possibleLiveWrite: true });
     expect(writeStarted).not.toMatch(/Find the copy in the In Review tab/i);
+    expect(writeStarted).not.toMatch(/In Review tab/i);
     expect(writeStarted).toMatch(/may already be live/i);
     expect(writeStarted).toMatch(/Copy is not publish/i);
 
     expect(duplicateDraftSuccessToast({ possibleLiveWrite: false })).toMatch(
-      /In Review/i
+      /Needs Review/i
     );
   });
 });
@@ -1226,6 +1227,30 @@ describe("Needs Review empty after last hold after #20", () => {
     expect(clientSource).not.toMatch(
       /heldCount: held\.length,\s*possibleLiveWriteCount:\s*approvedPossibleLiveWriteCount/
     );
+  });
+});
+
+describe("Copy toast names Needs Review after #21", () => {
+  it("clean Copy names the Needs Review tab, not In Review", () => {
+    const clean = duplicateDraftSuccessToast({ possibleLiveWrite: false });
+    expect(clean).toMatch(/Needs Review tab/i);
+    expect(clean).not.toMatch(/In Review tab/i);
+    expect(clean).not.toMatch(/Queue is clear/i);
+
+    const writeStarted = duplicateDraftSuccessToast({ possibleLiveWrite: true });
+    expect(writeStarted).toMatch(/may already be live/i);
+    expect(writeStarted).toMatch(/Copy is not publish/i);
+    expect(writeStarted).not.toMatch(/In Review tab/i);
+    expect(writeStarted).not.toMatch(/Find the copy in the Needs Review tab/i);
+  });
+
+  it("wires Copy toast so the review-queue client uses the helper", () => {
+    const clientSource = readFileSync(
+      join(__dirname, "../../app/(app)/review-queue/client.tsx"),
+      "utf8"
+    );
+    expect(clientSource).toMatch(/duplicateDraftSuccessToast\(/);
+    expect(clientSource).not.toMatch(/In Review tab/);
   });
 });
 
