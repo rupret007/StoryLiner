@@ -374,11 +374,32 @@ export function scheduleQueueHeadline(counts: {
 
 /**
  * Empty Scheduled Posts copy must describe the queue Jeff is looking at.
- * A completed schedule below does not need another Approve or schedule yes.
+ * A completed schedule below does not need another Approve or schedule yes
+ * unless Approved still has a draft waiting — Unschedule / Return put work
+ * back there, and other approved drafts still need a schedule yes.
  */
 export function scheduledPostsEmptyState(options: {
   recentlyPublishedCount: number;
+  approvedCount?: number;
+  possibleLiveWriteCount?: number;
 }): { title: string; description: string } {
+  const approvedCount = options.approvedCount ?? 0;
+  const possibleLiveWriteCount = options.possibleLiveWriteCount ?? 0;
+
+  if (approvedCount > 0) {
+    const drafts = approvedCount === 1 ? "draft" : "drafts";
+    const live =
+      possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return {
+      title: "No worker jobs waiting",
+      description:
+        `${approvedCount} approved ${drafts} still waiting for a schedule yes.` +
+        `${live} Open the Approved tab. This does not publish.`,
+    };
+  }
+
   if (options.recentlyPublishedCount > 0) {
     const posts = options.recentlyPublishedCount === 1 ? "post" : "posts";
     const verb = options.recentlyPublishedCount === 1 ? "is" : "are";
@@ -437,7 +458,7 @@ export function returnScheduleSuccessToast(options: {
     );
   }
   if (options.jobStatus === "PENDING") {
-    return "Unscheduled. Nothing was published.";
+    return "Unscheduled. Open the Approved tab. Nothing was published.";
   }
   return "Returned to Approved. Nothing was published. Schedule again after the fix.";
 }
