@@ -56,6 +56,7 @@ import {
   denySuccessToast,
   draftHasPossibleLiveWrite,
   duplicateDraftSuccessToast,
+  heldEmptyState,
   holdConfirmDescription,
   holdSuccessToast,
   needsReviewEmptyState,
@@ -930,6 +931,14 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
         ? inReview.filter((d) => draftHasPossibleLiveWrite(d.reviewNotes)).length
         : held.filter((d) => draftHasPossibleLiveWrite(d.reviewNotes)).length,
   });
+  const heldEmpty = heldEmptyState({
+    approvedCount: approved.length,
+    inReviewCount: inReview.length,
+    possibleLiveWriteCount:
+      approved.length > 0
+        ? approvedPossibleLiveWriteCount
+        : inReview.filter((d) => draftHasPossibleLiveWrite(d.reviewNotes)).length,
+  });
 
   function refresh() {
     router.refresh();
@@ -937,10 +946,12 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
 
   function handleApproved(draftId: string) {
     const remainingReview = inReview.filter((d) => d.id !== draftId);
+    const remainingHeld = held.filter((d) => d.id !== draftId);
     if (
       shouldOpenApprovedTabAfterApprove({
         currentTab: tab,
         remainingNeedsReviewCount: remainingReview.length,
+        remainingHeldCount: remainingHeld.length,
       })
     ) {
       setTab("approved");
@@ -1019,8 +1030,8 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           {held.length === 0 ? (
             <EmptyState
               icon={Pause}
-              title="Nothing on hold"
-              description="Hold parks a draft for later. It does not schedule or publish."
+              title={heldEmpty.title}
+              description={heldEmpty.description}
             />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
