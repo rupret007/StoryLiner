@@ -38,6 +38,7 @@ import {
   scheduledPostsEmptyState,
   upcomingScheduleBadge,
   dashboardFailedWriteStartedNote,
+  heldEmptyState,
   mergeReviewNotesPreservingPossibleLiveWrite,
   POSSIBLE_LIVE_WRITE_NOTE,
   returnScheduleButtonLabel,
@@ -961,6 +962,7 @@ describe("Review → Approve → Schedule handoff after #14", () => {
       shouldOpenApprovedTabAfterApprove({
         currentTab: "held",
         remainingNeedsReviewCount: 0,
+        remainingHeldCount: 1,
       })
     ).toBe(false);
   });
@@ -1048,6 +1050,124 @@ describe("Approved empty after last schedule after #15", () => {
         remainingApprovedCount: 0,
       })
     ).toBe(false);
+  });
+});
+
+describe("On Hold empty after last hold-approve after #19", () => {
+  it("On Hold empty is not nothing-on-hold while Approved still needs a schedule yes", () => {
+    const waiting = heldEmptyState({
+      approvedCount: 2,
+      inReviewCount: 0,
+      possibleLiveWriteCount: 0,
+    });
+    expect(waiting.title).toBe("On Hold is empty");
+    expect(waiting.description).toMatch(
+      /2 approved drafts still waiting for a schedule yes/i
+    );
+    expect(waiting.description).toMatch(/Open the Approved tab/i);
+    expect(waiting.description).toMatch(/does not publish/i);
+    expect(waiting.title).not.toMatch(/Nothing on hold/i);
+    expect(waiting.description).not.toMatch(/Hold parks a draft for later/i);
+    expect(waiting.description).not.toMatch(/Queue is clear/i);
+    expect(waiting.description).not.toMatch(/Ready to Schedule/i);
+
+    const writeStarted = heldEmptyState({
+      approvedCount: 1,
+      inReviewCount: 0,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted.description).toMatch(
+      /1 approved draft still waiting for a schedule yes/i
+    );
+    expect(writeStarted.description).toMatch(
+      /Check Facebook \/ Instagram \/ YouTube/i
+    );
+    expect(writeStarted.description).not.toMatch(/Hold parks a draft for later/i);
+  });
+
+  it("On Hold empty names Needs Review when a resume or caption return emptied the tab", () => {
+    const reviewOnly = heldEmptyState({
+      approvedCount: 0,
+      inReviewCount: 1,
+      possibleLiveWriteCount: 0,
+    });
+    expect(reviewOnly.title).toBe("On Hold is empty");
+    expect(reviewOnly.description).toMatch(
+      /1 Bob draft still waiting for a review yes/i
+    );
+    expect(reviewOnly.description).toMatch(/Open Needs Review/i);
+    expect(reviewOnly.description).toMatch(/is not publish/i);
+    expect(reviewOnly.description).not.toMatch(/Hold parks a draft for later/i);
+
+    const writeStarted = heldEmptyState({
+      approvedCount: 0,
+      inReviewCount: 2,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted.description).toMatch(
+      /2 Bob drafts still waiting for a review yes/i
+    );
+    expect(writeStarted.description).toMatch(
+      /Check Facebook \/ Instagram \/ YouTube/i
+    );
+  });
+
+  it("idle On Hold empty keeps park-for-later and is not a schedule yes", () => {
+    const idle = heldEmptyState({
+      approvedCount: 0,
+      inReviewCount: 0,
+      possibleLiveWriteCount: 0,
+    });
+    expect(idle.title).toBe("Nothing on hold");
+    expect(idle.description).toMatch(/Hold parks a draft for later/i);
+    expect(idle.description).toMatch(/does not schedule or publish/i);
+    expect(idle.description).not.toMatch(/Queue is clear/i);
+    expect(idle.description).not.toMatch(/Ready to Schedule/i);
+    expect(idle.description).not.toMatch(/Still not live/i);
+  });
+
+  it("opens Approved after the last On Hold yes and stays when more holds remain", () => {
+    expect(
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: "held",
+        remainingNeedsReviewCount: 0,
+        remainingHeldCount: 0,
+      })
+    ).toBe(true);
+    expect(
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: "held",
+        remainingNeedsReviewCount: 2,
+        remainingHeldCount: 0,
+      })
+    ).toBe(true);
+    expect(
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: "held",
+        remainingNeedsReviewCount: 0,
+        remainingHeldCount: 1,
+      })
+    ).toBe(false);
+    expect(
+      shouldOpenApprovedTabAfterApprove({
+        currentTab: "review",
+        remainingNeedsReviewCount: 1,
+        remainingHeldCount: 0,
+      })
+    ).toBe(false);
+  });
+
+  it("wires the On Hold tab to the held empty helper", () => {
+    const clientSource = readFileSync(
+      join(__dirname, "../../app/(app)/review-queue/client.tsx"),
+      "utf8"
+    );
+    expect(clientSource).toMatch(/heldEmptyState\(/);
+    expect(clientSource).toMatch(/title=\{heldEmpty\.title\}/);
+    expect(clientSource).toMatch(/remainingHeldCount: remainingHeld\.length/);
+    expect(clientSource).not.toMatch(
+      /title="Nothing on hold"[\s\S]*Hold parks a draft for later/
+    );
   });
 });
 

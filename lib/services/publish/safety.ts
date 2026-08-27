@@ -749,14 +749,22 @@ export function needsReviewEmptyState(options: {
 }
 
 /**
- * After the last Needs Review yes, open Approved so Jeff is not left
- * on an empty review tab. Stay put from On Hold, or when more review remains.
+ * After the last Needs Review yes, or the last On Hold yes, open Approved
+ * so Jeff is not left on an empty tab that still talks like Hold is only
+ * parking. Stay put when more review or more holds remain.
  */
 export function shouldOpenApprovedTabAfterApprove(options: {
   currentTab: string;
   remainingNeedsReviewCount: number;
+  remainingHeldCount?: number;
 }): boolean {
-  return options.currentTab === "review" && options.remainingNeedsReviewCount === 0;
+  if (options.currentTab === "review") {
+    return options.remainingNeedsReviewCount === 0;
+  }
+  if (options.currentTab === "held") {
+    return (options.remainingHeldCount ?? 0) === 0;
+  }
+  return false;
 }
 
 /**
@@ -814,6 +822,53 @@ export function approvedEmptyState(options: {
     title: "Nothing waiting to schedule",
     description:
       "No approved drafts waiting for a schedule yes. Worker jobs are on Scheduled Posts. This does not publish.",
+  };
+}
+
+/**
+ * On Hold empty copy. That tab must not talk as if nothing is waiting
+ * after the last hold-approve — or after a resume / edit / rewrite
+ * sent the caption back to Needs Review.
+ */
+export function heldEmptyState(options: {
+  approvedCount: number;
+  inReviewCount: number;
+  possibleLiveWriteCount: number;
+}): { title: string; description: string } {
+  if (options.approvedCount > 0) {
+    const n = options.approvedCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      options.possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return {
+      title: "On Hold is empty",
+      description:
+        `${n} approved ${drafts} still waiting for a schedule yes.` +
+        `${live} Open the Approved tab. This does not publish.`,
+    };
+  }
+
+  if (options.inReviewCount > 0) {
+    const n = options.inReviewCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      options.possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return {
+      title: "On Hold is empty",
+      description:
+        `${n} Bob ${drafts} still waiting for a review yes.` +
+        `${live} Open Needs Review. Hold is not publish.`,
+    };
+  }
+
+  return {
+    title: "Nothing on hold",
+    description:
+      "Hold parks a draft for later. It does not schedule or publish.",
   };
 }
 
