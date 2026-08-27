@@ -791,6 +791,17 @@ export function shouldOpenHeldTabAfterHold(options: {
 }
 
 /**
+ * Copy always creates an IN_REVIEW draft. Open Needs Review when the copy
+ * came from another tab so the newly created draft is not hidden behind the
+ * old queue. Copy is still only a review action; it never schedules or posts.
+ */
+export function shouldOpenNeedsReviewTabAfterCopy(options: {
+  currentTab: string;
+}): boolean {
+  return options.currentTab !== "review";
+}
+
+/**
  * Approved empty copy. That tab must not talk as if the next step is
  * another Approve — or as if nothing is waiting — after a schedule yes.
  */

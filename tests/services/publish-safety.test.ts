@@ -28,6 +28,7 @@ import {
   scheduleSuccessToast,
   shouldOpenApprovedTabAfterApprove,
   shouldOpenHeldTabAfterHold,
+  shouldOpenNeedsReviewTabAfterCopy,
   hasYouTubeVideoUrl,
   isCleanPendingScheduleJob,
   isFailedWriteStartedSchedule,
@@ -1251,6 +1252,33 @@ describe("Copy toast names Needs Review after #21", () => {
     );
     expect(clientSource).toMatch(/duplicateDraftSuccessToast\(/);
     expect(clientSource).not.toMatch(/In Review tab/);
+  });
+});
+
+describe("Copy opens its Needs Review destination after #22", () => {
+  it("opens Needs Review from every other queue and stays there when already open", () => {
+    expect(
+      shouldOpenNeedsReviewTabAfterCopy({ currentTab: "review" })
+    ).toBe(false);
+    expect(
+      shouldOpenNeedsReviewTabAfterCopy({ currentTab: "held" })
+    ).toBe(true);
+    expect(
+      shouldOpenNeedsReviewTabAfterCopy({ currentTab: "approved" })
+    ).toBe(true);
+    expect(
+      shouldOpenNeedsReviewTabAfterCopy({ currentTab: "denied" })
+    ).toBe(true);
+  });
+
+  it("wires every queue card to open the copied draft's real destination", () => {
+    const clientSource = readFileSync(
+      join(__dirname, "../../app/(app)/review-queue/client.tsx"),
+      "utf8"
+    );
+    expect(clientSource).toMatch(/function handleCopied\(\)/);
+    expect(clientSource).toMatch(/setTab\("review"\)/);
+    expect(clientSource.match(/onCopied=\{handleCopied\}/g)).toHaveLength(4);
   });
 });
 
