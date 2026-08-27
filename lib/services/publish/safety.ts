@@ -710,7 +710,8 @@ export function captionMutationSuccessToast(options: {
 
 /**
  * Needs Review empty copy. That tab must not say the promo queue is
- * done while Approved still needs a schedule yes.
+ * done while Approved still needs a schedule yes — or as if a hold
+ * is not waiting on the On Hold tab.
  */
 export function needsReviewEmptyState(options: {
   approvedCount: number;
@@ -735,9 +736,15 @@ export function needsReviewEmptyState(options: {
   if (options.heldCount > 0) {
     const n = options.heldCount;
     const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      options.possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
     return {
       title: "Needs Review is empty",
-      description: `${n} ${drafts} on hold. Hold is not schedule and is not publish.`,
+      description:
+        `${n} ${drafts} on hold. Hold is not schedule and is not publish.` +
+        `${live} Open the On Hold tab.`,
     };
   }
 
