@@ -619,6 +619,10 @@ export function reviewNotesForDuplicateDraft(
   );
 }
 
+/**
+ * Copy lands in IN_REVIEW. The review-queue tab is Needs Review,
+ * not In Review. Write-started copy keeps the platform check.
+ */
 export function duplicateDraftSuccessToast(options: {
   possibleLiveWrite: boolean;
 }): string {
@@ -628,7 +632,7 @@ export function duplicateDraftSuccessToast(options: {
       "Copy is not publish."
     );
   }
-  return "Duplicated. Find the copy in the In Review tab.";
+  return "Duplicated. Find the copy in the Needs Review tab.";
 }
 
 /**
