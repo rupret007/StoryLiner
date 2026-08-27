@@ -64,6 +64,7 @@ import {
   scheduleSuccessToast,
   shouldOpenApprovedTabAfterApprove,
   shouldOpenHeldTabAfterHold,
+  shouldOpenNeedsReviewTabAfterCopy,
 } from "@/lib/services/publish/safety";
 import {
   approveDraft,
@@ -331,11 +332,13 @@ function DraftCard({
   onAction,
   onApproved,
   onHeld,
+  onCopied,
 }: {
   draft: DraftWithRelations;
   onAction: () => void;
   onApproved?: () => void;
   onHeld?: () => void;
+  onCopied?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -430,7 +433,11 @@ function DraftCard({
             possibleLiveWrite,
           })
         );
-        onAction();
+        if (onCopied) {
+          onCopied();
+        } else {
+          onAction();
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not copy draft.");
       }
@@ -975,6 +982,13 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
     refresh();
   }
 
+  function handleCopied() {
+    if (shouldOpenNeedsReviewTabAfterCopy({ currentTab: tab })) {
+      setTab("review");
+    }
+    refresh();
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1023,6 +1037,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                   draft={draft}
                   onAction={refresh}
                   onApproved={() => handleApproved(draft.id)}
+                  onCopied={handleCopied}
                 />
               ))}
             </div>
@@ -1044,6 +1059,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                   draft={draft}
                   onAction={refresh}
                   onApproved={() => handleApproved(draft.id)}
+                  onCopied={handleCopied}
                 />
               ))}
             </div>
@@ -1071,6 +1087,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                     draft={draft}
                     onAction={refresh}
                     onHeld={() => handleHeld(draft.id)}
+                    onCopied={handleCopied}
                   />
                 ))}
               </div>
@@ -1088,7 +1105,12 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {denied.map((draft) => (
-                <DraftCard key={draft.id} draft={draft} onAction={refresh} />
+                <DraftCard
+                  key={draft.id}
+                  draft={draft}
+                  onAction={refresh}
+                  onCopied={handleCopied}
+                />
               ))}
             </div>
           )}
