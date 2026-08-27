@@ -1171,6 +1171,64 @@ describe("On Hold empty after last hold-approve after #19", () => {
   });
 });
 
+describe("Needs Review empty after last hold after #20", () => {
+  it("Needs Review empty names On Hold when a hold is what emptied the tab", () => {
+    const heldOnly = needsReviewEmptyState({
+      approvedCount: 0,
+      heldCount: 1,
+      possibleLiveWriteCount: 0,
+    });
+    expect(heldOnly.title).toBe("Needs Review is empty");
+    expect(heldOnly.description).toMatch(/1 draft on hold/i);
+    expect(heldOnly.description).toMatch(/is not publish/i);
+    expect(heldOnly.description).toMatch(/On Hold tab/i);
+    expect(heldOnly.description).not.toMatch(/Queue is clear/i);
+    expect(heldOnly.description).not.toMatch(/Ready to Schedule/i);
+
+    const writeStarted = needsReviewEmptyState({
+      approvedCount: 0,
+      heldCount: 2,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted.description).toMatch(/2 drafts on hold/i);
+    expect(writeStarted.description).toMatch(
+      /Check Facebook \/ Instagram \/ YouTube/i
+    );
+    expect(writeStarted.description).toMatch(/On Hold tab/i);
+    expect(writeStarted.description).not.toMatch(/Queue is clear/i);
+  });
+
+  it("stays on Needs Review after a hold from review, including the last one", () => {
+    expect(
+      shouldOpenHeldTabAfterHold({
+        currentTab: "review",
+        remainingApprovedCount: 0,
+      })
+    ).toBe(false);
+    expect(
+      shouldOpenHeldTabAfterHold({
+        currentTab: "approved",
+        remainingApprovedCount: 0,
+      })
+    ).toBe(true);
+  });
+
+  it("wires Needs Review empty so a hold-only queue names On Hold", () => {
+    const clientSource = readFileSync(
+      join(__dirname, "../../app/(app)/review-queue/client.tsx"),
+      "utf8"
+    );
+    expect(clientSource).toMatch(/needsReviewEmptyState\(/);
+    expect(clientSource).toMatch(/title=\{reviewEmpty\.title\}/);
+    expect(clientSource).toMatch(
+      /approved\.length > 0\s*\?[\s\S]*approvedPossibleLiveWriteCount[\s\S]*held\.filter/
+    );
+    expect(clientSource).not.toMatch(
+      /heldCount: held\.length,\s*possibleLiveWriteCount:\s*approvedPossibleLiveWriteCount/
+    );
+  });
+});
+
 describe("Scheduled Posts empty after the last schedule yes", () => {
   it("names the completed post below instead of asking for another Approve", () => {
     const completed = scheduledPostsEmptyState({ recentlyPublishedCount: 1 });

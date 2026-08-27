@@ -921,7 +921,10 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
   const reviewEmpty = needsReviewEmptyState({
     approvedCount: approved.length,
     heldCount: held.length,
-    possibleLiveWriteCount: approvedPossibleLiveWriteCount,
+    possibleLiveWriteCount:
+      approved.length > 0
+        ? approvedPossibleLiveWriteCount
+        : held.filter((d) => draftHasPossibleLiveWrite(d.reviewNotes)).length,
   });
   const approvedEmpty = approvedEmptyState({
     inReviewCount: inReview.length,
