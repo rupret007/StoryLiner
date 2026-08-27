@@ -18,8 +18,16 @@ export const REFUSED_LIVE_PLATFORMS: ReadonlySet<Platform> = new Set([
 export const LIVE_DESTINATION_REFUSAL =
   "Refusing live publish: StoryLiner live destinations are Facebook, Instagram, and YouTube only.";
 
+export const TWITTER_SCHEMA_LEFTOVER_REFUSAL =
+  `${LIVE_DESTINATION_REFUSAL} TWITTER is schema leftover. No real X adapter.`;
+
 export function isLiveDestinationPlatform(platform: Platform): boolean {
   return REAL_LIVE_PLATFORMS.has(platform);
+}
+
+/** Twitter/X is schema leftover only. Never a live or mock-publish destination. */
+export function isTwitterSchemaLeftover(platform: Platform): boolean {
+  return platform === "TWITTER";
 }
 
 export type LivePublishSafety =
@@ -42,6 +50,14 @@ export function assertSafeToLivePublish(options: {
   accountIsActive: boolean;
 }): LivePublishSafety {
   const mode = options.socialAdapterMode || "mock";
+
+  // Schema leftover: refuse Twitter/X in mock and real. No tweet can go out.
+  if (isTwitterSchemaLeftover(options.platform)) {
+    return {
+      ok: false,
+      reason: TWITTER_SCHEMA_LEFTOVER_REFUSAL,
+    };
+  }
 
   if (mode !== "real") {
     return { ok: true };

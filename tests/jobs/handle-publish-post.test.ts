@@ -201,6 +201,25 @@ describe("handlePublishPost fail-closed", () => {
     }
   );
 
+  it("refuses mock-mode TWITTER before any adapter write and does not mark published", async () => {
+    process.env.SOCIAL_ADAPTER = "mock";
+    prismaMock.scheduledPost.findUniqueOrThrow.mockResolvedValue(
+      scheduledRow({
+        platform: "TWITTER",
+        isConnected: true,
+        isActive: true,
+      })
+    );
+
+    await expect(handlePublishPost(job())).rejects.toThrow(/schema leftover/i);
+
+    expect(getSocialAdapter).not.toHaveBeenCalled();
+    expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
+    expect(prismaMock.draft.update).not.toHaveBeenCalled();
+    expect(prismaMock.scheduledPost.update).not.toHaveBeenCalled();
+    expect(prismaMock.job.update).not.toHaveBeenCalled();
+  });
+
   it("refuses real Instagram without https media and does not mark published", async () => {
     process.env.SOCIAL_ADAPTER = "real";
     prismaMock.scheduledPost.findUniqueOrThrow.mockResolvedValue(

@@ -155,12 +155,13 @@ export const mockTwitchAdapter = new MockSocialAdapter(
 );
 
 /**
- * X/Twitter is schema-legacy only. Do not add a real X adapter.
- * Keep this stub draft-only so it cannot masquerade as a Facebook live publish.
+ * X/Twitter is schema leftover only. This is not a real X adapter and must
+ * never look like a successful tweet — not even a mock Facebook publish.
  */
-export const mockTwitterAdapter = new MockSocialAdapter(
-  "TWITTER",
-  {
+class RefusedTwitterAdapter extends SocialProviderAdapter {
+  readonly platform: Platform = "TWITTER";
+  readonly adapterName = "refused-twitter";
+  readonly capabilities: SocialAdapterCapabilities = {
     canDirectPublish: false,
     canSchedule: false,
     canDraftOnly: true,
@@ -169,9 +170,37 @@ export const mockTwitterAdapter = new MockSocialAdapter(
     supportsHashtags: true,
     maxCaptionLength: 280,
     maxHashtags: 5,
-  },
-  "mock-twitter"
-);
+  };
+
+  getDegradationWarning(action: "publish" | "schedule" | "delete"): string {
+    return (
+      "Twitter/X is schema leftover. No real X adapter. " +
+      `StoryLiner will not ${action} a tweet.`
+    );
+  }
+
+  async publish(): Promise<PublishResult> {
+    return {
+      success: false,
+      isDraftOnly: true,
+      errorMessage:
+        "Twitter/X is schema leftover. No real X adapter. StoryLiner did not publish a tweet.",
+      durationMs: 0,
+    };
+  }
+
+  async deletePost(): Promise<boolean> {
+    return false;
+  }
+
+  async validateCredentials(): Promise<boolean> {
+    return false;
+  }
+}
+
+export const refusedTwitterAdapter = new RefusedTwitterAdapter();
+/** @deprecated Use refusedTwitterAdapter. Kept so existing imports keep working. */
+export const mockTwitterAdapter = refusedTwitterAdapter;
 
 /** Used when SOCIAL_ADAPTER=real but the platform has no real write adapter. */
 export function createDraftOnlyFallbackAdapter(
@@ -201,5 +230,5 @@ export const allMockAdapters: Record<Platform, SocialProviderAdapter> = {
   TIKTOK: mockTikTokAdapter,
   YOUTUBE: mockYouTubeAdapter,
   TWITCH: mockTwitchAdapter,
-  TWITTER: mockTwitterAdapter,
+  TWITTER: refusedTwitterAdapter,
 };

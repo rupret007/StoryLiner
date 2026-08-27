@@ -235,8 +235,12 @@ function ScheduleDialog({
                 I checked Facebook / Instagram / YouTube. No live post. Schedule is still not publish.
               </label>
             )}
-            {(draft.platform === "TWITTER" ||
-              draft.platform === "TIKTOK" ||
+            {draft.platform === "TWITTER" && (
+              <p className="text-xs text-amber-300">
+                Twitter/X is schema leftover. StoryLiner will refuse this schedule. No tweet will go out.
+              </p>
+            )}
+            {(draft.platform === "TIKTOK" ||
               draft.platform === "BLUESKY" ||
               draft.platform === "TWITCH") && (
               <p className="text-xs text-amber-300">

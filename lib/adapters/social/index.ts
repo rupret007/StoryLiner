@@ -1,10 +1,15 @@
 import type { Platform } from "@prisma/client";
-import { allMockAdapters, createDraftOnlyFallbackAdapter } from "./mock-adapter";
+import {
+  allMockAdapters,
+  createDraftOnlyFallbackAdapter,
+  refusedTwitterAdapter,
+} from "./mock-adapter";
 import type { SocialProviderAdapter } from "./base";
 
 /**
  * Supported real adapter platforms.
- * Bluesky, TikTok, Twitch, and Twitter/X stay draft-only fallbacks — no live write.
+ * Bluesky, TikTok, and Twitch stay draft-only fallbacks — no live write.
+ * Twitter/X is schema leftover and is refused in both mock and real.
  */
 const REAL_ADAPTER_PLATFORMS = new Set<Platform>(["FACEBOOK", "INSTAGRAM", "YOUTUBE"]);
 
@@ -20,6 +25,10 @@ function unsupportedRealFallback(platform: Platform): SocialProviderAdapter {
 }
 
 export async function getSocialAdapter(platform: Platform): Promise<SocialProviderAdapter> {
+  if (platform === "TWITTER") {
+    return refusedTwitterAdapter;
+  }
+
   const mode = process.env.SOCIAL_ADAPTER ?? "mock";
 
   if (mode === "mock") {

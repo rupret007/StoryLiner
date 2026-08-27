@@ -291,7 +291,11 @@ describe("getSocialAdapter — real mode wiring", () => {
     const { getSocialAdapter } = require("@/lib/adapters/social/index") as {
       getSocialAdapter: (platform: string) => Promise<{
         adapterName: string;
-        capabilities: { canDirectPublish: boolean; canDraftOnly: boolean };
+        capabilities: {
+          canDirectPublish: boolean;
+          canDraftOnly: boolean;
+          canSchedule: boolean;
+        };
       }>;
     };
 
@@ -301,8 +305,9 @@ describe("getSocialAdapter — real mode wiring", () => {
     expect(bluesky.capabilities.canDraftOnly).toBe(true);
 
     const twitter = await getSocialAdapter("TWITTER");
-    expect(twitter.adapterName).toBe("real-fallback-draft-only-twitter");
+    expect(twitter.adapterName).toBe("refused-twitter");
     expect(twitter.capabilities.canDirectPublish).toBe(false);
+    expect(twitter.capabilities.canSchedule).toBe(false);
 
     const tiktok = await getSocialAdapter("TIKTOK");
     expect(tiktok.adapterName).toBe("real-fallback-draft-only-tiktok");
@@ -319,6 +324,9 @@ describe("getSocialAdapter — real mode wiring", () => {
 
     await expect(getSocialAdapter("FACEBOOK")).resolves.toMatchObject({
       adapterName: "mock-facebook",
+    });
+    await expect(getSocialAdapter("TWITTER")).resolves.toMatchObject({
+      adapterName: "refused-twitter",
     });
   });
 });
