@@ -12,6 +12,7 @@ import {
   isFailedWriteStartedSchedule,
   isQueuedUpcomingSchedule,
   scheduleQueueHeadline,
+  scheduledPostsEmptyState,
   writeStartedQueueWarning,
 } from "@/lib/services/publish/safety";
 import { RescheduleButton, ReturnScheduleButton } from "./client";
@@ -37,6 +38,9 @@ export default async function ScheduledPostsPage() {
     include: { band: true, draft: true },
     orderBy: { scheduledFor: "desc" },
     take: 10,
+  });
+  const emptyState = scheduledPostsEmptyState({
+    recentlyPublishedCount: past.length,
   });
 
   let queued = 0;
@@ -77,8 +81,8 @@ export default async function ScheduledPostsPage() {
       {posts.length === 0 ? (
         <EmptyState
           icon={Clock}
-          title="Nothing scheduled"
-          description="Approve a Bob draft in the review queue, then schedule it here. Scheduling is not publish."
+          title={emptyState.title}
+          description={emptyState.description}
         />
       ) : (
         <div className="space-y-3">
