@@ -172,11 +172,14 @@ class RefusedTwitterAdapter extends SocialProviderAdapter {
     maxHashtags: 5,
   };
 
-  getDegradationWarning(_action: "publish" | "schedule" | "delete"): string {
-    return "Twitter/X is schema leftover. No real X adapter. StoryLiner will not publish a tweet.";
+  getDegradationWarning(action: "publish" | "schedule" | "delete"): string {
+    return (
+      "Twitter/X is schema leftover. No real X adapter. " +
+      `StoryLiner will not ${action} a tweet.`
+    );
   }
 
-  async publish(_payload: PublishPayload): Promise<PublishResult> {
+  async publish(): Promise<PublishResult> {
     return {
       success: false,
       isDraftOnly: true,
@@ -186,7 +189,7 @@ class RefusedTwitterAdapter extends SocialProviderAdapter {
     };
   }
 
-  async deletePost(_externalPostId: string): Promise<boolean> {
+  async deletePost(): Promise<boolean> {
     return false;
   }
 

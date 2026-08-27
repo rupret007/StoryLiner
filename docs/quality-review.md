@@ -139,6 +139,7 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 - `tests/services/rewrite-draft.test.ts` — imports real `deriveHashtags` / `riskLevelFromFlags`
 - `tests/services/mock-llm.test.ts` — Stalemate CTA must not be FOMO
 - `tests/adapters/social.test.ts` — Twitter stub is not Facebook
+- `tests/adapters/twitter-refuse.test.ts` — TWITTER refused in mock and real; FB/IG/YT cannot auto-post
 - `tests/adapters/real-social.test.ts` — await factory; draft-only fallback
 - `lib/adapters/social/real/facebook-adapter.test.ts` — refuse native schedule
 - `lib/adapters/social/real/youtube-adapter.test.ts` — description update requires explicit allow
