@@ -18,6 +18,9 @@ import { formatRelative, formatDateTime } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import {
   dashboardFailedWriteStartedNote,
+  dashboardNeedsReviewEmptyState,
+  dashboardScheduledEmptyState,
+  draftHasPossibleLiveWrite,
   isFailedWriteStartedSchedule,
   isQueuedUpcomingSchedule,
 } from "@/lib/services/publish/safety";
@@ -28,7 +31,15 @@ export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [bands, reviewQueue, scheduled, recentPublished, livestreams] =
+  const [
+    bands,
+    reviewQueue,
+    scheduled,
+    recentPublished,
+    livestreams,
+    approvedWaiting,
+    heldWaiting,
+  ] =
     await Promise.all([
       prisma.band.findMany({ where: { isActive: true }, take: 10 }),
       prisma.draft.findMany({
@@ -53,6 +64,14 @@ export default async function DashboardPage() {
         orderBy: { scheduledFor: "asc" },
         take: 3,
       }),
+      prisma.draft.findMany({
+        where: { status: "APPROVED" },
+        select: { reviewNotes: true },
+      }),
+      prisma.draft.findMany({
+        where: { status: "HELD" },
+        select: { reviewNotes: true },
+      }),
     ]);
 
   const totalReviewCount = await prisma.draft.count({ where: { status: "IN_REVIEW" } });
@@ -74,6 +93,24 @@ export default async function DashboardPage() {
     });
   }).length;
   const failedWriteNote = dashboardFailedWriteStartedNote(failedWriteStartedCount);
+  const approvedPossibleLiveWriteCount = approvedWaiting.filter((draft) =>
+    draftHasPossibleLiveWrite(draft.reviewNotes)
+  ).length;
+  const needsReviewEmpty = dashboardNeedsReviewEmptyState({
+    approvedCount: approvedWaiting.length,
+    heldCount: heldWaiting.length,
+    possibleLiveWriteCount:
+      approvedWaiting.length > 0
+        ? approvedPossibleLiveWriteCount
+        : heldWaiting.filter((draft) =>
+            draftHasPossibleLiveWrite(draft.reviewNotes)
+          ).length,
+  });
+  const scheduledEmpty = dashboardScheduledEmptyState({
+    approvedCount: approvedWaiting.length,
+    failedWriteStartedCount,
+    possibleLiveWriteCount: approvedPossibleLiveWriteCount,
+  });
   const totalScheduledCount = queuedUpcoming.length;
   const upcomingScheduled = queuedUpcoming.slice(0, 5);
   const totalPublishedCount = await prisma.publishedPost.count();
@@ -124,7 +161,7 @@ export default async function DashboardPage() {
           <CardContent className="space-y-3">
             {reviewQueue.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                Queue is clear.
+                {needsReviewEmpty}
               </p>
             ) : (
               reviewQueue.map((draft) => (
@@ -170,9 +207,7 @@ export default async function DashboardPage() {
             )}
             {upcomingScheduled.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                {failedWriteStartedCount > 0
-                  ? "No queued publishes. Failed writes are on Scheduled Posts."
-                  : "Nothing scheduled yet."}
+                {scheduledEmpty}
               </p>
             ) : (
               upcomingScheduled.map((post) => (

@@ -835,6 +835,99 @@ export function shouldOpenNeedsReviewTabAfterReturn(options: {
 }
 
 /**
+ * Review Queue first paint. After Unschedule / Return, the draft is
+ * APPROVED. Opening empty Needs Review hides the schedule yes that
+ * #25 already named on Scheduled Posts. Denied is terminal and is
+ * never the first screen. This does not publish.
+ */
+export function reviewQueueInitialTab(options: {
+  needsReviewCount: number;
+  approvedCount: number;
+  heldCount: number;
+}): "review" | "held" | "approved" {
+  if (options.needsReviewCount > 0) return "review";
+  if (options.approvedCount > 0) return "approved";
+  if (options.heldCount > 0) return "held";
+  return "review";
+}
+
+/**
+ * Dashboard Needs Review empty. That card is the first-screen review
+ * list. "Queue is clear" overclaims the promo queue after Unschedule
+ * put work back on Approved — or while a hold is still waiting.
+ */
+export function dashboardNeedsReviewEmptyState(options: {
+  approvedCount: number;
+  heldCount: number;
+  possibleLiveWriteCount?: number;
+}): string {
+  const possibleLiveWriteCount = options.possibleLiveWriteCount ?? 0;
+
+  if (options.approvedCount > 0) {
+    const n = options.approvedCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return (
+      `${n} approved ${drafts} still waiting for a schedule yes.` +
+      `${live} Open Review Queue. This does not publish.`
+    );
+  }
+
+  if (options.heldCount > 0) {
+    const n = options.heldCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return (
+      `${n} ${drafts} on hold. Hold is not schedule and is not publish.` +
+      `${live} Open Review Queue.`
+    );
+  }
+
+  return "Nothing needs review. Opening this page does not publish.";
+}
+
+/**
+ * Dashboard Scheduled empty. Worker jobs only — same as Scheduled Posts.
+ * After Unschedule the draft is on Approved. "Nothing scheduled yet"
+ * must not talk as if no schedule yes is waiting.
+ */
+export function dashboardScheduledEmptyState(options: {
+  approvedCount: number;
+  failedWriteStartedCount: number;
+  possibleLiveWriteCount?: number;
+}): string {
+  const possibleLiveWriteCount = options.possibleLiveWriteCount ?? 0;
+
+  if (options.approvedCount > 0) {
+    const n = options.approvedCount;
+    const drafts = n === 1 ? "draft" : "drafts";
+    const live =
+      possibleLiveWriteCount > 0
+        ? " Check Facebook / Instagram / YouTube before scheduling."
+        : "";
+    return (
+      `${n} approved ${drafts} still waiting for a schedule yes.` +
+      `${live} Open Review Queue. This does not publish.`
+    );
+  }
+
+  if (options.failedWriteStartedCount > 0) {
+    return "No queued publishes. Failed writes are on Scheduled Posts.";
+  }
+
+  return (
+    "No worker jobs waiting. New schedules start from Review Queue. " +
+    "This does not publish."
+  );
+}
+
+/**
  * Approved empty copy. That tab must not talk as if the next step is
  * another Approve — or as if nothing is waiting — after a schedule yes.
  */

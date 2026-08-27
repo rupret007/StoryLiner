@@ -40,7 +40,10 @@ import {
   scheduledPostsEmptyState,
   upcomingScheduleBadge,
   dashboardFailedWriteStartedNote,
+  dashboardNeedsReviewEmptyState,
+  dashboardScheduledEmptyState,
   heldEmptyState,
+  reviewQueueInitialTab,
   mergeReviewNotesPreservingPossibleLiveWrite,
   POSSIBLE_LIVE_WRITE_NOTE,
   returnScheduleButtonLabel,
@@ -1449,6 +1452,182 @@ describe("Scheduled Posts empty after last Unschedule after #24", () => {
     expect(pageSource).toMatch(/status: "APPROVED"/);
     expect(pageSource).toMatch(/draftHasPossibleLiveWrite/);
     expect(clientSource).toMatch(/returnScheduleSuccessToast\(/);
+  });
+});
+
+describe("Review / queue first screen after last Unschedule after #25", () => {
+  it("opens Approved on first paint when Needs Review is empty and a schedule yes is waiting", () => {
+    expect(
+      reviewQueueInitialTab({
+        needsReviewCount: 0,
+        approvedCount: 1,
+        heldCount: 0,
+      })
+    ).toBe("approved");
+    expect(
+      reviewQueueInitialTab({
+        needsReviewCount: 0,
+        approvedCount: 2,
+        heldCount: 1,
+      })
+    ).toBe("approved");
+  });
+
+  it("keeps Needs Review first when a review yes is still waiting", () => {
+    expect(
+      reviewQueueInitialTab({
+        needsReviewCount: 1,
+        approvedCount: 3,
+        heldCount: 2,
+      })
+    ).toBe("review");
+  });
+
+  it("opens On Hold when only a hold is waiting, and never opens Denied", () => {
+    expect(
+      reviewQueueInitialTab({
+        needsReviewCount: 0,
+        approvedCount: 0,
+        heldCount: 1,
+      })
+    ).toBe("held");
+    expect(
+      reviewQueueInitialTab({
+        needsReviewCount: 0,
+        approvedCount: 0,
+        heldCount: 0,
+      })
+    ).toBe("review");
+  });
+
+  it("dashboard Needs Review empty names Approved after Unschedule and is not Queue is clear", () => {
+    const waiting = dashboardNeedsReviewEmptyState({
+      approvedCount: 1,
+      heldCount: 0,
+    });
+    expect(waiting).toMatch(/1 approved draft still waiting for a schedule yes/i);
+    expect(waiting).toMatch(/Open Review Queue/i);
+    expect(waiting).toMatch(/does not publish/i);
+    expect(waiting).not.toMatch(/Queue is clear/i);
+    expect(waiting).not.toMatch(/Nothing scheduled yet/i);
+
+    const writeStarted = dashboardNeedsReviewEmptyState({
+      approvedCount: 2,
+      heldCount: 0,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted).toMatch(/2 approved drafts still waiting for a schedule yes/i);
+    expect(writeStarted).toMatch(/Check Facebook \/ Instagram \/ YouTube/i);
+    expect(writeStarted).not.toMatch(/Queue is clear/i);
+
+    const heldOnly = dashboardNeedsReviewEmptyState({
+      approvedCount: 0,
+      heldCount: 1,
+    });
+    expect(heldOnly).toMatch(/on hold/i);
+    expect(heldOnly).toMatch(/is not publish/i);
+    expect(heldOnly).not.toMatch(/Queue is clear/i);
+
+    const idle = dashboardNeedsReviewEmptyState({
+      approvedCount: 0,
+      heldCount: 0,
+    });
+    expect(idle).toMatch(/Nothing needs review/i);
+    expect(idle).toMatch(/does not publish/i);
+    expect(idle).not.toMatch(/Queue is clear/i);
+  });
+
+  it("dashboard Scheduled empty names Approved after Unschedule and keeps failed-write copy", () => {
+    const waiting = dashboardScheduledEmptyState({
+      approvedCount: 1,
+      failedWriteStartedCount: 0,
+    });
+    expect(waiting).toMatch(/1 approved draft still waiting for a schedule yes/i);
+    expect(waiting).toMatch(/Open Review Queue/i);
+    expect(waiting).toMatch(/does not publish/i);
+    expect(waiting).not.toMatch(/Nothing scheduled yet/i);
+    expect(waiting).not.toMatch(/Queue is clear/i);
+    expect(waiting).not.toMatch(/No second Approve or schedule yes is needed/i);
+
+    const writeStarted = dashboardScheduledEmptyState({
+      approvedCount: 2,
+      failedWriteStartedCount: 1,
+      possibleLiveWriteCount: 1,
+    });
+    expect(writeStarted).toMatch(/2 approved drafts still waiting for a schedule yes/i);
+    expect(writeStarted).toMatch(/Check Facebook \/ Instagram \/ YouTube/i);
+    expect(writeStarted).not.toMatch(/Nothing scheduled yet/i);
+
+    const failedOnly = dashboardScheduledEmptyState({
+      approvedCount: 0,
+      failedWriteStartedCount: 1,
+    });
+    expect(failedOnly).toMatch(/Failed writes are on Scheduled Posts/i);
+    expect(failedOnly).not.toMatch(/Nothing scheduled yet/i);
+
+    const idle = dashboardScheduledEmptyState({
+      approvedCount: 0,
+      failedWriteStartedCount: 0,
+    });
+    expect(idle).toMatch(/No worker jobs waiting/i);
+    expect(idle).toMatch(/Review Queue/i);
+    expect(idle).toMatch(/does not publish/i);
+    expect(idle).not.toMatch(/Nothing scheduled yet/i);
+  });
+
+  it("does not regress #25 Scheduled Posts empty after last Unschedule", () => {
+    const waiting = scheduledPostsEmptyState({
+      recentlyPublishedCount: 2,
+      approvedCount: 1,
+    });
+    expect(waiting.description).toMatch(
+      /1 approved draft still waiting for a schedule yes/i
+    );
+    expect(waiting.description).toMatch(/Open the Approved tab/i);
+    expect(waiting.description).not.toMatch(
+      /No second Approve or schedule yes is needed/i
+    );
+
+    const completed = scheduledPostsEmptyState({
+      recentlyPublishedCount: 1,
+      approvedCount: 0,
+    });
+    expect(completed.description).toMatch(
+      /1 scheduled post is in Recently published below/i
+    );
+    expect(completed.description).toMatch(
+      /No second Approve or schedule yes is needed/i
+    );
+  });
+
+  it("wires Review Queue first tab and dashboard empty so Unschedule work is named", () => {
+    const clientSource = readFileSync(
+      join(__dirname, "../../app/(app)/review-queue/client.tsx"),
+      "utf8"
+    );
+    const dashboardSource = readFileSync(
+      join(__dirname, "../../app/(app)/dashboard/page.tsx"),
+      "utf8"
+    );
+    const scheduledPageSource = readFileSync(
+      join(__dirname, "../../app/(app)/scheduled-posts/page.tsx"),
+      "utf8"
+    );
+
+    expect(clientSource).toMatch(/reviewQueueInitialTab\(/);
+    expect(clientSource).toMatch(/needsReviewCount: inReview\.length/);
+    expect(clientSource).not.toMatch(/useState\("review"\)/);
+
+    expect(dashboardSource).toMatch(/dashboardNeedsReviewEmptyState\(/);
+    expect(dashboardSource).toMatch(/dashboardScheduledEmptyState\(/);
+    expect(dashboardSource).toMatch(/approvedCount: approvedWaiting\.length/);
+    expect(dashboardSource).toMatch(/status: "APPROVED"/);
+    expect(dashboardSource).toMatch(/status: "HELD"/);
+    expect(dashboardSource).not.toMatch(/Queue is clear/);
+    expect(dashboardSource).not.toMatch(/Nothing scheduled yet/);
+
+    expect(scheduledPageSource).toMatch(/approvedCount: approvedWaiting\.length/);
+    expect(scheduledPageSource).toMatch(/scheduledPostsEmptyState\(/);
   });
 });
 

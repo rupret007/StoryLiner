@@ -61,6 +61,7 @@ import {
   holdSuccessToast,
   needsReviewEmptyState,
   resumeHeldSuccessToast,
+  reviewQueueInitialTab,
   scheduleSuccessToast,
   shouldOpenApprovedTabAfterApprove,
   shouldOpenHeldTabAfterHold,
@@ -935,12 +936,17 @@ interface ReviewQueueClientProps {
 
 export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
   const router = useRouter();
-  const [tab, setTab] = useState("review");
-
   const inReview = drafts.filter((d) => d.status === "IN_REVIEW");
   const held = drafts.filter((d) => d.status === "HELD");
   const approved = drafts.filter((d) => d.status === "APPROVED");
   const denied = drafts.filter((d) => d.status === "REJECTED");
+  const [tab, setTab] = useState(() =>
+    reviewQueueInitialTab({
+      needsReviewCount: inReview.length,
+      approvedCount: approved.length,
+      heldCount: held.length,
+    })
+  );
   const approvedPossibleLiveWriteCount = approved.filter((d) =>
     draftHasPossibleLiveWrite(d.reviewNotes)
   ).length;
