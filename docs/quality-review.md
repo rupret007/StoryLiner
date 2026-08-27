@@ -44,7 +44,7 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 
 **Evidence:** `allMockAdapters.TWITTER = mockFacebookAdapter` with `canDirectPublish: true`. Schema/UI leftover; no real X adapter (correct). Unsafe stub.
 
-**Fix:** dedicated `mock-twitter` draft-only stub. No real X client.
+**Fix:** dedicated `refused-twitter` stub (`canDirectPublish: false`). Schedule and worker refuse `TWITTER` in mock and real. `publish()` returns `success: false` with no tweet URL. No real X client.
 
 ### 6. Facebook native scheduled publish could mark unpublished posts as live
 
@@ -126,7 +126,7 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 - Generate always creates `IN_REVIEW`.
 - Real live write requires connected + active account (FB/IG/YT only).
 - Facebook/Instagram/YouTube are the only real adapters.
-- Twitter/X, Bluesky, TikTok, Twitch: draft-only in real mode; Twitter mock is draft-only.
+- Twitter/X is refused in mock and real (schema leftover; no tweet can go out). Bluesky, TikTok, Twitch: draft-only in real mode.
 - YouTube live description update is opt-in metadata, not default.
 - Worker never treats unimplemented jobs as success.
 

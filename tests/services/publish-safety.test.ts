@@ -18,6 +18,7 @@ import {
   assertLivePublishResult,
   draftHasPossibleLiveWrite,
   stripPossibleLiveWriteNote,
+  TWITTER_SCHEMA_LEFTOVER_REFUSAL,
   withPossibleLiveWriteNote,
   assertReadyForLivePublish,
   assertSafeToLivePublish,
@@ -31,6 +32,7 @@ import {
   isCleanPendingScheduleJob,
   isFailedWriteStartedSchedule,
   isLiveDestinationPlatform,
+  isTwitterSchemaLeftover,
   isQueuedUpcomingSchedule,
   scheduleQueueHeadline,
   scheduledPostsEmptyState,
@@ -113,6 +115,26 @@ describe("assertSafeToLivePublish", () => {
       }
     }
   );
+
+  it("refuses TWITTER in mock mode so a leftover tweet cannot schedule-publish", () => {
+    const result = assertSafeToLivePublish({
+      socialAdapterMode: "mock",
+      platform: "TWITTER",
+      accountIsConnected: true,
+      accountIsActive: true,
+    });
+    expect(result).toEqual({ ok: false, reason: TWITTER_SCHEMA_LEFTOVER_REFUSAL });
+  });
+
+  it("still allows mock-mode TikTok at the safety gate (Twitter is the leftover)", () => {
+    const result = assertSafeToLivePublish({
+      socialAdapterMode: "mock",
+      platform: "TIKTOK",
+      accountIsConnected: false,
+      accountIsActive: true,
+    });
+    expect(result).toEqual({ ok: true });
+  });
 });
 
 describe("sanitizeMediaUrls", () => {
@@ -209,6 +231,17 @@ describe("assertReadyForLivePublish", () => {
       }
     }
   );
+
+  it("refuses mock-mode TWITTER at the schedule/worker gate", () => {
+    const result = assertReadyForLivePublish({
+      socialAdapterMode: "mock",
+      platform: "TWITTER",
+      accountIsConnected: true,
+      accountIsActive: true,
+      mediaUrls: ["https://cdn.example.com/show.jpg"],
+    });
+    expect(result).toEqual({ ok: false, reason: TWITTER_SCHEMA_LEFTOVER_REFUSAL });
+  });
 
   it("refuses real YouTube without an allowed video URL", () => {
     const result = assertReadyForLivePublish({
@@ -1071,6 +1104,16 @@ describe("isLiveDestinationPlatform", () => {
     expect(isLiveDestinationPlatform("TWITTER")).toBe(false);
     expect(isLiveDestinationPlatform("TIKTOK")).toBe(false);
     expect(isLiveDestinationPlatform("BLUESKY")).toBe(false);
+  });
+});
+
+describe("isTwitterSchemaLeftover", () => {
+  it("is true only for TWITTER", () => {
+    expect(isTwitterSchemaLeftover("TWITTER")).toBe(true);
+    expect(isTwitterSchemaLeftover("FACEBOOK")).toBe(false);
+    expect(isTwitterSchemaLeftover("INSTAGRAM")).toBe(false);
+    expect(isTwitterSchemaLeftover("YOUTUBE")).toBe(false);
+    expect(isTwitterSchemaLeftover("TIKTOK")).toBe(false);
   });
 });
 
