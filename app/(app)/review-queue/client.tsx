@@ -940,7 +940,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
   const held = drafts.filter((d) => d.status === "HELD");
   const approved = drafts.filter((d) => d.status === "APPROVED");
   const denied = drafts.filter((d) => d.status === "REJECTED");
-  const [tab, setTab] = useState(() =>
+  const [tab, setTab] = useState<string>(() =>
     reviewQueueInitialTab({
       needsReviewCount: inReview.length,
       approvedCount: approved.length,

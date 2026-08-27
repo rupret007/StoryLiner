@@ -1616,6 +1616,7 @@ describe("Review / queue first screen after last Unschedule after #25", () => {
 
     expect(clientSource).toMatch(/reviewQueueInitialTab\(/);
     expect(clientSource).toMatch(/needsReviewCount: inReview\.length/);
+    expect(clientSource).toMatch(/useState<string>\(\(\) =>/);
     expect(clientSource).not.toMatch(/useState\("review"\)/);
 
     expect(dashboardSource).toMatch(/dashboardNeedsReviewEmptyState\(/);
