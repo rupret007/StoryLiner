@@ -8,6 +8,7 @@ import { Clock } from "lucide-react";
 import { formatRelative } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import {
+  draftHasPossibleLiveWrite,
   honestJobFailureMessage,
   isFailedWriteStartedSchedule,
   isQueuedUpcomingSchedule,
@@ -22,25 +23,34 @@ export const metadata: Metadata = { title: "Scheduled Posts" };
 export const dynamic = "force-dynamic";
 
 export default async function ScheduledPostsPage() {
-  const posts = await prisma.scheduledPost.findMany({
-    where: { status: "SCHEDULED" },
-    include: {
-      band: true,
-      draft: true,
-      platformAccount: true,
-      job: true,
-    },
-    orderBy: { scheduledFor: "asc" },
-  });
-
-  const past = await prisma.scheduledPost.findMany({
-    where: { status: { in: ["PUBLISHED"] } },
-    include: { band: true, draft: true },
-    orderBy: { scheduledFor: "desc" },
-    take: 10,
-  });
+  const [posts, past, approvedWaiting] = await Promise.all([
+    prisma.scheduledPost.findMany({
+      where: { status: "SCHEDULED" },
+      include: {
+        band: true,
+        draft: true,
+        platformAccount: true,
+        job: true,
+      },
+      orderBy: { scheduledFor: "asc" },
+    }),
+    prisma.scheduledPost.findMany({
+      where: { status: { in: ["PUBLISHED"] } },
+      include: { band: true, draft: true },
+      orderBy: { scheduledFor: "desc" },
+      take: 10,
+    }),
+    prisma.draft.findMany({
+      where: { status: "APPROVED" },
+      select: { reviewNotes: true },
+    }),
+  ]);
   const emptyState = scheduledPostsEmptyState({
     recentlyPublishedCount: past.length,
+    approvedCount: approvedWaiting.length,
+    possibleLiveWriteCount: approvedWaiting.filter((draft) =>
+      draftHasPossibleLiveWrite(draft.reviewNotes)
+    ).length,
   });
 
   let queued = 0;

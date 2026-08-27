@@ -1350,12 +1350,105 @@ describe("Scheduled Posts empty after the last schedule yes", () => {
       join(__dirname, "../../app/(app)/scheduled-posts/page.tsx"),
       "utf8"
     );
-    expect(pageSource).toMatch(
-      /scheduledPostsEmptyState\(\{\s*recentlyPublishedCount: past\.length,\s*\}\)/
-    );
+    expect(pageSource).toMatch(/recentlyPublishedCount: past\.length/);
     expect(pageSource).not.toMatch(
       /Approve a Bob draft in the review queue, then schedule it here/i
     );
+  });
+});
+
+describe("Scheduled Posts empty after last Unschedule after #24", () => {
+  it("names Approved when a schedule yes is still waiting, including after completed posts remain", () => {
+    const waiting = scheduledPostsEmptyState({
+      recentlyPublishedCount: 2,
+      approvedCount: 1,
+    });
+
+    expect(waiting.title).toBe("No worker jobs waiting");
+    expect(waiting.description).toMatch(
+      /1 approved draft still waiting for a schedule yes/i
+    );
+    expect(waiting.description).toMatch(/Open the Approved tab/i);
+    expect(waiting.description).toMatch(/does not publish/i);
+    expect(waiting.description).not.toMatch(
+      /No second Approve or schedule yes is needed/i
+    );
+    expect(waiting.description).not.toMatch(/Queue is clear/i);
+    expect(waiting.description).not.toMatch(/Ready to Schedule/i);
+  });
+
+  it("write-started Approved empty keeps the platform check", () => {
+    const writeStarted = scheduledPostsEmptyState({
+      recentlyPublishedCount: 1,
+      approvedCount: 2,
+      possibleLiveWriteCount: 1,
+    });
+
+    expect(writeStarted.description).toMatch(
+      /2 approved drafts still waiting for a schedule yes/i
+    );
+    expect(writeStarted.description).toMatch(
+      /Check Facebook \/ Instagram \/ YouTube/i
+    );
+    expect(writeStarted.description).toMatch(/Open the Approved tab/i);
+    expect(writeStarted.description).not.toMatch(
+      /No second Approve or schedule yes is needed/i
+    );
+  });
+
+  it("keeps #18 completed-only copy when nothing is waiting on Approved", () => {
+    const completed = scheduledPostsEmptyState({
+      recentlyPublishedCount: 1,
+      approvedCount: 0,
+    });
+
+    expect(completed.description).toMatch(
+      /1 scheduled post is in Recently published below/i
+    );
+    expect(completed.description).toMatch(
+      /No second Approve or schedule yes is needed/i
+    );
+    expect(completed.description).not.toMatch(
+      /still waiting for a schedule yes/i
+    );
+  });
+
+  it("clean Unschedule toast names Approved", () => {
+    const clean = returnScheduleSuccessToast({
+      jobStatus: "PENDING",
+      adapterWriteStarted: false,
+    });
+
+    expect(clean).toMatch(/Unscheduled/i);
+    expect(clean).toMatch(/Approved tab/i);
+    expect(clean).toMatch(/Nothing was published/i);
+    expect(clean).not.toMatch(/Queue is clear/i);
+    expect(clean).not.toMatch(/may already be live/i);
+
+    const writeStarted = returnScheduleSuccessToast({
+      jobStatus: "PENDING",
+      adapterWriteStarted: true,
+    });
+    expect(writeStarted).toMatch(/Returned to Approved/i);
+    expect(writeStarted).toMatch(/may already be live/i);
+    expect(writeStarted).not.toMatch(/Nothing was published/i);
+  });
+
+  it("wires Scheduled Posts empty so a waiting Approved draft is named", () => {
+    const pageSource = readFileSync(
+      join(__dirname, "../../app/(app)/scheduled-posts/page.tsx"),
+      "utf8"
+    );
+    const clientSource = readFileSync(
+      join(__dirname, "../../app/(app)/scheduled-posts/client.tsx"),
+      "utf8"
+    );
+
+    expect(pageSource).toMatch(/approvedCount: approvedWaiting\.length/);
+    expect(pageSource).toMatch(/possibleLiveWriteCount:/);
+    expect(pageSource).toMatch(/status: "APPROVED"/);
+    expect(pageSource).toMatch(/draftHasPossibleLiveWrite/);
+    expect(clientSource).toMatch(/returnScheduleSuccessToast\(/);
   });
 });
 
