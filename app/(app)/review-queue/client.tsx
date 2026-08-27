@@ -65,6 +65,7 @@ import {
   shouldOpenApprovedTabAfterApprove,
   shouldOpenHeldTabAfterHold,
   shouldOpenNeedsReviewTabAfterCopy,
+  shouldOpenNeedsReviewTabAfterReturn,
 } from "@/lib/services/publish/safety";
 import {
   approveDraft,
@@ -333,12 +334,14 @@ function DraftCard({
   onApproved,
   onHeld,
   onCopied,
+  onReturnedToReview,
 }: {
   draft: DraftWithRelations;
   onAction: () => void;
   onApproved?: () => void;
   onHeld?: () => void;
   onCopied?: () => void;
+  onReturnedToReview?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -408,7 +411,11 @@ function DraftCard({
       try {
         await resumeHeldDraft(draft.id);
         toast.success(resumeHeldSuccessToast({ possibleLiveWrite }));
-        onAction();
+        if (onReturnedToReview) {
+          onReturnedToReview();
+        } else {
+          onAction();
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not return to review.");
       }
@@ -444,6 +451,18 @@ function DraftCard({
     });
   }
 
+  function finishReturnedToReview() {
+    if (
+      onReturnedToReview &&
+      (captionMutationSourceStatus === "APPROVED" ||
+        captionMutationSourceStatus === "HELD")
+    ) {
+      onReturnedToReview();
+      return;
+    }
+    onAction();
+  }
+
   function handleRewrite(directive: string) {
     startTransition(async () => {
       await rewriteDraftAction({
@@ -458,7 +477,7 @@ function DraftCard({
           possibleLiveWrite,
         })
       );
-      onAction();
+      finishReturnedToReview();
     });
   }
 
@@ -473,7 +492,7 @@ function DraftCard({
           possibleLiveWrite,
         })
       );
-      onAction();
+      finishReturnedToReview();
     });
   }
 
@@ -989,6 +1008,13 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
     refresh();
   }
 
+  function handleReturnedToReview() {
+    if (shouldOpenNeedsReviewTabAfterReturn({ currentTab: tab })) {
+      setTab("review");
+    }
+    refresh();
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1060,6 +1086,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                   onAction={refresh}
                   onApproved={() => handleApproved(draft.id)}
                   onCopied={handleCopied}
+                  onReturnedToReview={handleReturnedToReview}
                 />
               ))}
             </div>
@@ -1088,6 +1115,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                     onAction={refresh}
                     onHeld={() => handleHeld(draft.id)}
                     onCopied={handleCopied}
+                    onReturnedToReview={handleReturnedToReview}
                   />
                 ))}
               </div>

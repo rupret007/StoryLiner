@@ -802,6 +802,18 @@ export function shouldOpenNeedsReviewTabAfterCopy(options: {
 }
 
 /**
+ * Resume / Edit / Rewrite from Approved or On Hold land in IN_REVIEW.
+ * Open Needs Review when that return came from another tab so the
+ * caption is not hidden behind the old queue. These are still only
+ * review actions; they never schedule or post.
+ */
+export function shouldOpenNeedsReviewTabAfterReturn(options: {
+  currentTab: string;
+}): boolean {
+  return options.currentTab === "held" || options.currentTab === "approved";
+}
+
+/**
  * Approved empty copy. That tab must not talk as if the next step is
  * another Approve — or as if nothing is waiting — after a schedule yes.
  */
