@@ -29,6 +29,7 @@ import {
   shouldOpenApprovedTabAfterApprove,
   shouldOpenHeldTabAfterHold,
   shouldOpenNeedsReviewTabAfterCopy,
+  shouldOpenNeedsReviewTabAfterReturn,
   hasYouTubeVideoUrl,
   isCleanPendingScheduleJob,
   isFailedWriteStartedSchedule,
@@ -1279,6 +1280,37 @@ describe("Copy opens its Needs Review destination after #22", () => {
     expect(clientSource).toMatch(/function handleCopied\(\)/);
     expect(clientSource).toMatch(/setTab\("review"\)/);
     expect(clientSource.match(/onCopied=\{handleCopied\}/g)).toHaveLength(4);
+  });
+});
+
+describe("Return opens its Needs Review destination after #23", () => {
+  it("opens Needs Review from On Hold / Approved and stays there when already open", () => {
+    expect(
+      shouldOpenNeedsReviewTabAfterReturn({ currentTab: "review" })
+    ).toBe(false);
+    expect(
+      shouldOpenNeedsReviewTabAfterReturn({ currentTab: "held" })
+    ).toBe(true);
+    expect(
+      shouldOpenNeedsReviewTabAfterReturn({ currentTab: "approved" })
+    ).toBe(true);
+    expect(
+      shouldOpenNeedsReviewTabAfterReturn({ currentTab: "denied" })
+    ).toBe(false);
+  });
+
+  it("wires Resume / Edit / Rewrite returns to open the real destination", () => {
+    const clientSource = readFileSync(
+      join(__dirname, "../../app/(app)/review-queue/client.tsx"),
+      "utf8"
+    );
+    expect(clientSource).toMatch(/function handleReturnedToReview\(\)/);
+    expect(clientSource).toMatch(/shouldOpenNeedsReviewTabAfterReturn/);
+    expect(clientSource).toMatch(/function finishReturnedToReview\(\)/);
+    expect(clientSource).toMatch(/if \(onReturnedToReview\)/);
+    expect(
+      clientSource.match(/onReturnedToReview=\{handleReturnedToReview\}/g)
+    ).toHaveLength(2);
   });
 });
 
