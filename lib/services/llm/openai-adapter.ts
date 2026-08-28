@@ -49,6 +49,7 @@ function buildGenerateSystemPrompt(
   const vp = band.voiceProfile;
   const voice = resolveStoryLinerVoice(band.name);
   const isRadDad = voice === "rad-dad";
+  const isFaultLines = voice === "fault-lines";
 
   const platformNoteMap = vp
     ? { FACEBOOK: vp.facebookNotes, INSTAGRAM: vp.instagramNotes, YOUTUBE: vp.youtubeNotes, BLUESKY: vp.blueskyNotes, TIKTOK: vp.tiktokNotes, TWITCH: vp.twitchNotes }
@@ -60,7 +61,9 @@ function buildGenerateSystemPrompt(
       ? "Pop-punk cover band energy -- nostalgic, crowd-first, fun, self-aware, not too serious."
       : voice === "stalemate"
       ? "Dry indie rock -- scene-rooted, honest, a little distant, values substance over flash."
-      : "Use only the configured voice profile. Do not borrow another band. Do not invent a third band."
+      : isFaultLines
+      ? "Canon-pending and context-led. Use only confirmed profile and request details."
+      : "Use only the configured voice profile. Do not borrow or invent a band identity."
   );
 
   const personalityTraits = vp?.personalityTraits?.length
@@ -69,6 +72,8 @@ function buildGenerateSystemPrompt(
     ? "energetic, playful, crowd-driven, self-aware, fun-loving"
     : voice === "stalemate"
     ? "reserved, genuine, a bit distant, substance-focused, low-ego"
+    : isFaultLines
+    ? "context-led, concise, canon-pending"
     : "match the voice profile; do not invent personality";
 
   const bannedPhrases = vp?.bannedPhrases?.length
@@ -79,8 +84,10 @@ function buildGenerateSystemPrompt(
     ? vp.bannedTopics.join(", ")
     : "none specified";
 
-  const humorLevel = vp?.humorLevel ?? (isRadDad ? 8 : voice === "stalemate" ? 5 : 4);
-  const edgeLevel = vp?.edgeLevel ?? (isRadDad ? 5 : voice === "stalemate" ? 7 : 4);
+  const humorLevel =
+    vp?.humorLevel ?? (isRadDad ? 8 : voice === "stalemate" ? 5 : isFaultLines ? 3 : 4);
+  const edgeLevel =
+    vp?.edgeLevel ?? (isRadDad ? 5 : voice === "stalemate" ? 7 : isFaultLines ? 3 : 4);
   const emojiTolerance = vp?.emojiTolerance ?? 3;
   const isExplicitOk = vp?.isExplicitOk ?? false;
 
@@ -97,7 +104,7 @@ BAND-SPECIFIC VOICE RULES:
 - BANNED TOPICS (avoid): ${bannedTopics}
 
 CANON RULES:
-- StoryLiner voices are Stalemate and Rad Dad only. Do not invent a third band.
+- Approved StoryLiner band identities are Stalemate, Rad Dad, and Fault Lines. Do not invent an additional band.
 - Never mention Trailer Swift. That is not a voice in this product.
 - Do not invent tour history, chart claims, lineup facts, or venues that are not in the voice profile or the provided context.
 - Demo knowledge may be unconfirmed. Prefer the provided context over guessed history.
@@ -229,7 +236,7 @@ function buildGenerateUserPrompt(
 
   const genericGuidance: Record<string, string> = {
     UNSPECIFIED:
-      "Write a natural, in-character band post using only the voice profile. Do not invent a third band. Never mention Trailer Swift.",
+      "Write a natural band post using only the configured profile and supplied context. Do not borrow another band's voice or invent an additional band. Never mention Trailer Swift.",
   };
 
   const campaignGuidance = isRadDad
@@ -264,7 +271,9 @@ function buildRewriteSystemPrompt(
       ? "Pop-punk cover band energy -- nostalgic, crowd-first, fun, self-aware."
       : voice === "stalemate"
       ? "Dry indie rock -- scene-rooted, honest, a little distant."
-      : "Use only the configured voice profile. Do not invent a third band."
+      : voice === "fault-lines"
+      ? "Canon-pending and context-led. Use only supplied facts and the configured profile."
+      : "Use only the configured voice profile. Do not invent a band identity."
   );
 
   const bannedPhrases = vp?.bannedPhrases?.length
@@ -290,7 +299,8 @@ If the directive is "shorterHashtags", keep only short hashtags (under 15 charac
 If the directive is "noHashtags", remove all hashtags entirely.
 If the directive is "addCTA", append a natural call-to-action that fits the band's voice.
 If the directive is "funnier", add humor consistent with the band's personality.
-If the directive is "morePunk" (Stalemate) or "moreFun" (Rad Dad), adjust tone accordingly.`;
+If the directive is "morePunk" (Stalemate) or "moreFun" (Rad Dad), adjust tone accordingly.
+For Fault Lines, follow only its canon-pending profile and supplied context; do not infer a replacement voice.`;
 }
 
 function buildRiskSystemPrompt(
@@ -309,7 +319,7 @@ function buildRiskSystemPrompt(
   return `You are a brand safety reviewer for ${band.name}.
 
 BAND VOICE PROFILE:
-- Tone: ${vp?.toneDescription ?? (isRadDad ? "pop-punk, fun, crowd-first" : voice === "stalemate" ? "dry indie rock, honest, scene-rooted" : "voice profile only — do not invent a third band")}
+- Tone: ${vp?.toneDescription ?? (isRadDad ? "pop-punk, fun, crowd-first" : voice === "stalemate" ? "dry indie rock, honest, scene-rooted" : voice === "fault-lines" ? "canon-pending and context-led; supplied facts only" : "voice profile only — do not invent a band identity")}
 - BANNED PHRASES: ${bannedPhrases}
 - Emoji tolerance: ${emojiTolerance}/10
 
@@ -451,11 +461,13 @@ Return your risk assessment as JSON now.`;
         ? "Rad Dad voice: energetic, playful, crowd-friendly, fun."
         : voice === "stalemate"
         ? "Stalemate voice: dry, genuine, a little reserved, substance-focused."
-        : "Use only this band's voice profile. Do not borrow Stalemate or Rad Dad. Never mention Trailer Swift.";
+        : voice === "fault-lines"
+        ? "Fault Lines voice: canon-pending and context-led. Use only supplied facts; do not infer genre, location, lineup, history, or audience."
+        : "Use only this band's voice profile. Do not borrow an approved band's voice. Never mention Trailer Swift.";
 
     const system = `You are a ${bandName} band member writing talking points for a livestream.
 ${voiceLine}
-Do not invent Trailer Swift or any third-band voice. Do not invent history that was not provided.
+Do not invent Trailer Swift or any additional band voice. Do not invent history that was not provided.
 Generate 4-6 short talking point strings. Each should be a single sentence or phrase a host can say to transition or open.
 Return JSON: { "points": ["point1", "point2", ...] }`;
 

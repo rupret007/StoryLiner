@@ -109,7 +109,7 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 | No auth on server actions | Any reachable client can approve/schedule. Post-MVP in architecture docs. |
 | Tokens/stream keys in DB plaintext | `PlatformAccount.metadata`, `LivestreamDestination.streamKey`. |
 | Worker does not forward `mediaUrls` | **Fixed on main (PR #3).** Worker sanitizes and forwards `mediaUrls`. See `prisma/README.md`. |
-| OpenAI campaign prompts hardcode Stalemate vs Rad Dad | Still hardcoded fallbacks. Trailer Swift remains absent — do not invent a voice. Prompts now forbid inventing a third band or extra history. |
+| OpenAI campaign prompts separate established Stalemate vs Rad Dad archetypes | Those established fallbacks remain intact. Fault Lines uses its canon-pending profile and neutral guidance. Trailer Swift remains absent — do not invent an additional voice or extra history. |
 | Seed demo facts vs unknown Jeff locks | **Honesty pass:** knowledge rows are prefixed and tagged `demo-unconfirmed`. Voice locks were not rewritten. See `docs/voice-facts.md`. |
 | `datetime-local` `min` uses UTC slice | TZ skew on schedule picker. |
 | Instagram `canDirectPublish: true` vs no-media draft-only | Capability/docs mismatch. |

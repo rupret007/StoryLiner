@@ -6,7 +6,7 @@ Built for musicians who are strong at making music and performing, but need help
 
 ## Overview
 
-StoryLiner is a single-operator tool managing two distinct bands — **Stalemate** (original indie rock, dry and scene-rooted) and **Rad Dad** (pop punk cover band, nostalgic and crowd-first) — with completely separate voice profiles, content rules, and publishing workflows.
+StoryLiner is a single-operator tool managing three separate band profiles — **Stalemate** (original indie rock, dry and scene-rooted), **Rad Dad** (pop punk cover band, nostalgic and crowd-first), and **Fault Lines** (owner-confirmed identity with all other canon intentionally pending). Each band keeps its own voice profile, content rules, and review workflow.
 
 Everything lands in a review queue before it can be published. Nothing auto-publishes.
 
@@ -75,8 +75,9 @@ npm run db:seed
 ```
 
 Seed creates:
-- Stalemate and Rad Dad with full voice profiles, tone rules, and banned phrases
-- Knowledge entries for each band (tagged `demo-unconfirmed` — Jeff owns canon)
+- Stalemate and Rad Dad with their existing full voice profiles, tone rules, and banned phrases
+- Fault Lines with a conservative, context-led profile that does not infer genre, location, lineup, history, audience, handles, or events
+- Demo knowledge entries for Stalemate and Rad Dad (tagged `demo-unconfirmed` — Jeff owns canon); Fault Lines starts without invented knowledge
 - Platform accounts (mock/disconnected)
 - Upcoming events and show campaigns
 - Realistic drafts in the review queue at various stages
@@ -176,7 +177,7 @@ Controlled by `LLM_ADAPTER` in `.env.local`:
 
 | Value | Behavior |
 |---|---|
-| `mock` (default) | Uses per-band realistic content pools with distinct Stalemate / Rad Dad voices |
+| `mock` (default) | Uses distinct Stalemate / Rad Dad pools plus a neutral, confirmed-context-only Fault Lines pool |
 | `openai` | Uses the configured OpenAI model for generation, rewrites, risk assessment, talking points, and engagement prompts; requires `OPENAI_API_KEY` |
 
 Any other `LLM_ADAPTER` value fails closed instead of silently selecting mock
@@ -303,7 +304,7 @@ Jest is required in CI. Suites include:
 | `tests/services/youtube-url.test.ts` | YouTube watch/shorts/embed/live ids — no bare ids |
 | `tests/workflow/review-decisions.test.ts` | Approve / Hold / Deny status gates |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
-| `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |
+| `tests/voice/demo-facts.test.ts` | Approved seeded identities, no Trailer Swift, and no invented Fault Lines canon |
 
 ## Project Structure
 
@@ -343,7 +344,7 @@ lib/
 
 prisma/
   schema.prisma        Full data model (19 models)
-  seed.ts              Realistic seed data for Stalemate and Rad Dad
+  seed.ts              Existing Stalemate/Rad Dad demo plus canon-pending Fault Lines profile
 
 scripts/
   worker.ts            Background job poll loop (every 5s)
