@@ -99,6 +99,12 @@ User (Content Studio)
 Review Queue (IN_REVIEW drafts)
   → approve / hold / deny / edit / rewrite / archive / duplicate
 
+Media attach / replace / clear (IN_REVIEW, HELD, or APPROVED only):
+  → sanitize public HTTPS URLs
+  → compare-and-set the current status and return the draft to IN_REVIEW
+  → clear reviewedAt; preserve review notes and POSSIBLE_LIVE_WRITE
+  → if status changed concurrently, write nothing and require a refresh
+
 Approve:
   → prisma.draft.update(status: APPROVED)
 
@@ -111,6 +117,7 @@ Schedule (approved drafts only):
 Worker (every 5 seconds):
   → prisma.job.findMany(status: PENDING, runAt: lte now)
   → handlePublishPost()
+    → require both ScheduledPost.status and Draft.status to be SCHEDULED
     → assertReadyForLivePublish() (connected account, FB/IG/YT only, Instagram media)
     → SocialProviderAdapter.publish({ mediaUrls })
     → assertLivePublishResult() (draft-only / failed writes throw — never mark PUBLISHED)

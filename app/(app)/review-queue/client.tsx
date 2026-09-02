@@ -59,6 +59,7 @@ import {
   heldEmptyState,
   holdConfirmDescription,
   holdSuccessToast,
+  mediaMutationSuccessToast,
   needsReviewEmptyState,
   resumeHeldSuccessToast,
   reviewQueueInitialTab,
@@ -504,8 +505,14 @@ function DraftCard({
           draftId: draft.id,
           mediaUrls: mediaUrlInput.trim() ? [mediaUrlInput.trim()] : [],
         });
-        toast.success(mediaUrlInput.trim() ? "Media URL saved." : "Media URL cleared.");
-        onAction();
+        toast.success(
+          mediaMutationSuccessToast({
+            cleared: !mediaUrlInput.trim(),
+            fromStatus: captionMutationSourceStatus,
+            possibleLiveWrite,
+          })
+        );
+        finishReturnedToReview();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not save media URL.");
       }
@@ -800,6 +807,12 @@ function DraftCard({
                 >
                   {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save media URL"}
                 </Button>
+                {(draft.status === "APPROVED" || draft.status === "HELD") && (
+                  <p className="text-xs text-amber-300">
+                    Changing or clearing media sends this back to Needs Review.
+                    It does not publish.
+                  </p>
+                )}
                 {draft.platform === "INSTAGRAM" && (
                   <p className="text-xs text-muted-foreground">
                     Real Instagram will not go live without this.
