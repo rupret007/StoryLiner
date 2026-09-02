@@ -6,6 +6,7 @@ import {
   assertCanDuplicateDraft,
   assertCanHoldDraft,
   assertCanMutateDraftCaption,
+  assertCanMutateDraftMedia,
   assertCanResumeHeldDraft,
   assertCanReturnFailedSchedule,
   assertCanReturnScheduleToApproved,
@@ -24,6 +25,7 @@ import {
   assertSafeToLivePublish,
   canRescheduleJob,
   captionMutationSuccessToast,
+  mediaMutationSuccessToast,
   needsReviewEmptyState,
   scheduleSuccessToast,
   shouldOpenApprovedTabAfterApprove,
@@ -873,6 +875,52 @@ describe("Review → Approve → Schedule leftover copy", () => {
     expect(rewriteHeldLive).toMatch(/Back in Needs Review/i);
     expect(rewriteHeldLive).toMatch(/may already be live/i);
     expect(rewriteHeldLive).toMatch(/does not publish/i);
+  });
+
+  it("Media changes are review-bearing and tell the operator where they moved", () => {
+    expect(assertCanMutateDraftMedia({ status: "IN_REVIEW" })).toEqual({ ok: true });
+    expect(assertCanMutateDraftMedia({ status: "HELD" })).toEqual({ ok: true });
+    expect(assertCanMutateDraftMedia({ status: "APPROVED" })).toEqual({ ok: true });
+    expect(assertCanMutateDraftMedia({ status: "SCHEDULED" }).ok).toBe(false);
+    expect(assertCanMutateDraftMedia({ status: "PUBLISHED" }).ok).toBe(false);
+
+    const approved = mediaMutationSuccessToast({
+      cleared: false,
+      fromStatus: "APPROVED",
+      possibleLiveWrite: false,
+    });
+    expect(approved).toMatch(/Media updated/i);
+    expect(approved).toMatch(/Back in Needs Review/i);
+    expect(approved).toMatch(/approve again/i);
+    expect(approved).toMatch(/does not publish/i);
+
+    const heldLive = mediaMutationSuccessToast({
+      cleared: true,
+      fromStatus: "HELD",
+      possibleLiveWrite: true,
+    });
+    expect(heldLive).toMatch(/Media cleared/i);
+    expect(heldLive).toMatch(/Back in Needs Review/i);
+    expect(heldLive).toMatch(/may already be live/i);
+    expect(heldLive).toMatch(/does not publish/i);
+
+    expect(
+      mediaMutationSuccessToast({
+        cleared: false,
+        fromStatus: "IN_REVIEW",
+        possibleLiveWrite: false,
+      })
+    ).toMatch(/Review it with the caption before approving/i);
+  });
+
+  it("wires media save copy and tab movement into the review card", () => {
+    const clientSource = readFileSync(
+      join(process.cwd(), "app/(app)/review-queue/client.tsx"),
+      "utf8"
+    );
+    expect(clientSource).toMatch(/mediaMutationSuccessToast\(/);
+    expect(clientSource).toMatch(/Changing or clearing media sends this back to Needs Review/);
+    expect(clientSource).toMatch(/finishReturnedToReview\(\)/);
   });
 });
 

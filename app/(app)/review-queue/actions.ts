@@ -9,6 +9,7 @@ import {
   assertCanDuplicateDraft,
   assertCanHoldDraft,
   assertCanMutateDraftCaption,
+  assertCanMutateDraftMedia,
   assertCanResumeHeldDraft,
   assertCanReturnScheduleToApproved,
   assertCanScheduleAfterPossibleLiveWrite,
@@ -363,12 +364,9 @@ export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
     where: { id: input.draftId },
   });
 
-  if (
-    draft.status !== "IN_REVIEW" &&
-    draft.status !== "APPROVED" &&
-    draft.status !== "HELD"
-  ) {
-    throw new Error("Media can only be attached while the draft is in review, held, or approved.");
+  const mutable = assertCanMutateDraftMedia({ status: draft.status });
+  if (!mutable.ok) {
+    throw new Error(mutable.reason);
   }
 
   const mediaUrls = sanitizeMediaUrls(input.mediaUrls);
@@ -377,9 +375,25 @@ export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
     throw new Error("Media URL must be a public https:// link. http, data, and javascript URLs are rejected.");
   }
 
-  const updated = await prisma.draft.update({
-    where: { id: draft.id },
-    data: { mediaUrls },
+  const updated = await prisma.$transaction(async (tx) => {
+    // Media is reviewed creative. Compare-and-set the status so a concurrent
+    // Schedule cannot be followed by a stale media write to that live path.
+    const moved = await tx.draft.updateMany({
+      where: { id: draft.id, status: draft.status },
+      data: {
+        mediaUrls,
+        status: "IN_REVIEW",
+        reviewedAt: null,
+      },
+    });
+    if (moved.count === 0) {
+      throw new Error(
+        "Draft changed while media was being saved. Refresh and review its current status. " +
+          "This media save did not schedule or publish."
+      );
+    }
+
+    return tx.draft.findUniqueOrThrow({ where: { id: draft.id } });
   });
 
   revalidatePath("/review-queue");
