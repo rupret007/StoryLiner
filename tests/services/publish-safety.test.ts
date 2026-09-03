@@ -1337,7 +1337,8 @@ describe("Copy opens its Needs Review destination after #22", () => {
     );
     expect(clientSource).toMatch(/function handleCopied\(\)/);
     expect(clientSource).toMatch(/setTab\("review"\)/);
-    expect(clientSource.match(/onCopied=\{handleCopied\}/g)).toHaveLength(4);
+    // Four queue tabs plus the focused review desk.
+    expect(clientSource.match(/onCopied=\{handleCopied\}/g)).toHaveLength(5);
   });
 });
 
@@ -1366,9 +1367,10 @@ describe("Return opens its Needs Review destination after #23", () => {
     expect(clientSource).toMatch(/shouldOpenNeedsReviewTabAfterReturn/);
     expect(clientSource).toMatch(/function finishReturnedToReview\(\)/);
     expect(clientSource).toMatch(/if \(onReturnedToReview\)/);
+    // On Hold + Approved tabs, plus the focused review desk.
     expect(
       clientSource.match(/onReturnedToReview=\{handleReturnedToReview\}/g)
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 });
 
