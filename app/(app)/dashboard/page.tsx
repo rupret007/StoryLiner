@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/storyliner/stat-card";
 import { BandChip } from "@/components/storyliner/band-chip";
-import { StatusBadge } from "@/components/storyliner/status-badge";
 import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,9 +11,12 @@ import {
   Music2,
   ArrowRight,
   Radio,
+  ShieldAlert,
+  CalendarCheck2,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { formatRelative, formatDateTime } from "@/lib/utils";
+import { cn, formatRelative, formatDateTime } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import {
   dashboardFailedWriteStartedNote,
@@ -25,6 +27,7 @@ import {
   isQueuedUpcomingSchedule,
 } from "@/lib/services/publish/safety";
 import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
+import { dashboardNextAction } from "@/lib/services/dashboard-next-action";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -74,11 +77,11 @@ export default async function DashboardPage() {
       }),
       prisma.draft.findMany({
         where: { status: "APPROVED" },
-        select: { reviewNotes: true },
+        select: { id: true, reviewNotes: true },
       }),
       prisma.draft.findMany({
         where: { status: "HELD" },
-        select: { reviewNotes: true },
+        select: { id: true, reviewNotes: true },
       }),
     ]);
 
@@ -91,7 +94,7 @@ export default async function DashboardPage() {
         : false,
     })
   );
-  const failedWriteStartedCount = scheduled.filter((post) => {
+  const failedWriteStarted = scheduled.filter((post) => {
     const adapterWriteStarted = post.job
       ? jobMayHaveStartedAdapterWrite(post.job.payload)
       : false;
@@ -99,20 +102,23 @@ export default async function DashboardPage() {
       jobStatus: post.job?.status ?? null,
       adapterWriteStarted,
     });
-  }).length;
+  });
+  const failedWriteStartedCount = failedWriteStarted.length;
   const failedWriteNote = dashboardFailedWriteStartedNote(failedWriteStartedCount);
-  const approvedPossibleLiveWriteCount = approvedWaiting.filter((draft) =>
+  const approvedPossibleLiveWrite = approvedWaiting.filter((draft) =>
     draftHasPossibleLiveWrite(draft.reviewNotes)
-  ).length;
+  );
+  const heldPossibleLiveWrite = heldWaiting.filter((draft) =>
+    draftHasPossibleLiveWrite(draft.reviewNotes)
+  );
+  const approvedPossibleLiveWriteCount = approvedPossibleLiveWrite.length;
   const needsReviewEmpty = dashboardNeedsReviewEmptyState({
     approvedCount: approvedWaiting.length,
     heldCount: heldWaiting.length,
     possibleLiveWriteCount:
       approvedWaiting.length > 0
         ? approvedPossibleLiveWriteCount
-        : heldWaiting.filter((draft) =>
-            draftHasPossibleLiveWrite(draft.reviewNotes)
-          ).length,
+        : heldPossibleLiveWrite.length,
   });
   const scheduledEmpty = dashboardScheduledEmptyState({
     approvedCount: approvedWaiting.length,
@@ -123,9 +129,67 @@ export default async function DashboardPage() {
   const upcomingScheduled = queuedUpcoming.slice(0, 5);
   const totalPublishedCount = await prisma.publishedPost.count();
   const totalBandCount = await prisma.band.count({ where: { isActive: true } });
+  const possibleLiveWriteCount =
+    approvedPossibleLiveWrite.length + heldPossibleLiveWrite.length;
+  const nextAction = dashboardNextAction({
+    failedWriteStartedCount,
+    failedWriteDraftId: failedWriteStarted[0]?.draft.id,
+    possibleLiveWriteCount,
+    possibleLiveWriteDraftId:
+      approvedPossibleLiveWrite[0]?.id ?? heldPossibleLiveWrite[0]?.id,
+    reviewCount: totalReviewCount,
+    reviewDraftId: reviewQueue[0]?.id,
+    approvedCount: approvedWaiting.length,
+    approvedDraftId: approvedReady[0]?.id,
+    scheduledCount: totalScheduledCount,
+    bandCount: totalBandCount,
+  });
+  const NextActionIcon = {
+    danger: ShieldAlert,
+    review: ClipboardList,
+    schedule: CalendarCheck2,
+    ready: Sparkles,
+  }[nextAction.tone];
 
   return (
     <div className="space-y-6">
+      <Card
+        className={cn(
+          "overflow-hidden border-l-4",
+          nextAction.tone === "danger"
+            ? "border-l-rose-500 bg-rose-500/5"
+            : nextAction.tone === "review"
+              ? "border-l-amber-500 bg-amber-500/5"
+              : nextAction.tone === "schedule"
+                ? "border-l-blue-500 bg-blue-500/5"
+                : "border-l-emerald-500 bg-emerald-500/5"
+        )}
+      >
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background/70">
+              <NextActionIcon className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {nextAction.eyebrow}
+              </p>
+              <h1 className="text-lg font-semibold text-foreground">
+                {nextAction.title}
+              </h1>
+              <p className="max-w-3xl text-sm text-muted-foreground">
+                {nextAction.description}
+              </p>
+            </div>
+          </div>
+          <Button asChild className="shrink-0">
+            <Link href={nextAction.href}>
+              {nextAction.cta} <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
