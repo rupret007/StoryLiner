@@ -148,7 +148,7 @@ Generate → Guard → Review → Approve → Schedule → Publish
 
 Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes. Approve / Hold / Deny never publish.
 
-The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, campaign/voice facts, and the next yes. The leftover card ring is not the review surface.
+The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, campaign/voice facts, and the next yes. After Approve, Schedule is bound to the same snapshot. After Schedule the desk stays on the job — Publish is the worker, not a desk button. Junk or missing `?focus=` is an honest empty desk, not a silent pile.
 
 All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. None of those actions publish.
 
@@ -309,7 +309,9 @@ Jest is required in CI. Suites include:
 | `tests/workflow/caption-review-fence.test.ts` | Caption edit returns to review and refuses unseen creative |
 | `tests/workflow/rewrite-review-fence.test.ts` | Rewrite returns to review and refuses a stale card |
 | `tests/services/generate-guard-review.test.ts` | Generate → Guard → Review next-action handoff |
-| `tests/services/review-desk.test.ts` | Review desk pipeline, facts, neighbors, no publish |
+| `tests/services/review-desk.test.ts` | Review desk pipeline, facts, neighbors, scheduled walk, no publish |
+| `tests/workflow/schedule-snapshot-fence.test.ts` | Schedule binds to the approved caption/media/guard snapshot |
+| `tests/workflow/archive-snapshot-fence.test.ts` | Archive / resume refuse a stale card |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
 | `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |
 

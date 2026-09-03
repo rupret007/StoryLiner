@@ -57,6 +57,26 @@ a desk button. Nothing auto-publishes.
 
 ---
 
+## Post-#31 leftover: Approve → Schedule is a desk walk, not a vanishing card
+
+**Evidence:** leftover #31 opened a review desk. Schedule still took only
+`draftId`. A stale approved card could queue unseen creative after a
+later edit + re-approve. After Schedule the desk query dropped
+`SCHEDULED` drafts, so Jeff fell back to the pile. Junk `?focus=` hit
+Prisma. Archive / resume had no snapshot fence. Generate still accepted
+Twitter/X. Settings was a fake auto-publish switch. Dashboard scheduled
+rows were not a path.
+
+**Fix:** Schedule carries the approved caption / media / guard snapshot
+and compare-and-sets it. The desk stays open for a focused SCHEDULED /
+PUBLISHED snapshot. Missing or junk focus is an honest empty desk.
+Archive and resume are snapshot-bound. Generate is Facebook /
+Instagram / YouTube only. Settings is a locked operator readout.
+Dashboard, Calendar, and Scheduled Posts open the desk. Publish is
+still the worker. Nothing auto-publishes.
+
+---
+
 ## P0
 
 ### 1. Real Facebook publish could fire against disconnected seed/demo accounts

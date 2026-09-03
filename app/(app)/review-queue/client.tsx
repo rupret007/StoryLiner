@@ -80,12 +80,19 @@ import {
   reviewQueueTabForFocus,
 } from "@/lib/services/publish/review-snapshot";
 import {
+  REVIEW_DESK_MISSING_FOCUS,
   previewablePromoMediaUrl,
+  reviewDeskCanArchive,
+  reviewDeskCanCopy,
+  reviewDeskCanDecide,
+  reviewDeskCanMutateCreative,
+  reviewDeskChromeNote,
   reviewDeskFactRows,
   reviewDeskNeighbors,
   reviewDeskPlatformNote,
   reviewDeskQueueHref,
   reviewDeskSamePileIds,
+  reviewDeskScheduleHref,
 } from "@/lib/services/publish/review-desk";
 import { PromoPipeline } from "@/components/storyliner/promo-pipeline";
 import {
@@ -120,6 +127,12 @@ type DraftWithRelations = Draft & {
   generationRun: {
     campaignType: CampaignType;
     inputContext: unknown;
+  } | null;
+  scheduledPost: {
+    scheduledFor: Date;
+    status: string;
+    platformAccount: { handle: string; isConnected: boolean } | null;
+    job: { status: string; runAt: Date } | null;
   } | null;
 };
 
@@ -185,6 +198,7 @@ function ScheduleDialog({
           draftId: draft.id,
           platformAccountId,
           scheduledFor: new Date(scheduledFor).toISOString(),
+          reviewedSnapshot: cardReceipt(draft),
           confirmCheckedNoLivePost: possibleLiveWrite ? checkedNoLivePost : undefined,
         });
         toast.success(scheduleSuccessToast({ possibleLiveWrite }));
@@ -453,7 +467,7 @@ function DraftCard({
   function handleResume() {
     startTransition(async () => {
       try {
-        await resumeHeldDraft(draft.id);
+        await resumeHeldDraft(draft.id, cardReceipt(draft));
         toast.success(resumeHeldSuccessToast({ possibleLiveWrite }));
         if (onReturnedToReview) {
           onReturnedToReview();
@@ -469,7 +483,7 @@ function DraftCard({
   function handleArchive() {
     setConfirmArchive(false);
     startTransition(async () => {
-      await archiveDraft(draft.id);
+      await archiveDraft(draft.id, cardReceipt(draft));
       toast.success("Draft archived.");
       onAction();
     });
@@ -588,6 +602,10 @@ function DraftCard({
   const mediaPreview = previewablePromoMediaUrl(draft.mediaUrls[0]);
   const platformNote = reviewDeskPlatformNote(draft.platform);
   const isDesk = variant === "desk";
+  const canDecide = reviewDeskCanDecide(draft.status);
+  const canMutate = reviewDeskCanMutateCreative(draft.status);
+  const canCopy = reviewDeskCanCopy(draft.status);
+  const canArchive = reviewDeskCanArchive(draft.status);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -779,6 +797,14 @@ function DraftCard({
           {isDesk && platformNote && (
             <p className="text-xs text-amber-200">{platformNote}</p>
           )}
+          {isDesk && draft.status === "SCHEDULED" && (
+            <Link
+              href={reviewDeskScheduleHref()}
+              className="inline-flex text-xs text-primary hover:underline"
+            >
+              Open scheduled jobs — Publish is the worker, not a desk button
+            </Link>
+          )}
 
           {/* Brand fit */}
           {draft.brandFitScore !== null && (
@@ -824,6 +850,7 @@ function DraftCard({
           </div>
 
           {/* Expandable section */}
+          {canMutate && (
           <button
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
             onClick={() => setIsExpanded(!isExpanded)}
@@ -835,8 +862,9 @@ function DraftCard({
             )}
             {isExpanded ? "Less" : "Rewrites and details"}
           </button>
+          )}
 
-          {isExpanded && (
+          {canMutate && isExpanded && (
             <div className="space-y-3 border-t border-border pt-3">
               {/* Quick rewrites */}
               <div>
@@ -964,7 +992,7 @@ function DraftCard({
               {reviewCardNextAction({ status: draft.status })}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
-              {(draft.status === "IN_REVIEW" || draft.status === "HELD") && (
+              {canDecide && (draft.status === "IN_REVIEW" || draft.status === "HELD") && (
                 <Button
                   size="sm"
                   onClick={() =>
@@ -984,7 +1012,7 @@ function DraftCard({
                 </Button>
               )}
 
-              {(draft.status === "IN_REVIEW" || draft.status === "APPROVED") && (
+              {canDecide && (draft.status === "IN_REVIEW" || draft.status === "APPROVED") && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -997,7 +1025,7 @@ function DraftCard({
                 </Button>
               )}
 
-              {(draft.status === "IN_REVIEW" || draft.status === "HELD") && (
+              {canDecide && (draft.status === "IN_REVIEW" || draft.status === "HELD") && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1011,7 +1039,7 @@ function DraftCard({
                 </Button>
               )}
 
-              {draft.status === "HELD" && (
+              {canDecide && draft.status === "HELD" && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -1023,7 +1051,7 @@ function DraftCard({
                 </Button>
               )}
 
-              {draft.status === "APPROVED" && (
+              {canDecide && draft.status === "APPROVED" && (
                 <Button
                   size="sm"
                   onClick={() => setShowSchedule(true)}
@@ -1035,11 +1063,12 @@ function DraftCard({
                 </Button>
               )}
 
+              {canMutate && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setEditingCaption(!editingCaption)}
-                disabled={isPending || draft.status === "REJECTED"}
+                disabled={isPending}
                 title={
                   draft.status === "APPROVED"
                     ? "Saving an edit returns this to Needs Review. This does not publish."
@@ -1048,7 +1077,9 @@ function DraftCard({
               >
                 Edit
               </Button>
+              )}
 
+              {canCopy && (
               <Button
                 size="sm"
                 variant="outline"
@@ -1059,7 +1090,9 @@ function DraftCard({
                 <Copy className="h-3.5 w-3.5" />
                 <span className="ml-1">Copy</span>
               </Button>
+              )}
 
+              {canArchive && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -1070,6 +1103,7 @@ function DraftCard({
               >
                 <Archive className="h-3.5 w-3.5" />
               </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -1081,9 +1115,14 @@ function DraftCard({
 interface ReviewQueueClientProps {
   drafts: DraftWithRelations[];
   focusDraftId?: string;
+  focusMissing?: boolean;
 }
 
-export function ReviewQueueClient({ drafts, focusDraftId }: ReviewQueueClientProps) {
+export function ReviewQueueClient({
+  drafts,
+  focusDraftId,
+  focusMissing = false,
+}: ReviewQueueClientProps) {
   const router = useRouter();
   const inReview = drafts.filter((d) => d.status === "IN_REVIEW");
   const held = drafts.filter((d) => d.status === "HELD");
@@ -1183,6 +1222,20 @@ export function ReviewQueueClient({ drafts, focusDraftId }: ReviewQueueClientPro
     ? reviewDeskNeighbors(pileIds, focusedDraft.id)
     : null;
 
+  if (focusMissing && !focusedDraft) {
+    return (
+      <div className="space-y-4">
+        <PromoPipeline status="IN_REVIEW" />
+        <div className="rounded-lg border border-border bg-muted/20 p-6 space-y-3">
+          <p className="text-sm text-foreground">{REVIEW_DESK_MISSING_FOCUS}</p>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={reviewDeskQueueHref()}>Back to queue</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (focusedDraft) {
     return (
       <div className="space-y-4">
@@ -1227,7 +1280,7 @@ export function ReviewQueueClient({ drafts, focusDraftId }: ReviewQueueClientPro
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Review this snapshot. Approve / Hold / Deny never publish.
+            {reviewDeskChromeNote(focusedDraft.status)}
           </p>
         </div>
         <DraftCard

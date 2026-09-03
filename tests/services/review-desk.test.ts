@@ -9,17 +9,28 @@ import { join } from "node:path";
 import {
   PROMO_PIPELINE_PATH,
   PROMO_PIPELINE_STEPS,
+  REVIEW_DESK_MISSING_FOCUS,
   REVIEW_DESK_NO_PUBLISH,
   generationContextFacts,
+  operatorPathPolicy,
+  parseReviewDeskFocusId,
   previewablePromoMediaUrl,
   promoPipelineCurrentStep,
   promoPipelineSteps,
+  reviewDeskAskedForFocus,
+  reviewDeskCanArchive,
+  reviewDeskCanCopy,
+  reviewDeskCanDecide,
+  reviewDeskCanMutateCreative,
+  reviewDeskChromeNote,
   reviewDeskDoesNotPublish,
   reviewDeskFactRows,
+  reviewDeskFocusMissing,
   reviewDeskNeighbors,
   reviewDeskPlatformNote,
   reviewDeskQueueHref,
   reviewDeskSamePileIds,
+  reviewDeskScheduleHref,
 } from "@/lib/services/publish/review-desk";
 import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
 
@@ -82,6 +93,86 @@ describe("promo pipeline", () => {
     expect(reviewDeskDoesNotPublish()).toBe(false);
     expect(REVIEW_DESK_NO_PUBLISH).toMatch(/never publish/i);
     expect(REVIEW_DESK_NO_PUBLISH).not.toMatch(/auto-publish/i);
+  });
+
+  it("keeps decide and mutate off SCHEDULED and PUBLISHED so Publish cannot be a desk yes", () => {
+    expect(reviewDeskCanDecide("APPROVED")).toBe(true);
+    expect(reviewDeskCanMutateCreative("APPROVED")).toBe(true);
+    expect(reviewDeskCanDecide("SCHEDULED")).toBe(false);
+    expect(reviewDeskCanMutateCreative("SCHEDULED")).toBe(false);
+    expect(reviewDeskCanCopy("SCHEDULED")).toBe(false);
+    expect(reviewDeskCanArchive("PUBLISHED")).toBe(false);
+    expect(reviewDeskChromeNote("SCHEDULED")).toMatch(/no Publish button/i);
+    expect(reviewDeskChromeNote("APPROVED")).toMatch(/Schedule is the next yes/i);
+  });
+});
+
+describe("review desk focus after Approve → Schedule", () => {
+  it("accepts a cuid and refuses junk that must not hit Prisma", () => {
+    expect(parseReviewDeskFocusId("clhf5gt0000000test0draftid1")).toBe(
+      "clhf5gt0000000test0draftid1"
+    );
+    expect(parseReviewDeskFocusId("javascript:alert(1)")).toBeNull();
+    expect(parseReviewDeskFocusId("../admin")).toBeNull();
+    expect(parseReviewDeskFocusId("")).toBeNull();
+    expect(reviewDeskAskedForFocus("  leftover  ")).toBe(true);
+    expect(reviewDeskAskedForFocus("")).toBe(false);
+    expect(
+      reviewDeskFocusMissing({
+        askedForFocus: true,
+        focusedDraftId: null,
+      })
+    ).toBe(true);
+    expect(REVIEW_DESK_MISSING_FOCUS).toMatch(/not on the desk/i);
+    expect(REVIEW_DESK_MISSING_FOCUS).toMatch(/Nothing was published/i);
+  });
+
+  it("surfaces the scheduled job so the desk does not evaporate after Schedule", () => {
+    const rows = reviewDeskFactRows({
+      scheduledPost: {
+        scheduledFor: new Date("2026-09-20T19:00:00.000Z"),
+        platformAccount: { handle: "stalematechi", isConnected: false },
+        job: { status: "PENDING" },
+      },
+    });
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { label: "Account", value: "@stalematechi (mock)" },
+        { label: "Worker job", value: "PENDING" },
+      ])
+    );
+    expect(rows.some((row) => row.label === "Scheduled for")).toBe(true);
+    expect(reviewDeskScheduleHref()).toBe("/scheduled-posts");
+  });
+});
+
+describe("operator path policy", () => {
+  it("locks the path and never offers an auto-publish switch", () => {
+    const rows = operatorPathPolicy({
+      llmAdapter: "mock",
+      socialAdapter: "mock",
+    });
+    expect(rows.every((row) => row.locked)).toBe(true);
+    expect(rows.map((row) => row.label)).toEqual([
+      "Path",
+      "Approve / Hold / Deny",
+      "Schedule",
+      "Publish",
+      "Live destinations",
+      "Real writes",
+      "LLM",
+    ]);
+    expect(rows.find((row) => row.label === "Publish")?.value).toMatch(
+      /Never a desk button/i
+    );
+    expect(rows.find((row) => row.label === "Publish")?.value).toMatch(
+      /Never auto-publish/i
+    );
+    expect(rows.find((row) => row.label === "Live destinations")?.value).toMatch(
+      /No X adapter/i
+    );
+    expect(JSON.stringify(rows)).not.toMatch(/fault.?lines/i);
   });
 });
 
@@ -212,7 +303,31 @@ describe("review desk wiring after leftover #30", () => {
     expect(client).toMatch(/reviewDeskQueueHref/);
     expect(client).not.toMatch(/>[\s]*Publish[\s]*</);
     expect(page).toMatch(/generationRun:/);
+    expect(page).toMatch(/scheduledPost:/);
+    expect(page).toMatch(/parseReviewDeskFocusId/);
     expect(page).toMatch(/PROMO_PIPELINE_PATH/);
+    expect(client).toMatch(/focusMissing/);
+    expect(client).toMatch(/REVIEW_DESK_MISSING_FOCUS/);
+    expect(client).toMatch(/reviewedSnapshot: cardReceipt\(draft\)/);
+    expect(client).toMatch(/reviewDeskCanDecide/);
+    expect(client).toMatch(/Open scheduled jobs/);
+  });
+
+  it("lets Dashboard, Calendar, and Scheduled Posts continue the desk walk", () => {
+    expect(readRepo("app/(app)/dashboard/page.tsx")).toMatch(
+      /reviewQueueFocusHref\(post\.draft\.id\)/
+    );
+    expect(readRepo("app/(app)/dashboard/page.tsx")).toMatch(
+      /Approved — schedule is the next yes/
+    );
+    expect(readRepo("app/(app)/calendar/page.tsx")).toMatch(
+      /reviewQueueFocusHref\(post\.draft\.id\)/
+    );
+    expect(readRepo("app/(app)/scheduled-posts/page.tsx")).toMatch(
+      /reviewQueueFocusHref\(post\.draft\.id\)/
+    );
+    expect(readRepo("app/(app)/settings/page.tsx")).toMatch(/operatorPathPolicy/);
+    expect(readRepo("app/(app)/settings/page.tsx")).not.toMatch(/<Switch/);
   });
 
   it("makes Generate name the same six-step path", () => {
@@ -225,7 +340,8 @@ describe("review desk wiring after leftover #30", () => {
     const desk = readRepo("lib/services/publish/review-desk.ts");
     const client = readRepo("app/(app)/review-queue/client.tsx");
     expect(desk).not.toMatch(/fault.?lines/i);
-    expect(desk).not.toMatch(/twitter-adapter|x-adapter|X adapter/i);
+    expect(desk).not.toMatch(/twitter-adapter|x-adapter\.ts/i);
+    expect(desk).toMatch(/No X adapter/);
     expect(client).toMatch(/Twitter\/X is schema leftover/);
     expect(readRepo("lib/adapters/social/index.ts")).toMatch(
       /return refusedTwitterAdapter/

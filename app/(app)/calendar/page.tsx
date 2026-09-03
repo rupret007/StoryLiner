@@ -5,8 +5,10 @@ import { BandChip } from "@/components/storyliner/band-chip";
 import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { EmptyState } from "@/components/storyliner/empty-state";
 import { Calendar as CalendarIcon } from "lucide-react";
+import Link from "next/link";
 import { formatDateTime, formatDate } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
+import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
 import {
   upcomingScheduleBadge,
   writeStartedQueueWarning,
@@ -103,7 +105,11 @@ export default async function CalendarPage() {
                       adapterWriteStarted: writeStarted,
                     });
                     return (
-                      <div key={`post-${post.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
+                      <Link
+                        key={`post-${post.id}`}
+                        href={reviewQueueFocusHref(post.draft.id)}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border hover:border-primary/40 transition-colors"
+                      >
                         <PlatformIcon platform={post.draft.platform} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-foreground line-clamp-1">{post.draft.caption}</p>
@@ -122,7 +128,7 @@ export default async function CalendarPage() {
                         <Badge variant={badge.variant} className="text-xs shrink-0">
                           {badge.label}
                         </Badge>
-                      </div>
+                      </Link>
                     );
                   }
                   if (item.type === "event") {
