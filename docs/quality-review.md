@@ -43,6 +43,20 @@ next yes. Nothing auto-publishes.
 
 ---
 
+## Post-#30 product: review desk, not leftover ring
+
+**Evidence:** leftover #30 sent Jeff to `/review-queue?focus=`, then
+only ringed a card in a two-column pile. Caption, CTA, campaign, voice,
+and media were cramped or hidden. The six-step path lived in the README.
+
+**Fix:** `?focus=` opens a review desk. The path
+Generate → Guard → Review → Approve → Schedule → Publish is on the
+queue and the desk. Jeff can read the snapshot, see guard + voice +
+show context, walk the same-status pile, and decide. Publish is never
+a desk button. Nothing auto-publishes.
+
+---
+
 ## P0
 
 ### 1. Real Facebook publish could fire against disconnected seed/demo accounts

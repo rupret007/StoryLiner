@@ -91,13 +91,14 @@ User (Content Studio)
     → prisma.draft.create(status: IN_REVIEW)
     → prisma.draftVersion.create(version: 1)
   → Studio shows the guarded snapshot (caption, media, flags)
-  → Next action is /review-queue?focus=draftId — not approve, not publish
+  → Next action is /review-queue?focus=draftId — the review desk, not approve, not publish
 ```
 
 ## Data Flow: Review → Publish
 
 ```
-Review Queue (IN_REVIEW drafts)
+Review Queue (`/review-queue?focus=` is the review desk)
+  → pipeline: Generate → Guard → Review → Approve → Schedule → Publish
   → approve / hold / deny / edit / rewrite / archive / duplicate
 
 Media attach / replace / clear (IN_REVIEW, HELD, or APPROVED only):
@@ -160,6 +161,10 @@ Deny / edit / rewrite / media, then compare-and-sets the same timestamp.
 A stale browser card cannot approve or overwrite newer creative the reviewer
 has not seen. A race during the server action loses safely and nothing is
 scheduled or published.
+
+The review queue opens a desk at `/review-queue?focus=` so Jeff can read
+the caption, media, guard, and voice before that yes. Publish is never a
+desk action.
 
 ## Guardrail Architecture
 

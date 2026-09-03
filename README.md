@@ -148,6 +148,8 @@ Generate → Guard → Review → Approve → Schedule → Publish
 
 Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes. Approve / Hold / Deny never publish.
 
+The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, campaign/voice facts, and the next yes. The leftover card ring is not the review surface.
+
 All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. None of those actions publish.
 
 | Action | Description |
@@ -307,6 +309,7 @@ Jest is required in CI. Suites include:
 | `tests/workflow/caption-review-fence.test.ts` | Caption edit returns to review and refuses unseen creative |
 | `tests/workflow/rewrite-review-fence.test.ts` | Rewrite returns to review and refuses a stale card |
 | `tests/services/generate-guard-review.test.ts` | Generate → Guard → Review next-action handoff |
+| `tests/services/review-desk.test.ts` | Review desk pipeline, facts, neighbors, no publish |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
 | `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |
 

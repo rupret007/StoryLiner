@@ -25,6 +25,7 @@ import {
   generateSuccessHandoff,
   reviewQueueFocusHref,
 } from "@/lib/services/publish/review-snapshot";
+import { PROMO_PIPELINE_PATH } from "@/lib/services/publish/review-desk";
 import { generateContentAction } from "./actions";
 
 type BandWithProfile = Band & {
@@ -432,10 +433,9 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
             <CardTitle className="text-sm">How this works</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>1. Pick your band. Each one has a completely separate voice profile.</p>
-            <p>2. Set the campaign type, platform, and tone. Live platforms are Facebook, Instagram, and YouTube only.</p>
-            <p>3. Add context if you have it — venue, date, extra notes, public media URL.</p>
-            <p>4. Generate. Guard runs, then you review the exact caption and media before any yes.</p>
+            <p className="text-foreground font-medium">{PROMO_PIPELINE_PATH}</p>
+            <p>Generate a draft for one band and one live platform: Facebook, Instagram, or YouTube.</p>
+            <p>Guard always runs. The next yes is Review — the exact caption and media, not a toast.</p>
             <p className="text-foreground font-medium">Nothing auto-publishes.</p>
           </CardContent>
         </Card>

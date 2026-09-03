@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ import {
   AlertTriangle,
   ClipboardList,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   CalendarClock,
   Loader2,
@@ -73,8 +76,18 @@ import {
   reviewCardNextAction,
   reviewGuardBanner,
   reviewSnapshotReceipt,
+  reviewQueueFocusHref,
   reviewQueueTabForFocus,
 } from "@/lib/services/publish/review-snapshot";
+import {
+  previewablePromoMediaUrl,
+  reviewDeskFactRows,
+  reviewDeskNeighbors,
+  reviewDeskPlatformNote,
+  reviewDeskQueueHref,
+  reviewDeskSamePileIds,
+} from "@/lib/services/publish/review-desk";
+import { PromoPipeline } from "@/components/storyliner/promo-pipeline";
 import {
   approveDraft,
   denyDraft,
@@ -91,6 +104,7 @@ import type {
   Band,
   BandVoiceProfile,
   Campaign,
+  CampaignType,
   Draft,
   DraftVersion,
   PlatformAccount,
@@ -103,6 +117,10 @@ type DraftWithRelations = Draft & {
   };
   versions: DraftVersion[];
   campaign: Campaign | null;
+  generationRun: {
+    campaignType: CampaignType;
+    inputContext: unknown;
+  } | null;
 };
 
 const REWRITE_DIRECTIVES = [
@@ -348,6 +366,7 @@ function DraftCard({
   onCopied,
   onReturnedToReview,
   focused = false,
+  variant = "queue",
 }: {
   draft: DraftWithRelations;
   onAction: () => void;
@@ -356,6 +375,7 @@ function DraftCard({
   onCopied?: () => void;
   onReturnedToReview?: () => void;
   focused?: boolean;
+  variant?: "queue" | "desk";
 }) {
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -564,6 +584,10 @@ function DraftCard({
     riskLevel: draft.riskLevel,
     riskFlags: draft.riskFlags,
   });
+  const deskFacts = reviewDeskFactRows(draft);
+  const mediaPreview = previewablePromoMediaUrl(draft.mediaUrls[0]);
+  const platformNote = reviewDeskPlatformNote(draft.platform);
+  const isDesk = variant === "desk";
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -684,15 +708,31 @@ function DraftCard({
             </div>
           ) : (
             <div>
-              <p className="text-sm text-foreground whitespace-pre-wrap">
-                {draft.caption}
-              </p>
+              {isDesk ? (
+                <p className="text-base text-foreground whitespace-pre-wrap leading-relaxed">
+                  {draft.caption}
+                </p>
+              ) : (
+                <Link
+                  href={reviewQueueFocusHref(draft.id)}
+                  className="text-sm text-foreground whitespace-pre-wrap hover:text-primary transition-colors block"
+                >
+                  {draft.caption}
+                </Link>
+              )}
               {draft.hashtags.length > 0 && (
                 <p className="text-xs text-primary mt-1">
                   {draft.hashtags.join(" ")}
                 </p>
               )}
-              {draft.mediaUrls.length > 0 ? (
+              {mediaPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={mediaPreview}
+                  alt={draft.altText || `${draft.band.name} promo media`}
+                  className="mt-3 max-h-72 w-full rounded-md border border-border object-cover"
+                />
+              ) : draft.mediaUrls.length > 0 ? (
                 <p className="text-xs text-muted-foreground mt-1 break-all">
                   Media: {draft.mediaUrls[0]}
                 </p>
@@ -707,7 +747,33 @@ function DraftCard({
                   Check the platform before scheduling again.
                 </p>
               )}
+              {!isDesk && (
+                <Link
+                  href={reviewQueueFocusHref(draft.id)}
+                  className="mt-2 inline-flex text-xs text-primary hover:underline"
+                >
+                  Open review desk
+                </Link>
+              )}
             </div>
+          )}
+
+          {isDesk && deskFacts.length > 0 && (
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-md border border-border bg-muted/20 p-3">
+              {deskFacts.map((fact) => (
+                <div key={fact.label} className="space-y-0.5">
+                  <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {fact.label}
+                  </dt>
+                  <dd className="text-xs text-foreground whitespace-pre-wrap">
+                    {fact.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {isDesk && platformNote && (
+            <p className="text-xs text-amber-200">{platformNote}</p>
           )}
 
           {/* Brand fit */}
@@ -1106,8 +1172,77 @@ export function ReviewQueueClient({ drafts, focusDraftId }: ReviewQueueClientPro
     refresh();
   }
 
+  const pileIds = focusedDraft
+    ? reviewDeskSamePileIds(drafts, focusedDraft.id)
+    : [];
+  const neighbors = focusedDraft
+    ? reviewDeskNeighbors(pileIds, focusedDraft.id)
+    : null;
+
+  if (focusedDraft) {
+    return (
+      <div className="space-y-4">
+        <PromoPipeline status={focusedDraft.status} />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={reviewDeskQueueHref()}>Back to queue</Link>
+            </Button>
+            {neighbors && neighbors.total > 1 && (
+              <>
+                {neighbors.previousId ? (
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={reviewQueueFocusHref(neighbors.previousId)}>
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      Previous
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" disabled>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Previous
+                  </Button>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {neighbors.position} of {neighbors.total} in this pile
+                </span>
+                {neighbors.nextId ? (
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={reviewQueueFocusHref(neighbors.nextId)}>
+                      Next
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" disabled>
+                    Next
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Review this snapshot. Approve / Hold / Deny never publish.
+          </p>
+        </div>
+        <DraftCard
+          draft={focusedDraft}
+          variant="desk"
+          focused
+          onAction={refresh}
+          onApproved={() => handleApproved(focusedDraft.id)}
+          onHeld={() => handleHeld(focusedDraft.id)}
+          onCopied={handleCopied}
+          onReturnedToReview={handleReturnedToReview}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      <PromoPipeline status="IN_REVIEW" />
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <Badge variant="warning">{inReview.length} need review</Badge>
