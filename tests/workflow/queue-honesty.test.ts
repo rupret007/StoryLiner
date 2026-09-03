@@ -132,10 +132,9 @@ describe("queue honesty after a possible live write", () => {
 
     await approveDraft(
       "draft_1",
-      reviewSnapshotReceipt({
-        ...approvedDraft(`${POSSIBLE_LIVE_WRITE_MARKER} check Instagram first`),
-        status: "HELD",
-      }),
+      reviewSnapshotReceipt(
+        approvedDraft(`${POSSIBLE_LIVE_WRITE_MARKER} check Instagram first`)
+      ),
       "Looks good after the hold."
     );
 

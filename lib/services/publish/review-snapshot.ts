@@ -1,3 +1,5 @@
+import type { ContentStatus } from "@prisma/client";
+
 /**
  * Generate → Guard → Review snapshot identity.
  *
@@ -116,7 +118,7 @@ export function assertReviewSnapshotMatches(
 
 export function reviewSnapshotWhere(
   draftId: string,
-  status: string,
+  status: ContentStatus,
   updatedAt: Date
 ) {
   return {
