@@ -44,6 +44,7 @@ import {
   updateDraftCaption,
 } from "@/app/(app)/review-queue/actions";
 import { POSSIBLE_LIVE_WRITE_MARKER } from "@/lib/services/publish/safety";
+import { reviewSnapshotReceipt } from "@/lib/services/publish/review-snapshot";
 
 const DRAFT_UPDATED_AT = new Date("2026-09-03T08:00:00.000Z");
 
@@ -52,8 +53,13 @@ function approvedDraft(reviewNotes: string | null) {
     id: "draft_1",
     status: "APPROVED",
     riskLevel: "LOW",
+    riskFlags: [] as string[],
     reviewNotes,
     updatedAt: DRAFT_UPDATED_AT,
+    caption: "Thursday at The Hive.",
+    hashtags: ["#stalemate"],
+    mediaUrls: [] as string[],
+    currentVersion: 1,
   };
 }
 
@@ -99,16 +105,22 @@ describe("queue honesty after a possible live write", () => {
       approvedDraft(`${POSSIBLE_LIVE_WRITE_MARKER} check Facebook first`)
     );
 
-    await holdDraft("draft_1");
+    await holdDraft("draft_1", reviewSnapshotReceipt(approvedDraft(
+      `${POSSIBLE_LIVE_WRITE_MARKER} check Facebook first`
+    )));
 
-    expect(prismaMock.draft.update).toHaveBeenCalledWith({
-      where: { id: "draft_1" },
+    expect(prismaMock.draft.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "draft_1",
+        status: "APPROVED",
+        updatedAt: DRAFT_UPDATED_AT,
+      },
       data: {
         status: "HELD",
         reviewNotes: expect.stringContaining(POSSIBLE_LIVE_WRITE_MARKER),
       },
     });
-    const notes = prismaMock.draft.update.mock.calls[0][0].data.reviewNotes as string;
+    const notes = prismaMock.draft.updateMany.mock.calls[0][0].data.reviewNotes as string;
     expect(notes).toMatch(/Held from review queue/);
   });
 
@@ -120,7 +132,9 @@ describe("queue honesty after a possible live write", () => {
 
     await approveDraft(
       "draft_1",
-      DRAFT_UPDATED_AT.toISOString(),
+      reviewSnapshotReceipt(
+        approvedDraft(`${POSSIBLE_LIVE_WRITE_MARKER} check Instagram first`)
+      ),
       "Looks good after the hold."
     );
 
@@ -269,37 +283,57 @@ describe("queue honesty after a possible live write", () => {
   });
 
   it("Edit of an approved draft returns it to review and keeps POSSIBLE_LIVE_WRITE", async () => {
-    prismaMock.draft.findUniqueOrThrow.mockResolvedValue({
-      id: "draft_1",
-      status: "APPROVED",
-      bandId: "band_1",
-      currentVersion: 1,
-      hashtags: [],
-      ctaText: null,
-      reviewNotes: `${POSSIBLE_LIVE_WRITE_MARKER} check Facebook first`,
-      caption: "old caption",
-      band: { name: "Stalemate", voiceProfile: { emojiTolerance: 2 } },
-    });
     prismaMock.band.findMany.mockResolvedValue([]);
     prismaMock.draftVersion.create.mockResolvedValue({ id: "ver_2" });
-    prismaMock.draft.update.mockResolvedValue({ id: "draft_1", status: "IN_REVIEW" });
+    prismaMock.draft.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.draft.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "draft_1",
+        status: "APPROVED",
+        bandId: "band_1",
+        currentVersion: 1,
+        hashtags: [],
+        mediaUrls: [],
+        riskLevel: "LOW",
+        riskFlags: [],
+        ctaText: null,
+        reviewNotes: `${POSSIBLE_LIVE_WRITE_MARKER} check Facebook first`,
+        caption: "old caption",
+        updatedAt: DRAFT_UPDATED_AT,
+        band: { name: "Stalemate", voiceProfile: { emojiTolerance: 2 } },
+      })
+      .mockResolvedValueOnce({ id: "draft_1", status: "IN_REVIEW" });
 
-    await updateDraftCaption("draft_1", "Thursday at The Hive.");
+    await updateDraftCaption(
+      "draft_1",
+      "Thursday at The Hive.",
+      reviewSnapshotReceipt({
+        caption: "old caption",
+        hashtags: [],
+        mediaUrls: [],
+        riskLevel: "LOW",
+        riskFlags: [],
+        currentVersion: 1,
+        updatedAt: DRAFT_UPDATED_AT,
+      })
+    );
 
-    expect(prismaMock.draft.update).toHaveBeenCalledWith({
-      where: { id: "draft_1" },
+    expect(prismaMock.draft.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "draft_1",
+        status: "APPROVED",
+        updatedAt: DRAFT_UPDATED_AT,
+      },
       data: expect.objectContaining({
         status: "IN_REVIEW",
         caption: "Thursday at The Hive.",
+        reviewedAt: null,
       }),
     });
-    expect(prismaMock.draft.update.mock.calls[0][0].data.status).not.toBe(
-      "APPROVED"
-    );
-    expect(prismaMock.draft.update.mock.calls[0][0].data.status).not.toBe(
-      "PUBLISHED"
-    );
-    expect(prismaMock.draft.update.mock.calls[0][0].data.reviewNotes).toBeUndefined();
+    const editData = prismaMock.draft.updateMany.mock.calls.at(-1)?.[0].data;
+    expect(editData.status).not.toBe("APPROVED");
+    expect(editData.status).not.toBe("PUBLISHED");
+    expect(editData.reviewNotes).toBeUndefined();
   });
 
   it("refuses Copy of a PUBLISHED draft", async () => {

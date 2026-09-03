@@ -19,18 +19,25 @@ jest.mock("@/lib/prisma", () => ({
   prisma: prismaMock,
 }));
 
-import { approveDraft } from "@/app/(app)/review-queue/actions";
+import { approveDraft, denyDraft, holdDraft } from "@/app/(app)/review-queue/actions";
+import { reviewSnapshotReceipt } from "@/lib/services/publish/review-snapshot";
 
 const DRAFT_ID = "clhf5gt0000000test0draftid1";
 const REVIEWED_AT = new Date("2026-09-03T08:00:00.000Z");
 
-function currentDraft(updatedAt = REVIEWED_AT) {
+function currentDraft(overrides: Record<string, unknown> = {}) {
   return {
     id: DRAFT_ID,
     status: "IN_REVIEW",
     riskLevel: "LOW",
     reviewNotes: null,
-    updatedAt,
+    caption: "Thursday at The Hive.",
+    hashtags: ["#stalemate"],
+    mediaUrls: [] as string[],
+    riskFlags: [] as string[],
+    currentVersion: 1,
+    updatedAt: REVIEWED_AT,
+    ...overrides,
   };
 }
 
@@ -41,8 +48,8 @@ describe("approval snapshot fence", () => {
     prismaMock.draft.updateMany.mockResolvedValue({ count: 1 });
   });
 
-  it("requires a valid timestamp from the review card", async () => {
-    await expect(approveDraft(DRAFT_ID, "not-a-timestamp")).rejects.toThrow(
+  it("requires a creative fingerprint from the review card, not a leftover timestamp", async () => {
+    await expect(approveDraft(DRAFT_ID, "not-a-timestamp" as never)).rejects.toThrow(
       /needs the current review card/i
     );
 
@@ -52,11 +59,23 @@ describe("approval snapshot fence", () => {
 
   it("refuses an old card after caption, media, risk, notes, or status changed", async () => {
     prismaMock.draft.findUniqueOrThrow.mockResolvedValue(
-      currentDraft(new Date("2026-09-03T08:01:00.000Z"))
+      currentDraft({ updatedAt: new Date("2026-09-03T08:01:00.000Z") })
     );
 
     await expect(
-      approveDraft(DRAFT_ID, REVIEWED_AT.toISOString())
+      approveDraft(DRAFT_ID, reviewSnapshotReceipt(currentDraft()))
+    ).rejects.toThrow(/changed since this review card loaded/i);
+
+    expect(prismaMock.draft.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the card fingerprint is not the current caption or media", async () => {
+    prismaMock.draft.findUniqueOrThrow.mockResolvedValue(
+      currentDraft({ caption: "Unseen rewrite Jeff has not looked at." })
+    );
+
+    await expect(
+      approveDraft(DRAFT_ID, reviewSnapshotReceipt(currentDraft()))
     ).rejects.toThrow(/changed since this review card loaded/i);
 
     expect(prismaMock.draft.updateMany).not.toHaveBeenCalled();
@@ -66,7 +85,7 @@ describe("approval snapshot fence", () => {
     prismaMock.draft.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
-      approveDraft(DRAFT_ID, REVIEWED_AT.toISOString())
+      approveDraft(DRAFT_ID, reviewSnapshotReceipt(currentDraft()))
     ).rejects.toThrow(/changed while approval was being saved/i);
 
     expect(prismaMock.draft.updateMany).toHaveBeenCalledWith({
@@ -81,7 +100,11 @@ describe("approval snapshot fence", () => {
 
   it("approves only the exact still-current review snapshot", async () => {
     await expect(
-      approveDraft(DRAFT_ID, REVIEWED_AT.toISOString(), "Reviewed together.")
+      approveDraft(
+        DRAFT_ID,
+        reviewSnapshotReceipt(currentDraft()),
+        "Reviewed together."
+      )
     ).resolves.toBeUndefined();
 
     expect(prismaMock.draft.updateMany).toHaveBeenCalledWith({
@@ -96,5 +119,20 @@ describe("approval snapshot fence", () => {
         reviewNotes: "Reviewed together.",
       },
     });
+  });
+
+  it("Hold and Deny also refuse a stale or unseen snapshot", async () => {
+    prismaMock.draft.findUniqueOrThrow.mockResolvedValue(
+      currentDraft({ caption: "Unseen rewrite." })
+    );
+
+    await expect(
+      holdDraft(DRAFT_ID, reviewSnapshotReceipt(currentDraft()))
+    ).rejects.toThrow(/changed since this card loaded/i);
+    await expect(
+      denyDraft(DRAFT_ID, reviewSnapshotReceipt(currentDraft()))
+    ).rejects.toThrow(/changed since this card loaded/i);
+
+    expect(prismaMock.draft.updateMany).not.toHaveBeenCalled();
   });
 });

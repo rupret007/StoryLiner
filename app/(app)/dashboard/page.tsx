@@ -24,6 +24,7 @@ import {
   isFailedWriteStartedSchedule,
   isQueuedUpcomingSchedule,
 } from "@/lib/services/publish/safety";
+import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -167,7 +168,7 @@ export default async function DashboardPage() {
               reviewQueue.map((draft) => (
                 <Link
                   key={draft.id}
-                  href="/review-queue"
+                  href={reviewQueueFocusHref(draft.id)}
                   className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors group"
                 >
                   <PlatformIcon platform={draft.platform} />

@@ -86,11 +86,12 @@ User (Content Studio)
   → generateContentSchema.parse() (Zod validation)
   → generateContent() (service layer)
     → LLMAdapter.generateContent() (mock or real)
-    → checkHardGuardrails() (always runs)
+    → evaluateGuardrails() (always runs; isAutoPublish is explicitly false)
     → prisma.generationRun.create()
     → prisma.draft.create(status: IN_REVIEW)
     → prisma.draftVersion.create(version: 1)
-  → Draft sent to /review-queue
+  → Studio shows the guarded snapshot (caption, media, flags)
+  → Next action is /review-queue?focus=draftId — not approve, not publish
 ```
 
 ## Data Flow: Review → Publish
@@ -105,10 +106,15 @@ Media attach / replace / clear (IN_REVIEW, HELD, or APPROVED only):
   → clear reviewedAt; preserve review notes and POSSIBLE_LIVE_WRITE
   → if status changed concurrently, write nothing and require a refresh
 
-Approve:
-  → require the current review card's updatedAt receipt
-  → compare-and-set the same status + updatedAt to APPROVED
+Approve / Hold / Deny:
+  → require the current review card's updatedAt + caption/media/guard fingerprint
+  → compare-and-set the same status + updatedAt
   → stale card or mid-request creative change refuses and refreshes
+
+Caption edit / rewrite / media:
+  → require the same snapshot receipt
+  → compare-and-set; return to IN_REVIEW; clear reviewedAt
+  → a concurrent Schedule wins or loses atomically; unseen creative is not approved
 
 Schedule (approved drafts only):
   → validateDraftForPlatform() (character limits, risk check)
@@ -147,12 +153,13 @@ interface SocialAdapterCapabilities {
 
 The publisher checks `getDegradationWarning()` before executing. In **real** mode, Twitter/X, TikTok, Bluesky, and Twitch are refused before any adapter write. Mock mode may still simulate those platforms for the demo queue. Draft-only or failed adapter results never mark a post `PUBLISHED`.
 
-Approval is also an exact-snapshot decision. The review card sends the
-`Draft.updatedAt` value it displayed; the server verifies it before approval
-and uses the same value in a compare-and-set write. Because `updatedAt` changes
-for caption, media, risk, notes, and status updates, a stale browser card cannot
-approve newer creative the reviewer has not seen. A race during the server
-action loses safely and nothing is scheduled or published.
+Approval is an exact-snapshot decision. The review card sends the
+`Draft.updatedAt` value it displayed plus a fingerprint of caption, media,
+hashtags, risk, and version. The server verifies both before Approve / Hold /
+Deny / edit / rewrite / media, then compare-and-sets the same timestamp.
+A stale browser card cannot approve or overwrite newer creative the reviewer
+has not seen. A race during the server action loses safely and nothing is
+scheduled or published.
 
 ## Guardrail Architecture
 

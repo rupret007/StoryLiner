@@ -747,8 +747,8 @@ export function captionMutationSuccessToast(options: {
   }
 
   return options.kind === "edit"
-    ? "Caption updated."
-    : "Rewrite applied. Review the updated caption.";
+    ? "Caption updated. Review this new snapshot before approving. This does not publish."
+    : "Rewrite applied. Review the updated caption before approving. This does not publish.";
 }
 
 /**
