@@ -1,8 +1,10 @@
 import { reviewDraftSchema } from "@/lib/schemas/content";
 import {
   assertCanApproveDraft,
+  assertCanArchiveDraft,
   assertCanDenyDraft,
   assertCanDuplicateDraft,
+  assertCanGenerateForPlatform,
   assertCanHoldDraft,
   assertCanMutateDraftCaption,
 } from "@/lib/services/publish/safety";
@@ -52,5 +54,20 @@ describe("Approve / Hold / Deny never imply publish", () => {
     expect(assertCanDuplicateDraft({ status: "APPROVED" }).ok).toBe(true);
     expect(assertCanDuplicateDraft({ status: "SCHEDULED" }).ok).toBe(false);
     expect(assertCanDuplicateDraft({ status: "PUBLISHED" }).ok).toBe(false);
+  });
+
+  it("cannot archive a scheduled or published draft", () => {
+    expect(assertCanArchiveDraft({ status: "APPROVED" }).ok).toBe(true);
+    expect(assertCanArchiveDraft({ status: "SCHEDULED" }).ok).toBe(false);
+    expect(assertCanArchiveDraft({ status: "PUBLISHED" }).ok).toBe(false);
+  });
+
+  it("cannot generate leftover-platform drafts", () => {
+    expect(assertCanGenerateForPlatform("FACEBOOK").ok).toBe(true);
+    expect(assertCanGenerateForPlatform("INSTAGRAM").ok).toBe(true);
+    expect(assertCanGenerateForPlatform("YOUTUBE").ok).toBe(true);
+    expect(assertCanGenerateForPlatform("TWITTER").ok).toBe(false);
+    expect(assertCanGenerateForPlatform("TIKTOK").ok).toBe(false);
+    expect(assertCanGenerateForPlatform("TWITTER").reason).toMatch(/No real X adapter/i);
   });
 });

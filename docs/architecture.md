@@ -163,8 +163,9 @@ has not seen. A race during the server action loses safely and nothing is
 scheduled or published.
 
 The review queue opens a desk at `/review-queue?focus=` so Jeff can read
-the caption, media, guard, and voice before that yes. Publish is never a
-desk action.
+the caption, media, guard, and voice before that yes. After Approve,
+Schedule is bound to that same snapshot. After Schedule the desk stays
+open on the job — Publish is the worker, never a desk button.
 
 ## Guardrail Architecture
 

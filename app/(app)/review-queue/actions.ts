@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { validateDraftForPlatform } from "@/lib/services/publish/validate";
 import {
   assertCanApproveDraft,
+  assertCanArchiveDraft,
   assertCanDenyDraft,
   assertCanDuplicateDraft,
   assertCanHoldDraft,
@@ -31,6 +32,7 @@ import type { AttachDraftMediaInput, RewriteDraftInput, ScheduleDraftInput } fro
 import {
   APPROVE_SNAPSHOT_RACE,
   REVIEW_SNAPSHOT_RACE,
+  SCHEDULE_SNAPSHOT_RACE,
   assertReviewSnapshotMatches,
   parseReviewSnapshotReceipt,
   reviewSnapshotWhere,
@@ -143,30 +145,47 @@ export async function holdDraft(
   revalidatePath("/review-queue");
 }
 
-export async function resumeHeldDraft(draftId: string) {
+export async function resumeHeldDraft(
+  draftId: string,
+  reviewedSnapshot: ReviewSnapshotReceipt
+) {
+  const receipt = parseReviewSnapshotReceipt(reviewedSnapshot);
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  assertReviewSnapshotMatches(draft, receipt);
   const resumable = assertCanResumeHeldDraft({ status: draft.status });
   if (!resumable.ok) {
     throw new Error(resumable.reason);
   }
 
-  await prisma.draft.update({
-    where: { id: draftId },
+  const resumed = await prisma.draft.updateMany({
+    where: reviewSnapshotWhere(draftId, draft.status, receipt.updatedAt),
     data: { status: "IN_REVIEW" },
   });
+  if (resumed.count === 0) {
+    throw new Error(REVIEW_SNAPSHOT_RACE);
+  }
   revalidatePath("/review-queue");
 }
 
-export async function archiveDraft(draftId: string) {
+export async function archiveDraft(
+  draftId: string,
+  reviewedSnapshot: ReviewSnapshotReceipt
+) {
+  const receipt = parseReviewSnapshotReceipt(reviewedSnapshot);
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
-  if (draft.status === "SCHEDULED" || draft.status === "PUBLISHED") {
-    throw new Error(`Draft cannot be archived from status ${draft.status}.`);
+  assertReviewSnapshotMatches(draft, receipt);
+  const archivable = assertCanArchiveDraft({ status: draft.status });
+  if (!archivable.ok) {
+    throw new Error(archivable.reason);
   }
 
-  await prisma.draft.update({
-    where: { id: draftId },
+  const archived = await prisma.draft.updateMany({
+    where: reviewSnapshotWhere(draftId, draft.status, receipt.updatedAt),
     data: { status: "ARCHIVED" },
   });
+  if (archived.count === 0) {
+    throw new Error(REVIEW_SNAPSHOT_RACE);
+  }
   revalidatePath("/review-queue");
 }
 
@@ -230,6 +249,7 @@ export async function rewriteDraftAction(rawInput: RewriteDraftInput) {
 export async function scheduleApprovedDraft(rawInput: ScheduleDraftInput) {
   // Validate input shape + future-time rule
   const input = scheduleDraftSchema.parse(rawInput);
+  const receipt = parseReviewSnapshotReceipt(input.reviewedSnapshot, "schedule");
 
   const scheduledFor = new Date(input.scheduledFor);
   if (scheduledFor <= new Date()) {
@@ -241,6 +261,7 @@ export async function scheduleApprovedDraft(rawInput: ScheduleDraftInput) {
     where: { id: input.draftId },
     include: { band: true },
   });
+  assertReviewSnapshotMatches(draft, receipt, "schedule");
 
   if (draft.status !== "APPROVED") {
     throw new Error("Draft must be approved before scheduling.");
@@ -328,16 +349,17 @@ export async function scheduleApprovedDraft(rawInput: ScheduleDraftInput) {
       data: { payload: { scheduledPostId: post.id } },
     });
 
-    // Claim APPROVED → SCHEDULED so a concurrent schedule cannot win twice.
+    // Claim the approved snapshot Jeff scheduled — a stale card or a
+    // mid-request rewrite cannot queue unseen creative. This does not publish.
     const moved = await tx.draft.updateMany({
-      where: { id: draft.id, status: "APPROVED" },
+      where: reviewSnapshotWhere(draft.id, "APPROVED", receipt.updatedAt),
       data: {
         status: "SCHEDULED",
         reviewNotes: stripPossibleLiveWriteNote(draft.reviewNotes),
       },
     });
     if (moved.count === 0) {
-      throw new Error("Draft is no longer approved. Nothing was published.");
+      throw new Error(SCHEDULE_SNAPSHOT_RACE);
     }
 
     return post;

@@ -38,6 +38,7 @@ export default async function DashboardPage() {
     scheduled,
     recentPublished,
     livestreams,
+    approvedReady,
     approvedWaiting,
     heldWaiting,
   ] =
@@ -64,6 +65,12 @@ export default async function DashboardPage() {
         include: { band: true },
         orderBy: { scheduledFor: "asc" },
         take: 3,
+      }),
+      prisma.draft.findMany({
+        where: { status: "APPROVED" },
+        include: { band: true },
+        orderBy: { createdAt: "desc" },
+        take: 5,
       }),
       prisma.draft.findMany({
         where: { status: "APPROVED" },
@@ -212,7 +219,11 @@ export default async function DashboardPage() {
               </p>
             ) : (
               upcomingScheduled.map((post) => (
-                <div key={post.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                <Link
+                  key={post.id}
+                  href={reviewQueueFocusHref(post.draft.id)}
+                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-accent transition-colors"
+                >
                   <PlatformIcon platform={post.draft.platform} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-foreground line-clamp-1">
@@ -225,8 +236,35 @@ export default async function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))
+            )}
+            {approvedReady.length > 0 && (
+              <div className="pt-2 border-t border-border space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Approved — schedule is the next yes
+                </p>
+                {approvedReady.map((draft) => (
+                  <Link
+                    key={draft.id}
+                    href={reviewQueueFocusHref(draft.id)}
+                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
+                  >
+                    <PlatformIcon platform={draft.platform} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-foreground line-clamp-1">
+                        {draft.caption}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <BandChip name={draft.band.name} color={draft.band.coverColor} />
+                        <span className="text-[10px] text-muted-foreground">
+                          {formatRelative(draft.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

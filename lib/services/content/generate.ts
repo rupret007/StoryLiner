@@ -3,11 +3,16 @@
 import { prisma } from "@/lib/prisma";
 import { getLlmAdapter } from "@/lib/services/llm";
 import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
-import { sanitizeMediaUrls } from "@/lib/services/publish/safety";
+import { assertCanGenerateForPlatform, sanitizeMediaUrls } from "@/lib/services/publish/safety";
 import type { GenerateContentInput } from "@/lib/schemas/content";
 import type { Draft } from "@prisma/client";
 
 export async function generateContent(input: GenerateContentInput): Promise<Draft> {
+  const generatable = assertCanGenerateForPlatform(input.platform);
+  if (!generatable.ok) {
+    throw new Error(generatable.reason);
+  }
+
   const band = await prisma.band.findUniqueOrThrow({
     where: { id: input.bandId },
     include: { voiceProfile: true },

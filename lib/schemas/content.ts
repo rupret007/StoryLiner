@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Generate only creates live-destination drafts. Schema leftovers stay leftover. */
+export const LIVE_GENERATE_PLATFORMS = ["FACEBOOK", "INSTAGRAM", "YOUTUBE"] as const;
+
 export const generateContentSchema = z.object({
   bandId: z.string().cuid(),
   campaignType: z.enum([
@@ -10,7 +13,7 @@ export const generateContentSchema = z.object({
     "LIVESTREAM_REMINDER", "GOING_LIVE_NOW", "POST_STREAM_THANK_YOU",
     "POST_STREAM_RECAP", "CLIP_PROMOTION",
   ]),
-  platform: z.enum(["FACEBOOK", "INSTAGRAM", "BLUESKY", "TIKTOK", "YOUTUBE", "TWITCH", "TWITTER"]),
+  platform: z.enum(LIVE_GENERATE_PLATFORMS),
   contentLength: z.enum(["SHORT", "MEDIUM", "LONG"]).default("MEDIUM"),
   toneVariant: z.enum([
     "AUTHENTIC", "ENERGETIC", "NOSTALGIC", "FUNNY", "RAW",
@@ -70,6 +73,7 @@ export const scheduleDraftSchema = z.object({
   draftId: z.string().cuid(),
   platformAccountId: z.string().cuid(),
   scheduledFor: z.string().datetime(),
+  reviewedSnapshot: reviewSnapshotReceiptSchema,
   confirmCheckedNoLivePost: z.boolean().optional(),
 });
 

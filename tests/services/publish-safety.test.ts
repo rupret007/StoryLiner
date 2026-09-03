@@ -787,6 +787,9 @@ describe("Review → Approve → Schedule leftover copy", () => {
     expect(writeStarted).toMatch(/Check the platform/i);
 
     expect(approveSuccessToast({ possibleLiveWrite: false })).toMatch(
+      /Schedule is the next yes on this desk/i
+    );
+    expect(approveSuccessToast({ possibleLiveWrite: false })).not.toMatch(
       /schedule it from the Approved tab/i
     );
   });

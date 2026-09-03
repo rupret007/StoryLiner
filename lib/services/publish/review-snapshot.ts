@@ -36,6 +36,33 @@ export const APPROVE_SNAPSHOT_RACE =
   "This draft changed while approval was being saved. Refresh and review the current caption and media, " +
   "then approve again. Nothing was scheduled or published.";
 
+export const SCHEDULE_SNAPSHOT_INVALID =
+  "Schedule needs the current approved snapshot. Refresh and look at the caption and media again. " +
+  "Nothing was scheduled or published.";
+
+export const SCHEDULE_SNAPSHOT_STALE =
+  "This draft changed since this card loaded. Refresh and review the current caption and media, " +
+  "then schedule again. Nothing was scheduled or published.";
+
+export const SCHEDULE_SNAPSHOT_RACE =
+  "This draft changed while scheduling was being saved. Refresh and review the current caption and media. " +
+  "Nothing was scheduled or published.";
+
+export type ReviewSnapshotKind = "approve" | "review" | "schedule";
+
+function snapshotMessages(kind: ReviewSnapshotKind): {
+  invalid: string;
+  stale: string;
+} {
+  if (kind === "approve") {
+    return { invalid: APPROVE_SNAPSHOT_INVALID, stale: APPROVE_SNAPSHOT_STALE };
+  }
+  if (kind === "schedule") {
+    return { invalid: SCHEDULE_SNAPSHOT_INVALID, stale: SCHEDULE_SNAPSHOT_STALE };
+  }
+  return { invalid: REVIEW_SNAPSHOT_INVALID, stale: REVIEW_SNAPSHOT_STALE };
+}
+
 export type ReviewCreativeIdentity = {
   caption: string;
   hashtags: readonly string[];
@@ -78,10 +105,9 @@ export function reviewSnapshotReceipt(
 
 export function parseReviewSnapshotReceipt(
   receipt: ReviewSnapshotReceipt | string | null | undefined,
-  kind: "approve" | "review" = "review"
+  kind: ReviewSnapshotKind = "review"
 ): { updatedAt: Date; fingerprint: string } {
-  const invalid =
-    kind === "approve" ? APPROVE_SNAPSHOT_INVALID : REVIEW_SNAPSHOT_INVALID;
+  const { invalid } = snapshotMessages(kind);
 
   if (!receipt || typeof receipt === "string") {
     throw new Error(invalid);
@@ -102,10 +128,9 @@ export function parseReviewSnapshotReceipt(
 export function assertReviewSnapshotMatches(
   draft: ReviewCreativeIdentity & { updatedAt: Date },
   receipt: { updatedAt: Date; fingerprint: string },
-  kind: "approve" | "review" = "review"
+  kind: ReviewSnapshotKind = "review"
 ): void {
-  const stale =
-    kind === "approve" ? APPROVE_SNAPSHOT_STALE : REVIEW_SNAPSHOT_STALE;
+  const { stale } = snapshotMessages(kind);
 
   if (draft.updatedAt.getTime() !== receipt.updatedAt.getTime()) {
     throw new Error(stale);
@@ -174,6 +199,10 @@ export function reviewCardNextAction(options: { status: string }): string {
       return "Next: Schedule is a separate yes. Approve already happened and did not publish.";
     case "REJECTED":
       return "Denied. Copy it for another pass. This did not publish.";
+    case "SCHEDULED":
+      return "Next: the worker publishes when this job is due. This desk has no Publish button.";
+    case "PUBLISHED":
+      return "The worker already published this. This desk never publishes.";
     default:
       return "Review this snapshot. Approve / Hold / Deny never publish.";
   }

@@ -55,4 +55,22 @@ describe("Draft.mediaUrls leftovers", () => {
     });
     expect(missingReceipt.success).toBe(false);
   });
+
+  it("refuses leftover-platform generate so Twitter/X cannot enter the path", () => {
+    for (const platform of ["TWITTER", "TIKTOK", "BLUESKY", "TWITCH"] as const) {
+      const leftover = generateContentSchema.safeParse({
+        bandId: "clhf5gt0000000test0bandid01",
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform,
+      });
+      expect(leftover.success).toBe(false);
+    }
+
+    const live = generateContentSchema.safeParse({
+      bandId: "clhf5gt0000000test0bandid01",
+      campaignType: "SHOW_ANNOUNCEMENT",
+      platform: "FACEBOOK",
+    });
+    expect(live.success).toBe(true);
+  });
 });

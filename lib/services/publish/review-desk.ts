@@ -34,6 +34,135 @@ export const PROMO_PIPELINE_PATH = PROMO_PIPELINE_STEPS.map(
 export const REVIEW_DESK_NO_PUBLISH =
   "This desk is review only. Approve, Hold, and Deny never publish. Schedule is a later yes.";
 
+export const REVIEW_DESK_MISSING_FOCUS =
+  "This snapshot is not on the desk. It may be archived, or the link is stale. Nothing was published.";
+
+export const REVIEW_DESK_QUEUE_STATUSES = [
+  "IN_REVIEW",
+  "HELD",
+  "APPROVED",
+  "REJECTED",
+] as const;
+
+export const REVIEW_DESK_FOCUS_STATUSES = [
+  ...REVIEW_DESK_QUEUE_STATUSES,
+  "SCHEDULED",
+  "PUBLISHED",
+] as const;
+
+const FOCUS_CUID = /^c[a-z0-9]{20,32}$/i;
+
+/** Refuse junk ?focus= values before they hit Prisma or the desk. */
+export function parseReviewDeskFocusId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const id = raw.trim();
+  if (!FOCUS_CUID.test(id)) return null;
+  return id;
+}
+
+export function reviewDeskAskedForFocus(raw: unknown): boolean {
+  return typeof raw === "string" && raw.trim().length > 0;
+}
+
+export function reviewDeskFocusMissing(options: {
+  askedForFocus: boolean;
+  focusedDraftId?: string | null;
+}): boolean {
+  return options.askedForFocus && !options.focusedDraftId;
+}
+
+export function reviewDeskCanDecide(status: string | null | undefined): boolean {
+  return status === "IN_REVIEW" || status === "HELD" || status === "APPROVED";
+}
+
+export function reviewDeskCanMutateCreative(
+  status: string | null | undefined
+): boolean {
+  return status === "IN_REVIEW" || status === "HELD" || status === "APPROVED";
+}
+
+export function reviewDeskCanCopy(status: string | null | undefined): boolean {
+  return status !== "SCHEDULED" && status !== "PUBLISHED";
+}
+
+export function reviewDeskCanArchive(status: string | null | undefined): boolean {
+  return status !== "SCHEDULED" && status !== "PUBLISHED";
+}
+
+export function reviewDeskChromeNote(status: string | null | undefined): string {
+  switch (status) {
+    case "APPROVED":
+      return "Schedule is the next yes. It does not publish.";
+    case "SCHEDULED":
+      return "Publish is the worker when this job is due. This desk has no Publish button.";
+    case "PUBLISHED":
+      return "The worker already published this. This desk never publishes.";
+    case "REJECTED":
+      return "Denied. Copy it for another pass. This did not publish.";
+    default:
+      return "Review this snapshot. Approve / Hold / Deny never publish.";
+  }
+}
+
+export function reviewDeskScheduleHref(): string {
+  return "/scheduled-posts";
+}
+
+export type OperatorPolicyRow = {
+  label: string;
+  value: string;
+  locked: true;
+};
+
+/** Settings is an operator readout, not a toggle that can enable auto-publish. */
+export function operatorPathPolicy(options: {
+  llmAdapter: string;
+  socialAdapter: string;
+}): OperatorPolicyRow[] {
+  const llm = options.llmAdapter.trim() || "mock";
+  const social = options.socialAdapter.trim() || "mock";
+
+  return [
+    { label: "Path", value: PROMO_PIPELINE_PATH, locked: true },
+    {
+      label: "Approve / Hold / Deny",
+      value: "Review only. These never publish.",
+      locked: true,
+    },
+    {
+      label: "Schedule",
+      value: "A later yes, bound to the approved snapshot. Queues a worker job.",
+      locked: true,
+    },
+    {
+      label: "Publish",
+      value: "Worker only, after a due job. Never a desk button. Never auto-publish.",
+      locked: true,
+    },
+    {
+      label: "Live destinations",
+      value: "Facebook, Instagram, and YouTube only. No X adapter.",
+      locked: true,
+    },
+    {
+      label: "Real writes",
+      value:
+        social === "real"
+          ? "Real mode. Connected + active Facebook / Instagram / YouTube accounts only."
+          : "Mock mode. Seed accounts stay disconnected. Nothing reaches a live page.",
+      locked: true,
+    },
+    {
+      label: "LLM",
+      value:
+        llm === "openai"
+          ? "OpenAI — drafts still land in review."
+          : "Mock — offline drafts only.",
+      locked: true,
+    },
+  ];
+}
+
 export type PromoPipelineState = "done" | "current" | "upcoming" | "off";
 
 export type PromoPipelineStepView = {
@@ -173,6 +302,11 @@ export function reviewDeskFactRows(draft: {
   confidenceNotes?: string | null;
   campaign?: { name: string; type: string } | null;
   generationRun?: { campaignType: string; inputContext: unknown } | null;
+  scheduledPost?: {
+    scheduledFor?: Date | string | null;
+    platformAccount?: { handle?: string | null; isConnected?: boolean } | null;
+    job?: { status?: string | null } | null;
+  } | null;
   band?: {
     voiceProfile?: {
       toneRules?: readonly string[] | null;
@@ -208,6 +342,35 @@ export function reviewDeskFactRows(draft: {
   }
   if (draft.confidenceNotes?.trim()) {
     rows.push({ label: "Why this draft", value: draft.confidenceNotes.trim() });
+  }
+
+  const scheduledFor = draft.scheduledPost?.scheduledFor;
+  if (scheduledFor) {
+    const when =
+      typeof scheduledFor === "string" ? new Date(scheduledFor) : scheduledFor;
+    if (!Number.isNaN(when.getTime())) {
+      rows.push({
+        label: "Scheduled for",
+        value: when.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      });
+    }
+  }
+  const handle = draft.scheduledPost?.platformAccount?.handle?.trim();
+  if (handle) {
+    const mock = draft.scheduledPost?.platformAccount?.isConnected
+      ? ""
+      : " (mock)";
+    rows.push({ label: "Account", value: `@${handle}${mock}` });
+  }
+  const jobStatus = draft.scheduledPost?.job?.status?.trim();
+  if (jobStatus) {
+    rows.push({ label: "Worker job", value: jobStatus });
   }
 
   const voiceRules = (draft.band?.voiceProfile?.toneRules ?? [])

@@ -83,6 +83,18 @@ describe("generate → guard → review handoff", () => {
     expect(reviewCardNextAction({ status: "REJECTED" })).toMatch(
       /did not publish/i
     );
+    expect(reviewCardNextAction({ status: "SCHEDULED" })).toMatch(
+      /worker publishes/i
+    );
+    expect(reviewCardNextAction({ status: "SCHEDULED" })).toMatch(
+      /no Publish button/i
+    );
+    expect(reviewCardNextAction({ status: "PUBLISHED" })).toMatch(
+      /already published/i
+    );
+    expect(reviewCardNextAction({ status: "PUBLISHED" })).not.toMatch(
+      /click Publish/i
+    );
   });
 
   it("opens the focused snapshot instead of a leftover empty tab", () => {
