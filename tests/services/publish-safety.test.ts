@@ -845,14 +845,21 @@ describe("Review → Approve → Schedule leftover copy", () => {
         fromStatus: "IN_REVIEW",
         possibleLiveWrite: false,
       })
-    ).toBe("Caption updated.");
+    ).toMatch(/Review this new snapshot before approving/i);
+    expect(
+      captionMutationSuccessToast({
+        kind: "edit",
+        fromStatus: "IN_REVIEW",
+        possibleLiveWrite: false,
+      })
+    ).toMatch(/does not publish/i);
     expect(
       captionMutationSuccessToast({
         kind: "rewrite",
         fromStatus: "IN_REVIEW",
         possibleLiveWrite: false,
       })
-    ).toMatch(/Review the updated caption/i);
+    ).toMatch(/Review the updated caption before approving/i);
   });
 
   it("Edit / Rewrite of a held draft says it moved back to Needs Review", () => {

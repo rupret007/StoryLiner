@@ -29,9 +29,15 @@ export const generateContentSchema = z.object({
   mediaUrls: z.array(z.string().max(2000)).max(5).optional(),
 });
 
+export const reviewSnapshotReceiptSchema = z.object({
+  updatedAt: z.string().min(1).max(64),
+  fingerprint: z.string().min(1).max(20000),
+});
+
 export const attachDraftMediaSchema = z.object({
   draftId: z.string().cuid(),
   mediaUrls: z.array(z.string().max(2000)).max(5),
+  reviewedSnapshot: reviewSnapshotReceiptSchema,
 });
 
 export const rewriteDraftSchema = z.object({
@@ -50,6 +56,7 @@ export const rewriteDraftSchema = z.object({
     "addCTA",
   ]),
   additionalInstructions: z.string().max(200).optional(),
+  reviewedSnapshot: reviewSnapshotReceiptSchema,
 });
 
 export const reviewDraftSchema = z.object({

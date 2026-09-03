@@ -21,6 +21,10 @@ import { BandChip } from "@/components/storyliner/band-chip";
 import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { Loader2, Sparkles, ArrowRight } from "lucide-react";
 import type { Band, BandVoiceProfile, PlatformAccount } from "@prisma/client";
+import {
+  generateSuccessHandoff,
+  reviewQueueFocusHref,
+} from "@/lib/services/publish/review-snapshot";
 import { generateContentAction } from "./actions";
 
 type BandWithProfile = Band & {
@@ -70,6 +74,57 @@ interface ContentStudioClientProps {
   selectedBandId?: string;
 }
 
+function GeneratedSnapshotCard({
+  snapshot,
+}: {
+  snapshot: {
+    id: string;
+    caption: string;
+    hashtags: string[];
+    mediaUrls: string[];
+    riskLevel: string;
+    riskFlags: string[];
+  };
+}) {
+  const handoff = generateSuccessHandoff({
+    riskLevel: snapshot.riskLevel,
+    riskFlagCount: snapshot.riskFlags.length,
+  });
+
+  return (
+    <Card className="border-emerald-600/40 bg-emerald-950/20">
+      <CardContent className="p-4 space-y-3">
+        <p className="text-sm font-medium text-emerald-400">
+          Guarded snapshot is ready.
+        </p>
+        <p className="text-xs text-foreground whitespace-pre-wrap line-clamp-6">
+          {snapshot.caption}
+        </p>
+        {snapshot.hashtags.length > 0 && (
+          <p className="text-xs text-primary">{snapshot.hashtags.join(" ")}</p>
+        )}
+        {snapshot.mediaUrls.length > 0 && (
+          <p className="text-xs text-muted-foreground break-all">
+            Media: {snapshot.mediaUrls[0]}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">{handoff.guardSummary}</p>
+        {snapshot.riskFlags.map((flag) => (
+          <p key={flag} className="text-xs text-amber-300">
+            {flag}
+          </p>
+        ))}
+        <p className="text-xs text-muted-foreground">{handoff.nextAction}</p>
+        <Button size="sm" className="w-full" asChild>
+          <a href={reviewQueueFocusHref(snapshot.id)}>
+            Review this snapshot <ArrowRight className="h-3 w-3" />
+          </a>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -90,7 +145,14 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
   const [additionalContext, setAdditionalContext] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
 
-  const [generatedDraftId, setGeneratedDraftId] = useState<string | null>(null);
+  const [generatedSnapshot, setGeneratedSnapshot] = useState<{
+    id: string;
+    caption: string;
+    hashtags: string[];
+    mediaUrls: string[];
+    riskLevel: string;
+    riskFlags: string[];
+  } | null>(null);
 
   function handleBandChange(bandId: string) {
     const band = bands.find((b) => b.id === bandId);
@@ -123,11 +185,23 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
           },
         });
 
-        setGeneratedDraftId(result.id);
-        toast.success("Draft created and sent to review queue.", {
+        const snapshot = {
+          id: result.id,
+          caption: result.caption,
+          hashtags: result.hashtags,
+          mediaUrls: result.mediaUrls,
+          riskLevel: result.riskLevel,
+          riskFlags: result.riskFlags,
+        };
+        setGeneratedSnapshot(snapshot);
+        const handoff = generateSuccessHandoff({
+          riskLevel: snapshot.riskLevel,
+          riskFlagCount: snapshot.riskFlags.length,
+        });
+        toast.success(handoff.toast, {
           action: {
             label: "Review now",
-            onClick: () => router.push("/review-queue"),
+            onClick: () => router.push(reviewQueueFocusHref(snapshot.id)),
           },
         });
       } catch (err) {
@@ -361,7 +435,7 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
             <p>1. Pick your band. Each one has a completely separate voice profile.</p>
             <p>2. Set the campaign type, platform, and tone. Live platforms are Facebook, Instagram, and YouTube only.</p>
             <p>3. Add context if you have it — venue, date, extra notes, public media URL.</p>
-            <p>4. Generate. The draft goes to the review queue before anything is published.</p>
+            <p>4. Generate. Guard runs, then you review the exact caption and media before any yes.</p>
             <p className="text-foreground font-medium">Nothing auto-publishes.</p>
           </CardContent>
         </Card>
@@ -395,20 +469,8 @@ export function ContentStudioClient({ bands, selectedBandId }: ContentStudioClie
           </Card>
         )}
 
-        {generatedDraftId && (
-          <Card className="border-emerald-600/40 bg-emerald-950/20">
-            <CardContent className="p-4 space-y-3">
-              <p className="text-sm font-medium text-emerald-400">Draft created.</p>
-              <p className="text-xs text-muted-foreground">
-                Sent to the review queue. Nothing is published until you approve and schedule it.
-              </p>
-              <Button size="sm" className="w-full" asChild>
-                <a href="/review-queue">
-                  Go to Review Queue <ArrowRight className="h-3 w-3" />
-                </a>
-              </Button>
-            </CardContent>
-          </Card>
+        {generatedSnapshot && (
+          <GeneratedSnapshotCard snapshot={generatedSnapshot} />
         )}
       </div>
     </div>

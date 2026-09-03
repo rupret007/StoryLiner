@@ -136,9 +136,9 @@ App runs at [http://localhost:3000](http://localhost:3000)
 Generate → Guard → Review → Approve → Schedule → Publish
 ```
 
-1. **Generate** — Content Studio calls `lib/services/content/generate.ts` → LLM adapter → draft created with `IN_REVIEW` status
-2. **Guard** — Hard guardrails run on every generated caption (`lib/services/guardrails/policy.ts`)
-3. **Review** — All drafts land in `/review-queue` — approve, hold, deny, edit, rewrite, or archive
+1. **Generate** — Content Studio calls `lib/services/content/generate.ts` → LLM adapter → draft created with `IN_REVIEW` status. The studio shows that exact caption, media, and guard result.
+2. **Guard** — Hard guardrails run on every generated caption (`lib/services/guardrails/policy.ts`). A clean pass is still shown — it is not a skip.
+3. **Review** — All drafts land in `/review-queue` as the snapshot Jeff just saw — approve, hold, deny, edit, rewrite, or archive. A stale card cannot decide on newer creative.
 4. **Rewrite** — Apply directives (`funnier`, `morePunk`, `noHashtags`, etc.) via `lib/services/content/rewrite.ts` — creates new version, recomputes risk, back to review
 5. **Approve** — Sets status to `APPROVED`, draft moves to the Approved tab for scheduling
 6. **Schedule** — Select a platform account and future datetime; creates `ScheduledPost` + `Job` in a single transaction
@@ -152,7 +152,7 @@ All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, an
 
 | Action | Description |
 |---|---|
-| Approve | Marks the exact caption/media snapshot shown on the review card as APPROVED, ready to schedule. A stale card refreshes for a new decision. Does **not** publish. |
+| Approve | Marks the exact caption/media/guard snapshot shown on the review card as APPROVED, ready to schedule. A stale card or unseen rewrite refreshes for a new decision. Does **not** publish. |
 | Hold | Parks the draft (`HELD`). Does **not** schedule or publish. |
 | Deny | Requires confirmation; marks as REJECTED. Does **not** publish. |
 | Schedule | Opens account + datetime picker (approved drafts only). After a write that may already be live, requires a platform check. |
@@ -162,7 +162,7 @@ All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, an
 | Archive | Requires confirmation; removes from active queue |
 
 Scheduling validation enforces:
-- Approval is bound to the review card's `updatedAt` value; any intervening caption, media, risk, notes, or status change requires a fresh review
+- Approval, Hold, Deny, edit, rewrite, and media saves are bound to the review card's `updatedAt` plus caption/media/guard fingerprint; any intervening creative change requires a fresh review
 - Account must belong to the same band
 - Account platform must match the draft platform
 - Account must be active
@@ -303,6 +303,10 @@ Jest is required in CI. Suites include:
 | `tests/jobs/worker-policy.test.ts` | Unimplemented jobs and stale RUNNING fail closed |
 | `tests/services/youtube-url.test.ts` | YouTube watch/shorts/embed/live ids — no bare ids |
 | `tests/workflow/review-decisions.test.ts` | Approve / Hold / Deny status gates |
+| `tests/workflow/approval-snapshot-fence.test.ts` | Approve / Hold / Deny bind to caption/media/guard snapshot |
+| `tests/workflow/caption-review-fence.test.ts` | Caption edit returns to review and refuses unseen creative |
+| `tests/workflow/rewrite-review-fence.test.ts` | Rewrite returns to review and refuses a stale card |
+| `tests/services/generate-guard-review.test.ts` | Generate → Guard → Review next-action handoff |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
 | `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |
 

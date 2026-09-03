@@ -25,6 +25,24 @@ queue after a refused approval. Neither path schedules or publishes.
 
 ---
 
+## Post-#29 leftover: Generate → Guard → Review snapshot identity
+
+**Evidence:** Approve was clock-bound only. Content Studio stored the new
+draft id and hid the caption. Guard results were invisible on a clean pass.
+Caption edit and rewrite updated by id, kept `reviewedAt`, and did not
+compare-and-set. Hold / Deny / media could still act on a stale card. A
+reviewer could therefore decide on unseen creative, and the next action
+after Generate was a toast instead of the snapshot.
+
+**Fix:** Review decisions and creative mutations now carry the card's
+caption / media / guard fingerprint plus `updatedAt`. A mismatch refuses
+and refreshes. Edit / rewrite clear `reviewedAt` and return to
+`IN_REVIEW` through compare-and-set. Studio shows the guarded snapshot
+and sends Jeff to `/review-queue?focus=`. Every review card names the
+next yes. Nothing auto-publishes.
+
+---
+
 ## P0
 
 ### 1. Real Facebook publish could fire against disconnected seed/demo accounts

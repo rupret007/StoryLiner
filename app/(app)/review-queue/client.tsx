@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -70,6 +70,12 @@ import {
   shouldOpenNeedsReviewTabAfterReturn,
 } from "@/lib/services/publish/safety";
 import {
+  reviewCardNextAction,
+  reviewGuardBanner,
+  reviewSnapshotReceipt,
+  reviewQueueTabForFocus,
+} from "@/lib/services/publish/review-snapshot";
+import {
   approveDraft,
   denyDraft,
   holdDraft,
@@ -115,8 +121,8 @@ function defaultScheduleLocalValue() {
   return formatDatetimeLocalValue(d);
 }
 
-function reviewSnapshotTimestamp(value: Date | string): string {
-  return (typeof value === "string" ? new Date(value) : value).toISOString();
+function cardReceipt(draft: DraftWithRelations) {
+  return reviewSnapshotReceipt(draft);
 }
 
 function ScheduleDialog({
@@ -341,6 +347,7 @@ function DraftCard({
   onHeld,
   onCopied,
   onReturnedToReview,
+  focused = false,
 }: {
   draft: DraftWithRelations;
   onAction: () => void;
@@ -348,6 +355,7 @@ function DraftCard({
   onHeld?: () => void;
   onCopied?: () => void;
   onReturnedToReview?: () => void;
+  focused?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -371,7 +379,7 @@ function DraftCard({
       try {
         await approveDraft(
           draft.id,
-          reviewSnapshotTimestamp(draft.updatedAt),
+          cardReceipt(draft),
           undefined,
           confirmHighRiskApprove
         );
@@ -394,7 +402,7 @@ function DraftCard({
     setConfirmHold(false);
     startTransition(async () => {
       try {
-        await holdDraft(draft.id);
+        await holdDraft(draft.id, cardReceipt(draft));
         toast.success(holdSuccessToast({ possibleLiveWrite }));
         if (onHeld) {
           onHeld();
@@ -403,6 +411,7 @@ function DraftCard({
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Hold failed.");
+        onAction();
       }
     });
   }
@@ -411,11 +420,12 @@ function DraftCard({
     setConfirmDeny(false);
     startTransition(async () => {
       try {
-        await denyDraft(draft.id, "Denied from review queue");
+        await denyDraft(draft.id, cardReceipt(draft), "Denied from review queue");
         toast.success(denySuccessToast({ possibleLiveWrite }));
         onAction();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Deny failed.");
+        onAction();
       }
     });
   }
@@ -479,34 +489,45 @@ function DraftCard({
 
   function handleRewrite(directive: string) {
     startTransition(async () => {
-      await rewriteDraftAction({
-        draftId: draft.id,
-        directive:
-          directive as Parameters<typeof rewriteDraftAction>[0]["directive"],
-      });
-      toast.success(
-        captionMutationSuccessToast({
-          kind: "rewrite",
-          fromStatus: captionMutationSourceStatus,
-          possibleLiveWrite,
-        })
-      );
-      finishReturnedToReview();
+      try {
+        await rewriteDraftAction({
+          draftId: draft.id,
+          directive:
+            directive as Parameters<typeof rewriteDraftAction>[0]["directive"],
+          reviewedSnapshot: cardReceipt(draft),
+        });
+        toast.success(
+          captionMutationSuccessToast({
+            kind: "rewrite",
+            fromStatus: captionMutationSourceStatus,
+            possibleLiveWrite,
+          })
+        );
+        finishReturnedToReview();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Rewrite failed.");
+        onAction();
+      }
     });
   }
 
   function handleSaveEdit() {
     startTransition(async () => {
-      await updateDraftCaption(draft.id, editedCaption);
-      setEditingCaption(false);
-      toast.success(
-        captionMutationSuccessToast({
-          kind: "edit",
-          fromStatus: captionMutationSourceStatus,
-          possibleLiveWrite,
-        })
-      );
-      finishReturnedToReview();
+      try {
+        await updateDraftCaption(draft.id, editedCaption, cardReceipt(draft));
+        setEditingCaption(false);
+        toast.success(
+          captionMutationSuccessToast({
+            kind: "edit",
+            fromStatus: captionMutationSourceStatus,
+            possibleLiveWrite,
+          })
+        );
+        finishReturnedToReview();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Caption save failed.");
+        onAction();
+      }
     });
   }
 
@@ -516,6 +537,7 @@ function DraftCard({
         await attachDraftMedia({
           draftId: draft.id,
           mediaUrls: mediaUrlInput.trim() ? [mediaUrlInput.trim()] : [],
+          reviewedSnapshot: cardReceipt(draft),
         });
         toast.success(
           mediaMutationSuccessToast({
@@ -527,6 +549,7 @@ function DraftCard({
         finishReturnedToReview();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not save media URL.");
+        onAction();
       }
     });
   }
@@ -537,6 +560,17 @@ function DraftCard({
       : draft.riskLevel === "MEDIUM"
       ? "text-amber-400"
       : "text-emerald-400";
+  const guardBanner = reviewGuardBanner({
+    riskLevel: draft.riskLevel,
+    riskFlags: draft.riskFlags,
+  });
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (focused) {
+      cardRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [focused]);
 
   return (
     <>
@@ -589,8 +623,11 @@ function DraftCard({
       />
 
       <Card
+        ref={cardRef}
         className={
-          draft.status === "APPROVED"
+          focused
+            ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
+            : draft.status === "APPROVED"
             ? "border-emerald-600/30"
             : draft.status === "HELD"
             ? "border-blue-600/30"
@@ -608,6 +645,9 @@ function DraftCard({
                 <StatusBadge status={draft.status} />
                 <Badge variant="outline" className="text-xs">
                   {draft.toneVariant}
+                </Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  v{draft.currentVersion} snapshot
                 </Badge>
                 <span className="text-xs text-muted-foreground ml-auto">
                   {formatRelative(draft.createdAt)}
@@ -683,21 +723,35 @@ function DraftCard({
             </div>
           )}
 
-          {/* Risk flags */}
-          {draft.riskFlags.length > 0 && (
-            <div className="flex items-start gap-2 p-2 rounded-md bg-amber-600/10 border border-amber-600/20">
-              <AlertTriangle
-                className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${riskColor}`}
-              />
-              <div className="space-y-0.5">
-                {draft.riskFlags.map((flag, i) => (
-                  <p key={i} className="text-xs text-amber-300">
-                    {flag}
-                  </p>
-                ))}
-              </div>
+          <div
+            className={
+              guardBanner.tone === "flag"
+                ? "flex items-start gap-2 p-2 rounded-md bg-amber-600/10 border border-amber-600/20"
+                : "flex items-start gap-2 p-2 rounded-md bg-emerald-600/10 border border-emerald-600/20"
+            }
+          >
+            <AlertTriangle
+              className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${
+                guardBanner.tone === "flag" ? riskColor : "text-emerald-400"
+              }`}
+            />
+            <div className="space-y-0.5">
+              <p
+                className={
+                  guardBanner.tone === "flag"
+                    ? "text-xs text-amber-200"
+                    : "text-xs text-emerald-200"
+                }
+              >
+                {guardBanner.title}
+              </p>
+              {guardBanner.details.map((flag, i) => (
+                <p key={i} className="text-xs text-amber-300">
+                  {flag}
+                </p>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Expandable section */}
           <button
@@ -837,8 +891,7 @@ function DraftCard({
           {/* Action buttons — Approve / Hold / Deny never publish */}
           <div className="space-y-2 pt-1 border-t border-border">
             <p className="text-[11px] text-muted-foreground">
-              Bob drafted this. Approve, Hold, and Deny are Jeff&apos;s review
-              decisions only. None of them publish.
+              {reviewCardNextAction({ status: draft.status })}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               {(draft.status === "IN_REVIEW" || draft.status === "HELD") && (
@@ -957,20 +1010,27 @@ function DraftCard({
 
 interface ReviewQueueClientProps {
   drafts: DraftWithRelations[];
+  focusDraftId?: string;
 }
 
-export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
+export function ReviewQueueClient({ drafts, focusDraftId }: ReviewQueueClientProps) {
   const router = useRouter();
   const inReview = drafts.filter((d) => d.status === "IN_REVIEW");
   const held = drafts.filter((d) => d.status === "HELD");
   const approved = drafts.filter((d) => d.status === "APPROVED");
   const denied = drafts.filter((d) => d.status === "REJECTED");
+  const focusedDraft = focusDraftId
+    ? drafts.find((d) => d.id === focusDraftId)
+    : undefined;
   const [tab, setTab] = useState<string>(() =>
-    reviewQueueInitialTab({
-      needsReviewCount: inReview.length,
-      approvedCount: approved.length,
-      heldCount: held.length,
-    })
+    reviewQueueTabForFocus(
+      focusedDraft?.status,
+      reviewQueueInitialTab({
+        needsReviewCount: inReview.length,
+        approvedCount: approved.length,
+        heldCount: held.length,
+      })
+    )
   );
   const approvedPossibleLiveWriteCount = approved.filter((d) =>
     draftHasPossibleLiveWrite(d.reviewNotes)
@@ -1092,6 +1152,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                 <DraftCard
                   key={draft.id}
                   draft={draft}
+                  focused={draft.id === focusDraftId}
                   onAction={refresh}
                   onApproved={() => handleApproved(draft.id)}
                   onCopied={handleCopied}
@@ -1114,6 +1175,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                 <DraftCard
                   key={draft.id}
                   draft={draft}
+                  focused={draft.id === focusDraftId}
                   onAction={refresh}
                   onApproved={() => handleApproved(draft.id)}
                   onCopied={handleCopied}
@@ -1143,6 +1205,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                   <DraftCard
                     key={draft.id}
                     draft={draft}
+                    focused={draft.id === focusDraftId}
                     onAction={refresh}
                     onHeld={() => handleHeld(draft.id)}
                     onCopied={handleCopied}
@@ -1167,6 +1230,7 @@ export function ReviewQueueClient({ drafts }: ReviewQueueClientProps) {
                 <DraftCard
                   key={draft.id}
                   draft={draft}
+                  focused={draft.id === focusDraftId}
                   onAction={refresh}
                   onCopied={handleCopied}
                 />

@@ -26,30 +26,26 @@ import {
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 import { rewriteDraft } from "@/lib/services/content/rewrite";
-import { attachDraftMediaSchema, scheduleDraftSchema } from "@/lib/schemas/content";
+import { attachDraftMediaSchema, rewriteDraftSchema, scheduleDraftSchema } from "@/lib/schemas/content";
 import type { AttachDraftMediaInput, RewriteDraftInput, ScheduleDraftInput } from "@/lib/schemas/content";
+import {
+  APPROVE_SNAPSHOT_RACE,
+  REVIEW_SNAPSHOT_RACE,
+  assertReviewSnapshotMatches,
+  parseReviewSnapshotReceipt,
+  reviewSnapshotWhere,
+  type ReviewSnapshotReceipt,
+} from "@/lib/services/publish/review-snapshot";
 
 export async function approveDraft(
   draftId: string,
-  reviewedUpdatedAt: string,
+  reviewedSnapshot: ReviewSnapshotReceipt,
   notes?: string,
   confirmHighRisk = false
 ) {
-  const expectedUpdatedAt = new Date(reviewedUpdatedAt);
-  if (!reviewedUpdatedAt || Number.isNaN(expectedUpdatedAt.getTime())) {
-    throw new Error(
-      "Approval needs the current review card. Refresh and review the caption and media again. " +
-        "Nothing was scheduled or published."
-    );
-  }
-
+  const receipt = parseReviewSnapshotReceipt(reviewedSnapshot, "approve");
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
-  if (draft.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
-    throw new Error(
-      "This draft changed since this review card loaded. Refresh and review the current caption and media, " +
-        "then approve again. Nothing was scheduled or published."
-    );
-  }
+  assertReviewSnapshotMatches(draft, receipt, "approve");
 
   const approvable = assertCanApproveDraft({
     status: draft.status,
@@ -60,16 +56,12 @@ export async function approveDraft(
     throw new Error(approvable.reason);
   }
 
-  // Bind Jeff's yes to the exact row the card displayed. updatedAt covers
-  // caption, media, risk, notes, and status changes that may not bump the
-  // caption version. updateMany makes the final write a compare-and-set, so a
-  // change between the read above and this mutation also loses safely.
+  // Bind Jeff's yes to the exact caption / media / guard snapshot the card
+  // displayed. updatedAt plus the creative fingerprint refuse an unseen
+  // rewrite. updateMany compare-and-sets the clock so a mid-request change
+  // also loses safely. Neither path schedules or publishes.
   const approved = await prisma.draft.updateMany({
-    where: {
-      id: draftId,
-      status: draft.status,
-      updatedAt: expectedUpdatedAt,
-    },
+    where: reviewSnapshotWhere(draftId, draft.status, receipt.updatedAt),
     data: {
       status: "APPROVED",
       reviewedAt: new Date(),
@@ -77,48 +69,66 @@ export async function approveDraft(
     },
   });
   if (approved.count === 0) {
-    throw new Error(
-      "This draft changed while approval was being saved. Refresh and review the current caption and media, " +
-        "then approve again. Nothing was scheduled or published."
-    );
+    throw new Error(APPROVE_SNAPSHOT_RACE);
   }
 
   revalidatePath("/review-queue");
   revalidatePath("/scheduled-posts");
 }
 
-export async function denyDraft(draftId: string, reason?: string) {
+export async function denyDraft(
+  draftId: string,
+  reviewedSnapshot: ReviewSnapshotReceipt,
+  reason?: string
+) {
+  const receipt = parseReviewSnapshotReceipt(reviewedSnapshot);
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  assertReviewSnapshotMatches(draft, receipt);
+
   const deniable = assertCanDenyDraft({ status: draft.status });
   if (!deniable.ok) {
     throw new Error(deniable.reason);
   }
 
-  await prisma.draft.update({
-    where: { id: draftId },
+  const denied = await prisma.draft.updateMany({
+    where: reviewSnapshotWhere(draftId, draft.status, receipt.updatedAt),
     data: {
       status: "REJECTED",
       rejectedAt: new Date(),
       rejectedReason: reason ?? "Denied from review queue",
     },
   });
+  if (denied.count === 0) {
+    throw new Error(REVIEW_SNAPSHOT_RACE);
+  }
   revalidatePath("/review-queue");
 }
 
 /** @deprecated Use denyDraft. Kept so existing callers keep working. */
-export async function rejectDraft(draftId: string, reason?: string) {
-  return denyDraft(draftId, reason);
+export async function rejectDraft(
+  draftId: string,
+  reviewedSnapshot: ReviewSnapshotReceipt,
+  reason?: string
+) {
+  return denyDraft(draftId, reviewedSnapshot, reason);
 }
 
-export async function holdDraft(draftId: string, notes?: string) {
+export async function holdDraft(
+  draftId: string,
+  reviewedSnapshot: ReviewSnapshotReceipt,
+  notes?: string
+) {
+  const receipt = parseReviewSnapshotReceipt(reviewedSnapshot);
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  assertReviewSnapshotMatches(draft, receipt);
+
   const holdable = assertCanHoldDraft({ status: draft.status });
   if (!holdable.ok) {
     throw new Error(holdable.reason);
   }
 
-  await prisma.draft.update({
-    where: { id: draftId },
+  const held = await prisma.draft.updateMany({
+    where: reviewSnapshotWhere(draftId, draft.status, receipt.updatedAt),
     data: {
       status: "HELD",
       reviewNotes: mergeReviewNotesPreservingPossibleLiveWrite(
@@ -127,6 +137,9 @@ export async function holdDraft(draftId: string, notes?: string) {
       ),
     },
   });
+  if (held.count === 0) {
+    throw new Error(REVIEW_SNAPSHOT_RACE);
+  }
   revalidatePath("/review-queue");
 }
 
@@ -207,7 +220,8 @@ export async function duplicateDraft(draftId: string) {
   return duplicate;
 }
 
-export async function rewriteDraftAction(input: RewriteDraftInput) {
+export async function rewriteDraftAction(rawInput: RewriteDraftInput) {
+  const input = rewriteDraftSchema.parse(rawInput);
   const draft = await rewriteDraft(input);
   revalidatePath("/review-queue");
   return draft;
@@ -391,9 +405,11 @@ export async function reschedulePost(
 
 export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
   const input = attachDraftMediaSchema.parse(rawInput);
+  const receipt = parseReviewSnapshotReceipt(input.reviewedSnapshot);
   const draft = await prisma.draft.findUniqueOrThrow({
     where: { id: input.draftId },
   });
+  assertReviewSnapshotMatches(draft, receipt);
 
   const mutable = assertCanMutateDraftMedia({ status: draft.status });
   if (!mutable.ok) {
@@ -407,10 +423,11 @@ export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    // Media is reviewed creative. Compare-and-set the status so a concurrent
-    // Schedule cannot be followed by a stale media write to that live path.
+    // Media is reviewed creative. Compare-and-set the card snapshot so a
+    // concurrent Schedule or rewrite cannot be followed by a stale media
+    // write onto unseen caption.
     const moved = await tx.draft.updateMany({
-      where: { id: draft.id, status: draft.status },
+      where: reviewSnapshotWhere(draft.id, draft.status, receipt.updatedAt),
       data: {
         mediaUrls,
         status: "IN_REVIEW",
@@ -502,11 +519,18 @@ export async function returnFailedScheduleToApproved(
   return returnScheduleToApproved(scheduledPostId, confirmCheckedPlatform);
 }
 
-export async function updateDraftCaption(draftId: string, caption: string) {
+export async function updateDraftCaption(
+  draftId: string,
+  caption: string,
+  reviewedSnapshot: ReviewSnapshotReceipt
+) {
+  const receipt = parseReviewSnapshotReceipt(reviewedSnapshot);
   const draft = await prisma.draft.findUniqueOrThrow({
     where: { id: draftId },
     include: { band: { include: { voiceProfile: true } } },
   });
+  assertReviewSnapshotMatches(draft, receipt);
+
   const mutable = assertCanMutateDraftCaption({ status: draft.status });
   if (!mutable.ok) {
     throw new Error(mutable.reason);
@@ -527,26 +551,34 @@ export async function updateDraftCaption(draftId: string, caption: string) {
   });
   const riskFlags = violations.map((v) => v.detail);
 
-  await prisma.draftVersion.create({
-    data: {
-      draftId,
-      version: newVersion,
-      caption,
-      hashtags: draft.hashtags,
-      ctaText: draft.ctaText ?? undefined,
-      changeNotes: "Manual edit",
-    },
-  });
+  const updated = await prisma.$transaction(async (tx) => {
+    const moved = await tx.draft.updateMany({
+      where: reviewSnapshotWhere(draftId, draft.status, receipt.updatedAt),
+      data: {
+        caption,
+        currentVersion: newVersion,
+        status: "IN_REVIEW",
+        riskFlags,
+        riskLevel: riskLevelFromFlags(riskFlags.length),
+        reviewedAt: null,
+      },
+    });
+    if (moved.count === 0) {
+      throw new Error(REVIEW_SNAPSHOT_RACE);
+    }
 
-  const updated = await prisma.draft.update({
-    where: { id: draftId },
-    data: {
-      caption,
-      currentVersion: newVersion,
-      status: "IN_REVIEW",
-      riskFlags,
-      riskLevel: riskLevelFromFlags(riskFlags.length),
-    },
+    await tx.draftVersion.create({
+      data: {
+        draftId,
+        version: newVersion,
+        caption,
+        hashtags: draft.hashtags,
+        ctaText: draft.ctaText ?? undefined,
+        changeNotes: "Manual edit",
+      },
+    });
+
+    return tx.draft.findUniqueOrThrow({ where: { id: draftId } });
   });
 
   revalidatePath("/review-queue");
