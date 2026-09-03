@@ -115,6 +115,10 @@ function defaultScheduleLocalValue() {
   return formatDatetimeLocalValue(d);
 }
 
+function reviewSnapshotTimestamp(value: Date | string): string {
+  return (typeof value === "string" ? new Date(value) : value).toISOString();
+}
+
 function ScheduleDialog({
   draft,
   open,
@@ -365,7 +369,12 @@ function DraftCard({
   function handleApprove(confirmHighRiskApprove = false) {
     startTransition(async () => {
       try {
-        await approveDraft(draft.id, undefined, confirmHighRiskApprove);
+        await approveDraft(
+          draft.id,
+          reviewSnapshotTimestamp(draft.updatedAt),
+          undefined,
+          confirmHighRiskApprove
+        );
         toast.success(approveSuccessToast({ possibleLiveWrite }));
         if (onApproved) {
           onApproved();
@@ -374,6 +383,9 @@ function DraftCard({
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Approve failed.");
+        // A stale approval is deliberately rejected. Refresh the card so Jeff
+        // sees the creative that now needs a fresh decision.
+        onAction();
       }
     });
   }

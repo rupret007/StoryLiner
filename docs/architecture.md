@@ -106,7 +106,9 @@ Media attach / replace / clear (IN_REVIEW, HELD, or APPROVED only):
   → if status changed concurrently, write nothing and require a refresh
 
 Approve:
-  → prisma.draft.update(status: APPROVED)
+  → require the current review card's updatedAt receipt
+  → compare-and-set the same status + updatedAt to APPROVED
+  → stale card or mid-request creative change refuses and refreshes
 
 Schedule (approved drafts only):
   → validateDraftForPlatform() (character limits, risk check)
@@ -144,6 +146,13 @@ interface SocialAdapterCapabilities {
 ```
 
 The publisher checks `getDegradationWarning()` before executing. In **real** mode, Twitter/X, TikTok, Bluesky, and Twitch are refused before any adapter write. Mock mode may still simulate those platforms for the demo queue. Draft-only or failed adapter results never mark a post `PUBLISHED`.
+
+Approval is also an exact-snapshot decision. The review card sends the
+`Draft.updatedAt` value it displayed; the server verifies it before approval
+and uses the same value in a compare-and-set write. Because `updatedAt` changes
+for caption, media, risk, notes, and status updates, a stale browser card cannot
+approve newer creative the reviewer has not seen. A race during the server
+action loses safely and nothing is scheduled or published.
 
 ## Guardrail Architecture
 

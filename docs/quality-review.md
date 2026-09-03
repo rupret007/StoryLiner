@@ -10,6 +10,21 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 
 ---
 
+## Post-#28 follow-up: approval snapshot identity
+
+**Evidence:** the review card sent only `draftId`, then `approveDraft` loaded
+whatever row was current and updated it by id. If caption, media, risk, notes,
+or status changed after the card rendered, an older click could approve newer
+creative Jeff had not reviewed. A change between the server read and write
+could also be overwritten.
+
+**Fix:** Approve now carries the card's `updatedAt` receipt. The server rejects
+a stale receipt before mutation, then compare-and-sets both status and the same
+timestamp so a mid-request change also loses safely. The client refreshes the
+queue after a refused approval. Neither path schedules or publishes.
+
+---
+
 ## P0
 
 ### 1. Real Facebook publish could fire against disconnected seed/demo accounts

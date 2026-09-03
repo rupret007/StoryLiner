@@ -8,6 +8,7 @@ const prismaMock = {
   draft: {
     findUniqueOrThrow: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     create: jest.fn(),
   },
   draftVersion: {
@@ -44,12 +45,15 @@ import {
 } from "@/app/(app)/review-queue/actions";
 import { POSSIBLE_LIVE_WRITE_MARKER } from "@/lib/services/publish/safety";
 
+const DRAFT_UPDATED_AT = new Date("2026-09-03T08:00:00.000Z");
+
 function approvedDraft(reviewNotes: string | null) {
   return {
     id: "draft_1",
     status: "APPROVED",
     riskLevel: "LOW",
     reviewNotes,
+    updatedAt: DRAFT_UPDATED_AT,
   };
 }
 
@@ -84,6 +88,7 @@ describe("queue honesty after a possible live write", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.draft.update.mockResolvedValue({ id: "draft_1" });
+    prismaMock.draft.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
       fn(prismaMock)
     );
@@ -113,17 +118,25 @@ describe("queue honesty after a possible live write", () => {
       status: "HELD",
     });
 
-    await approveDraft("draft_1", "Looks good after the hold.");
+    await approveDraft(
+      "draft_1",
+      DRAFT_UPDATED_AT.toISOString(),
+      "Looks good after the hold."
+    );
 
-    expect(prismaMock.draft.update).toHaveBeenCalledWith({
-      where: { id: "draft_1" },
+    expect(prismaMock.draft.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "draft_1",
+        status: "HELD",
+        updatedAt: DRAFT_UPDATED_AT,
+      },
       data: {
         status: "APPROVED",
         reviewedAt: expect.any(Date),
         reviewNotes: expect.stringContaining(POSSIBLE_LIVE_WRITE_MARKER),
       },
     });
-    const notes = prismaMock.draft.update.mock.calls[0][0].data.reviewNotes as string;
+    const notes = prismaMock.draft.updateMany.mock.calls[0][0].data.reviewNotes as string;
     expect(notes).toContain("Looks good after the hold.");
   });
 
