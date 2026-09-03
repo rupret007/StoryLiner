@@ -725,14 +725,18 @@ function DraftCard({
                   {draft.hashtags.join(" ")}
                 </p>
               )}
-              {mediaPreview ? (
+              {mediaPreview && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={mediaPreview}
                   alt={draft.altText || `${draft.band.name} promo media`}
                   className="mt-3 max-h-72 w-full rounded-md border border-border object-cover"
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                  }}
                 />
-              ) : draft.mediaUrls.length > 0 ? (
+              )}
+              {draft.mediaUrls.length > 0 ? (
                 <p className="text-xs text-muted-foreground mt-1 break-all">
                   Media: {draft.mediaUrls[0]}
                 </p>
