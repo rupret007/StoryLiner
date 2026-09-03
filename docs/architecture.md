@@ -94,6 +94,22 @@ User (Content Studio)
   → Next action is /review-queue?focus=draftId — the review desk, not approve, not publish
 ```
 
+## Dashboard Decision Guide
+
+The dashboard turns existing workflow state into one read-only **next action**.
+It does not create a second queue and its button only navigates to an existing
+screen or exact draft snapshot. Priority is deterministic and fail-closed:
+
+1. A failed adapter write or `POSSIBLE_LIVE_WRITE` receipt that needs a platform check
+2. Drafts waiting for review
+3. Approved drafts waiting for a separate schedule yes
+4. A healthy scheduled queue
+5. Band setup, then guarded content creation
+
+This keeps a normal content task from hiding a possible live-post uncertainty.
+The decision logic lives in `lib/services/dashboard-next-action.ts` and has
+branch coverage in `tests/services/dashboard-next-action.test.ts`.
+
 ## Data Flow: Review → Publish
 
 ```
@@ -188,6 +204,14 @@ Voice isolation is enforced at multiple levels:
 2. **Generation**: Band voice profile is always fetched and passed to the LLM adapter — never shared
 3. **Guardrails**: Cross-band name check in `checkBandVoiceSeparation()`
 4. **UI**: Band selector always explicit — generation never runs without confirming the band
+
+The `/bands/new` first-run path creates the Band and its initial voice profile
+in one transaction. It derives a collision-safe URL slug and requires a
+human-written voice description plus at least one trait; optional facts remain
+empty instead of being invented. Setup never connects an account, schedules a
+job, or publishes. The current app is single-operator, so setup uses the first
+operator record (or creates the initial local operator); user selection belongs
+with the post-MVP auth/roles work below.
 
 ## Analytics Heuristics
 
