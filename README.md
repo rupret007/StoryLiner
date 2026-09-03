@@ -309,6 +309,7 @@ Jest is required in CI. Suites include:
 | `tests/workflow/caption-review-fence.test.ts` | Caption edit returns to review and refuses unseen creative |
 | `tests/workflow/rewrite-review-fence.test.ts` | Rewrite returns to review and refuses a stale card |
 | `tests/services/generate-guard-review.test.ts` | Generate → Guard → Review next-action handoff |
+| `tests/services/local-deployment-boundary.test.ts` | Default Compose stays loopback-only while request-level auth is absent |
 | `tests/services/review-desk.test.ts` | Review desk pipeline, facts, neighbors, scheduled walk, no publish |
 | `tests/workflow/schedule-snapshot-fence.test.ts` | Schedule binds to the approved caption/media/guard snapshot |
 | `tests/workflow/archive-snapshot-fence.test.ts` | Archive / resume refuse a stale card |
@@ -392,6 +393,16 @@ StoryLiner ships a single `compose.yaml` that works identically with **Podman De
 
 `podman compose` and `docker compose` are interchangeable for every command below.
 
+### Local-only safety boundary
+
+The shipped Compose file binds StoryLiner to `127.0.0.1:3000`, so the operator
+UI is reachable only from the same computer. This matters because request-level
+operator auth is still post-MVP: any browser that can reach the app can invoke
+its review and scheduling actions. Loopback reduces that exposure but is not a
+login system. Do not expose this port to a LAN or the public internet, use a
+reverse proxy, or change it to `3000:3000` / `0.0.0.0` until real request-level
+auth and roles protect every mutation.
+
 ### Option A — One-command deploy (recommended)
 
 **Windows (PowerShell):**
@@ -461,7 +472,7 @@ podman compose run --rm migrate npx tsx prisma/seed.ts
 |---|---|---|
 | `db` | (internal) | Postgres 16 with persistent volume |
 | `migrate` | (none) | One-shot schema push (exits 0 after success) |
-| `app` | 3000 | Next.js app (standalone build) |
+| `app` | `127.0.0.1:3000` (host) | Next.js app (standalone build), local computer only |
 | `worker` | (none) | Background job worker — polls every 5 s |
 
 The app and worker start only after Postgres passes its health check, so you will never see "connection refused" errors on first boot.

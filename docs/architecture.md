@@ -294,6 +294,20 @@ USER: Write a {campaignType} caption in {contentLength} length for {platform}.
   Output JSON: { caption, hashtags[], ctaText, altText, imagePrompt, fanReplies[] }
 ```
 
+### Local deployment boundary
+
+The default Compose package publishes the app as
+`127.0.0.1:3000:3000`. Postgres and the worker have no host ports. This keeps
+the single-operator UI on the same computer while request-level operator auth
+is not implemented. The container still listens on `0.0.0.0` inside its private
+Compose network so its own health check and worker architecture continue to
+work; only the host-side port is loopback-bound.
+
+Loopback is not authentication. Do not expose StoryLiner through a LAN binding,
+public host port, tunnel, or reverse proxy until every mutation has an
+authenticated operator identity and role check. Provider credentials and a
+real social adapter do not satisfy that boundary.
+
 ### Auth / Roles (post-MVP)
 
 For multi-operator teams:
