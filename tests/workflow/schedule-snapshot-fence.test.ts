@@ -103,10 +103,17 @@ describe("schedule snapshot fence", () => {
   });
 
   it("refuses a leftover timestamp in place of the desk receipt", async () => {
+    expect(
+      scheduleDraftSchema.safeParse({
+        ...input(),
+        reviewedSnapshot: "2026-09-03T08:00:00.000Z",
+      }).success
+    ).toBe(false);
+
     await expect(
       scheduleApprovedDraft({
         ...input(),
-        reviewedSnapshot: "2026-09-03T08:00:00.000Z" as never,
+        reviewedSnapshot: { updatedAt: "not-a-date", fingerprint: "leftover" },
       })
     ).rejects.toThrow(/needs the current approved snapshot/i);
 

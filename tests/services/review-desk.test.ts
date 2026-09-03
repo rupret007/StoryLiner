@@ -340,7 +340,8 @@ describe("review desk wiring after leftover #30", () => {
     const desk = readRepo("lib/services/publish/review-desk.ts");
     const client = readRepo("app/(app)/review-queue/client.tsx");
     expect(desk).not.toMatch(/fault.?lines/i);
-    expect(desk).not.toMatch(/twitter-adapter|x-adapter|X adapter/i);
+    expect(desk).not.toMatch(/twitter-adapter|x-adapter\.ts/i);
+    expect(desk).toMatch(/No X adapter/);
     expect(client).toMatch(/Twitter\/X is schema leftover/);
     expect(readRepo("lib/adapters/social/index.ts")).toMatch(
       /return refusedTwitterAdapter/

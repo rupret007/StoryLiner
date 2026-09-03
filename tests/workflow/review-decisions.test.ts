@@ -68,6 +68,10 @@ describe("Approve / Hold / Deny never imply publish", () => {
     expect(assertCanGenerateForPlatform("YOUTUBE").ok).toBe(true);
     expect(assertCanGenerateForPlatform("TWITTER").ok).toBe(false);
     expect(assertCanGenerateForPlatform("TIKTOK").ok).toBe(false);
-    expect(assertCanGenerateForPlatform("TWITTER").reason).toMatch(/No real X adapter/i);
+    const twitter = assertCanGenerateForPlatform("TWITTER");
+    expect(twitter.ok).toBe(false);
+    if (!twitter.ok) {
+      expect(twitter.reason).toMatch(/No real X adapter/i);
+    }
   });
 });
