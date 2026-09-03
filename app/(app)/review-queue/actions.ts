@@ -31,10 +31,26 @@ import type { AttachDraftMediaInput, RewriteDraftInput, ScheduleDraftInput } fro
 
 export async function approveDraft(
   draftId: string,
+  reviewedUpdatedAt: string,
   notes?: string,
   confirmHighRisk = false
 ) {
+  const expectedUpdatedAt = new Date(reviewedUpdatedAt);
+  if (!reviewedUpdatedAt || Number.isNaN(expectedUpdatedAt.getTime())) {
+    throw new Error(
+      "Approval needs the current review card. Refresh and review the caption and media again. " +
+        "Nothing was scheduled or published."
+    );
+  }
+
   const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  if (draft.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+    throw new Error(
+      "This draft changed since this review card loaded. Refresh and review the current caption and media, " +
+        "then approve again. Nothing was scheduled or published."
+    );
+  }
+
   const approvable = assertCanApproveDraft({
     status: draft.status,
     riskLevel: draft.riskLevel,
@@ -44,14 +60,29 @@ export async function approveDraft(
     throw new Error(approvable.reason);
   }
 
-  await prisma.draft.update({
-    where: { id: draftId },
+  // Bind Jeff's yes to the exact row the card displayed. updatedAt covers
+  // caption, media, risk, notes, and status changes that may not bump the
+  // caption version. updateMany makes the final write a compare-and-set, so a
+  // change between the read above and this mutation also loses safely.
+  const approved = await prisma.draft.updateMany({
+    where: {
+      id: draftId,
+      status: draft.status,
+      updatedAt: expectedUpdatedAt,
+    },
     data: {
       status: "APPROVED",
       reviewedAt: new Date(),
       reviewNotes: mergeReviewNotesPreservingPossibleLiveWrite(draft.reviewNotes, notes),
     },
   });
+  if (approved.count === 0) {
+    throw new Error(
+      "This draft changed while approval was being saved. Refresh and review the current caption and media, " +
+        "then approve again. Nothing was scheduled or published."
+    );
+  }
+
   revalidatePath("/review-queue");
   revalidatePath("/scheduled-posts");
 }

@@ -152,7 +152,7 @@ All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, an
 
 | Action | Description |
 |---|---|
-| Approve | Marks draft as APPROVED, ready to schedule. Does **not** publish. |
+| Approve | Marks the exact caption/media snapshot shown on the review card as APPROVED, ready to schedule. A stale card refreshes for a new decision. Does **not** publish. |
 | Hold | Parks the draft (`HELD`). Does **not** schedule or publish. |
 | Deny | Requires confirmation; marks as REJECTED. Does **not** publish. |
 | Schedule | Opens account + datetime picker (approved drafts only). After a write that may already be live, requires a platform check. |
@@ -162,6 +162,7 @@ All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, an
 | Archive | Requires confirmation; removes from active queue |
 
 Scheduling validation enforces:
+- Approval is bound to the review card's `updatedAt` value; any intervening caption, media, risk, notes, or status change requires a fresh review
 - Account must belong to the same band
 - Account platform must match the draft platform
 - Account must be active
