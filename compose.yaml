@@ -52,8 +52,10 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # StoryLiner has no request-level operator auth yet. Keep the shipped app
+    # on this computer only; do not replace this with a wildcard/LAN binding.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - .env
     environment:
