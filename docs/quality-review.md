@@ -192,7 +192,7 @@ still the worker. Nothing auto-publishes.
 | No request-level auth on server actions | Any reachable client can approve/schedule. Default Compose is now fail-closed to `127.0.0.1`; that is exposure reduction, not auth. LAN/public hosting remains blocked until post-MVP auth/roles. |
 | Tokens/stream keys in DB plaintext | `PlatformAccount.metadata`, `LivestreamDestination.streamKey`. |
 | Worker does not forward `mediaUrls` | **Fixed on main (PR #3).** Worker sanitizes and forwards `mediaUrls`. See `prisma/README.md`. |
-| OpenAI campaign prompts hardcode Stalemate vs Rad Dad | Still hardcoded fallbacks. Trailer Swift remains absent — do not invent a voice. Prompts now forbid inventing a third band or extra history. |
+| OpenAI campaign prompts separate established Stalemate vs Rad Dad archetypes | Those established fallbacks remain intact. Fault Lines uses its canon-pending profile and neutral guidance. Trailer Swift remains absent — do not invent an additional voice or extra history. |
 | Seed demo facts vs unknown Jeff locks | **Honesty pass:** knowledge rows are prefixed and tagged `demo-unconfirmed`. Voice locks were not rewritten. See `docs/voice-facts.md`. |
 | Instagram `canDirectPublish: true` vs no-media draft-only | Capability/docs mismatch. |
 | Mock YouTube `canDirectPublish: true` vs real YouTube draft-only | Adapter drift. |

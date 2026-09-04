@@ -114,6 +114,15 @@ describe("checkBandVoiceSeparation", () => {
     );
     expect(violations.some((v) => v.rule === "band-voice-separation")).toBe(true);
   });
+
+  it("keeps Fault Lines separate from both established voices", () => {
+    const violations = checkBandVoiceSeparation(
+      "Fault Lines with a Rad Dad-style singalong tonight.",
+      "Fault Lines",
+      ["Stalemate", "Rad Dad"]
+    );
+    expect(violations.some((v) => v.rule === "band-voice-separation")).toBe(true);
+  });
 });
 
 describe("checkEmojiOveruse", () => {
@@ -165,16 +174,17 @@ describe("evaluateGuardrails", () => {
 });
 
 describe("checkInventedVoiceFacts", () => {
-  it("flags Trailer Swift leakage without inventing a third-band voice", () => {
+  it("flags Trailer Swift leakage without inventing an additional band voice", () => {
     const violations = checkInventedVoiceFacts(
       "Trailer Swift would smash this chorus at Lincoln Hall."
     );
     expect(violations.some((v) => v.rule === "no-invented-band-voice")).toBe(true);
   });
 
-  it("does not flag Stalemate or Rad Dad copy", () => {
+  it("does not flag approved band copy", () => {
     expect(checkInventedVoiceFacts("Playing Burlington Bar on Saturday.")).toHaveLength(0);
     expect(checkInventedVoiceFacts("We will play Mr. Brightside. We always do.")).toHaveLength(0);
+    expect(checkInventedVoiceFacts("Fault Lines. Confirmed details below.")).toHaveLength(0);
   });
 });
 

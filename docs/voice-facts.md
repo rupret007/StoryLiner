@@ -1,6 +1,6 @@
 # Voice facts and Jeff locks
 
-StoryLiner has two band voices: **Stalemate** and **Rad Dad**. Jeff talks to Bob (front door). StoryLiner is the promo engine. Jeff owns feel and live posts. Nothing auto-publishes. Trailer Swift is not a voice in this product.
+StoryLiner has three approved band identities: **Stalemate**, **Rad Dad**, and **Fault Lines**. Jeff talks to Bob (front door). StoryLiner is the promo engine. Jeff owns feel and live posts. Nothing auto-publishes. Trailer Swift is not a voice in this product.
 
 ## Locks (do not invent around these)
 
@@ -9,9 +9,10 @@ StoryLiner has two band voices: **Stalemate** and **Rad Dad**. Jeff talks to Bob
 | No auto-publish | Generate → Guard → Review → Approve → Schedule → Publish |
 | Live destinations | Facebook, Instagram, YouTube only |
 | No real X adapter | `TWITTER` is schema leftover; live path refuses it |
-| No Trailer Swift | Do not add a third-band voice or leak that name into copy |
+| No Trailer Swift | Do not add an unapproved band voice or leak that name into copy |
 | Stalemate tone | Dry, anti-hype, no FOMO ticket CTAs |
 | Rad Dad tone | Crowd-first cover-band energy, not corporate |
+| Fault Lines tone | Canon pending: use only confirmed profile/request facts; do not borrow either existing voice |
 
 Tone rules and banned phrases on each `BandVoiceProfile` are the operator-owned voice. Do not rewrite them to “improve” the bands.
 
@@ -27,6 +28,7 @@ and tagged `demo-unconfirmed`. That includes:
 
 - Stalemate: 2019 origin, three members, never a festival, *Nothing Stays* / February, Burlington Bar six times in 2023
 - Rad Dad: 2021 origin, Lincoln Hall / Subterranean, “always” Mr. Brightside, shorts policy
+- Fault Lines: no demo history, genre, location, lineup, handles, events, or audience facts are seeded; only the band identity and conservative review-only profile are configured
 
 These stay in the demo so the app has flavor. They are **not** canon until Jeff says so. Do not auto-post them. Do not invent more history to fill gaps.
 
@@ -34,4 +36,4 @@ These stay in the demo so the app has flavor. They are **not** canon until Jeff 
 
 1. Leave the voice locks alone.
 2. Relabel or remove only the conflicting **demo** knowledge row.
-3. Never add Trailer Swift, a real X adapter, or an auto-publish switch to “fix” it.
+3. Never add Trailer Swift or another unapproved voice, a real X adapter, or an auto-publish switch to “fix” it.

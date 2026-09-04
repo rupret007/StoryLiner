@@ -22,10 +22,25 @@ describe("demo voice-facts hygiene", () => {
     expect(seed).toMatch(/Jeff owns canon/);
   });
 
-  it("keeps Stalemate and Rad Dad as the only seeded bands", () => {
+  it("seeds the three approved bands and no Trailer Swift identity", () => {
     const seed = readFileSync(join(root, "prisma/seed.ts"), "utf8");
     expect(seed).toMatch(/slug: "stalemate"/);
     expect(seed).toMatch(/slug: "rad-dad"/);
+    expect(seed).toMatch(/slug: "fault-lines"/);
     expect(seed).not.toMatch(/slug: "trailer-swift"/);
+  });
+
+  it("keeps Fault Lines canon pending instead of inventing band facts", () => {
+    const seed = readFileSync(join(root, "prisma/seed.ts"), "utf8");
+    const start = seed.indexOf("// ─── Band: Fault Lines");
+    const end = seed.indexOf("const existingEvent", start);
+    const faultLinesSeed = seed.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(faultLinesSeed).toMatch(/name: "Fault Lines"/);
+    expect(faultLinesSeed).toMatch(/canon-pending/i);
+    expect(faultLinesSeed).not.toMatch(/\n\s+(genre|location|founded):/);
+    expect(faultLinesSeed).not.toMatch(/platformAccount\.upsert/);
   });
 });

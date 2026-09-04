@@ -154,8 +154,9 @@ export function checkAutoPublishGuard(isAutoPublish: boolean): GuardrailViolatio
 const INVENTED_VOICE_PATTERNS = [/trailer\s*swift/i];
 
 /**
- * Jeff lock: StoryLiner voices are Stalemate and Rad Dad only.
- * Do not invent Trailer Swift or any third-band voice. Flag leakage; never auto-post.
+ * Jeff lock: StoryLiner's approved identities are Stalemate, Rad Dad, and
+ * Fault Lines. Do not invent Trailer Swift or any additional band voice.
+ * Flag leakage; never auto-post.
  */
 export function checkInventedVoiceFacts(caption: string): GuardrailViolation[] {
   const violations: GuardrailViolation[] = [];
@@ -167,7 +168,7 @@ export function checkInventedVoiceFacts(caption: string): GuardrailViolation[] {
         rule: "no-invented-band-voice",
         detail:
           `Invented-band voice detected: "${match[0]}". ` +
-          "StoryLiner bands are Stalemate and Rad Dad only. Trailer Swift is not a voice here. Jeff owns canon.",
+          "StoryLiner bands are Stalemate, Rad Dad, and Fault Lines. Trailer Swift is not a voice here. Jeff owns canon.",
       });
     }
   }

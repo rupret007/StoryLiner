@@ -60,6 +60,27 @@ const mockRadDad = {
   } as BandVoiceProfile,
 } as Band & { voiceProfile: BandVoiceProfile };
 
+const mockFaultLines = {
+  ...mockStalemate,
+  id: "band_faultlines_01",
+  name: "Fault Lines",
+  slug: "fault-lines",
+  coverColor: "#0f766e",
+  voiceProfile: {
+    ...mockStalemate.voiceProfile,
+    id: "vp_faultlines_01",
+    bandId: "band_faultlines_01",
+    toneDescription: "Canon-pending and context-led; confirmed facts only",
+    personalityTraits: ["context-led", "concise", "canon-pending"],
+    toneRules: ["Use only supplied facts"],
+    bannedPhrases: ["award-winning"],
+    defaultTone: "AUTHENTIC" as const,
+    emojiTolerance: 1,
+    humorLevel: 3,
+    edgeLevel: 3,
+  } as BandVoiceProfile,
+} as Band & { voiceProfile: BandVoiceProfile };
+
 describe("MockLlmAdapter", () => {
   const adapter = new MockLlmAdapter();
 
@@ -141,6 +162,28 @@ describe("MockLlmAdapter", () => {
 
       expect(result.caption).toBeTruthy();
       expect(result.hashtags.length).toBeGreaterThan(0);
+    });
+
+    it("gives Fault Lines its neutral canon-pending pool", async () => {
+      const result = await adapter.generateContent({
+        band: mockFaultLines,
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform: "INSTAGRAM",
+        contentLength: "MEDIUM",
+        context: {
+          venue: "Confirmed Venue",
+          showDate: "Confirmed Date",
+          ticketUrl: "https://example.com/confirmed",
+        },
+      });
+
+      expect(result.caption).toContain("Fault Lines");
+      expect(result.caption).toContain("Confirmed Venue");
+      expect(result.caption).not.toMatch(/Basket Case|pop punk|tuning too slow/i);
+      expect(result.hashtags).toContain("#faultlines");
+      expect(result.hashtags).toHaveLength(3);
+      expect(result.altText).toMatch(/add a factual image description/i);
+      expect(result.imagePrompt).toMatch(/do not invent lineup/i);
     });
 
     it("generates different content for Stalemate vs Rad Dad", async () => {
@@ -228,6 +271,18 @@ describe("MockLlmAdapter", () => {
 
       expect(rewritten).toContain("If you're coming, come.");
       expect(rewritten).not.toMatch(/don't wait on this/i);
+    });
+
+    it("does not borrow Stalemate or Rad Dad copy for Fault Lines rewrites", async () => {
+      const rewritten = await adapter.rewriteContent({
+        originalCaption: "Fault Lines. Confirmed details below.",
+        directive: "morePunk",
+        band: mockFaultLines,
+        platform: "INSTAGRAM",
+      });
+
+      expect(rewritten).toBe("Fault Lines. Confirmed details below.");
+      expect(rewritten).not.toMatch(/band tee|fake smiles/i);
     });
 
     it("reduces exclamations with cleaner directive", async () => {
