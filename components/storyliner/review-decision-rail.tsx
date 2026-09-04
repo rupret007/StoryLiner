@@ -70,7 +70,7 @@ export function ReviewDecisionRail({
                 data-next-yes={decision.nextYes ? "true" : "false"}
                 className={cn(
                   "rounded-md border p-2 space-y-2",
-                  inline ? "w-full" : "min-w-[9.5rem] flex-1",
+                  inline ? "min-w-[16rem] flex-[2]" : "min-w-[9.5rem] flex-1",
                   decision.nextYes
                     ? "border-primary/50 bg-primary/5"
                     : "border-border bg-muted/10"
