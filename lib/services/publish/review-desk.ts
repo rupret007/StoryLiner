@@ -32,7 +32,7 @@ export const PROMO_PIPELINE_PATH = PROMO_PIPELINE_STEPS.map(
 ).join(" → ");
 
 export const REVIEW_DESK_NO_PUBLISH =
-  "This desk is review only. Approve, Hold, and Deny never publish. Schedule is a later yes.";
+  "Approve, Hold, Deny, and Schedule are labeled on the card. None of them publish.";
 
 export const REVIEW_DESK_MISSING_FOCUS =
   "This snapshot is not on the desk. It may be archived, or the link is stale. Nothing was published.";

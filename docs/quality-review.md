@@ -10,6 +10,22 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 
 ---
 
+## Post-#34 leftover: Approve / Hold / Deny / Schedule as a decision rail
+
+**Evidence:** leftover #32/#34 left the four verbs as a flat wrap next to
+Edit / Copy / Archive. One shared "next action" line sat above every
+button. Approve and Schedule looked like the same kind of click.
+Schedule on the approved desk was still a dialog behind another button.
+
+**Fix:** the review card now has a decision rail. Approve, Hold, Deny,
+and Schedule each have a label, a consequence, and at most one next yes.
+Edit / Copy / Archive sit in a separate "Change this draft" row. On the
+approved desk, Schedule is the form on the card — it still only queues a
+worker job. None of those verbs publish. No X adapter. Parked Fault
+Lines #27 stays untouched.
+
+---
+
 ## Post-#28 follow-up: approval snapshot identity
 
 **Evidence:** the review card sent only `draftId`, then `approveDraft` loaded
