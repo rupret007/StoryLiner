@@ -91,7 +91,8 @@ describe("promo pipeline", () => {
 
   it("says the desk does not publish", () => {
     expect(reviewDeskDoesNotPublish()).toBe(false);
-    expect(REVIEW_DESK_NO_PUBLISH).toMatch(/never publish/i);
+    expect(REVIEW_DESK_NO_PUBLISH).toMatch(/Approve, Hold, Deny, and Schedule/i);
+    expect(REVIEW_DESK_NO_PUBLISH).toMatch(/None of them publish/i);
     expect(REVIEW_DESK_NO_PUBLISH).not.toMatch(/auto-publish/i);
   });
 
@@ -309,7 +310,8 @@ describe("review desk wiring after leftover #30", () => {
     expect(client).toMatch(/focusMissing/);
     expect(client).toMatch(/REVIEW_DESK_MISSING_FOCUS/);
     expect(client).toMatch(/reviewedSnapshot: cardReceipt\(draft\)/);
-    expect(client).toMatch(/reviewDeskCanDecide/);
+    expect(client).toMatch(/reviewDecisionRail/);
+    expect(client).toMatch(/ReviewDecisionRail/);
     expect(client).toMatch(/Open scheduled jobs/);
   });
 

@@ -115,7 +115,8 @@ branch coverage in `tests/services/dashboard-next-action.test.ts`.
 ```
 Review Queue (`/review-queue?focus=` is the review desk)
   → pipeline: Generate → Guard → Review → Approve → Schedule → Publish
-  → approve / hold / deny / edit / rewrite / archive / duplicate
+  → decision rail: Approve / Hold / Deny / Schedule (one next yes, none publish)
+  → tools: edit / rewrite / archive / duplicate
 
 Media attach / replace / clear (IN_REVIEW, HELD, or APPROVED only):
   → sanitize public HTTPS URLs
@@ -123,10 +124,12 @@ Media attach / replace / clear (IN_REVIEW, HELD, or APPROVED only):
   → clear reviewedAt; preserve review notes and POSSIBLE_LIVE_WRITE
   → if status changed concurrently, write nothing and require a refresh
 
-Approve / Hold / Deny:
+Approve / Hold / Deny / Schedule (decision rail):
   → require the current review card's updatedAt + caption/media/guard fingerprint
   → compare-and-set the same status + updatedAt
   → stale card or mid-request creative change refuses and refreshes
+  → the card labels each verb and marks one next yes; Schedule on the
+    approved desk is the job form, not a publish button
 
 Caption edit / rewrite / media:
   → require the same snapshot receipt

@@ -45,7 +45,6 @@ import {
   CalendarClock,
   Loader2,
   Pause,
-  Undo2,
 } from "lucide-react";
 import { formatDatetimeLocalValue, formatRelative } from "@/lib/utils";
 import {
@@ -73,18 +72,21 @@ import {
   shouldOpenNeedsReviewTabAfterReturn,
 } from "@/lib/services/publish/safety";
 import {
-  reviewCardNextAction,
   reviewGuardBanner,
   reviewSnapshotReceipt,
   reviewQueueFocusHref,
   reviewQueueTabForFocus,
 } from "@/lib/services/publish/review-snapshot";
 import {
+  REVIEW_QUEUE_DECISION_HELP,
+  reviewCardTools,
+  reviewDecisionRail,
+  type ReviewDecisionId,
+} from "@/lib/services/publish/review-decision";
+import { ReviewDecisionRail } from "@/components/storyliner/review-decision-rail";
+import {
   REVIEW_DESK_MISSING_FOCUS,
   previewablePromoMediaUrl,
-  reviewDeskCanArchive,
-  reviewDeskCanCopy,
-  reviewDeskCanDecide,
   reviewDeskCanMutateCreative,
   reviewDeskChromeNote,
   reviewDeskFactRows,
@@ -156,15 +158,15 @@ function cardReceipt(draft: DraftWithRelations) {
   return reviewSnapshotReceipt(draft);
 }
 
-function ScheduleDialog({
+function ScheduleForm({
   draft,
-  open,
-  onClose,
+  variant,
+  onCancel,
   onScheduled,
 }: {
   draft: DraftWithRelations;
-  open: boolean;
-  onClose: () => void;
+  variant: "dialog" | "inline";
+  onCancel?: () => void;
   onScheduled: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -173,7 +175,6 @@ function ScheduleDialog({
   const [checkedNoLivePost, setCheckedNoLivePost] = useState(false);
   const possibleLiveWrite = draftHasPossibleLiveWrite(draft.reviewNotes);
 
-  // Only accounts matching draft platform
   const compatibleAccounts = draft.band.platformAccounts.filter(
     (a) => a.platform === draft.platform && a.isActive
   );
@@ -202,7 +203,7 @@ function ScheduleDialog({
           confirmCheckedNoLivePost: possibleLiveWrite ? checkedNoLivePost : undefined,
         });
         toast.success(scheduleSuccessToast({ possibleLiveWrite }));
-        onClose();
+        onCancel?.();
         onScheduled();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Scheduling failed.");
@@ -210,120 +211,146 @@ function ScheduleDialog({
     });
   }
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Schedule — separate yes from Bob&apos;s draft</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
+  const form = (
+    <div className={variant === "dialog" ? "space-y-4 py-2" : "space-y-3"}>
+      {variant === "dialog" && (
+        <>
           <div className="flex items-center gap-2 mb-2">
             <PlatformIcon platform={draft.platform} size="md" showLabel />
             <BandChip name={draft.band.name} color={draft.band.coverColor} />
           </div>
-
           <p className="text-sm text-muted-foreground line-clamp-3">{draft.caption}</p>
+        </>
+      )}
 
-          <div className="space-y-2">
-            <Label>Platform Account</Label>
-            {compatibleAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No active {draft.platform} account for {draft.band.name}. Add one in Integrations.
-              </p>
-            ) : (
-              <Select value={platformAccountId} onValueChange={setPlatformAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {compatibleAccounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      @{a.handle}
-                      {!a.isConnected && " (mock)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+      <div className="space-y-2">
+        <Label>Platform Account</Label>
+        {compatibleAccounts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No active {draft.platform} account for {draft.band.name}. Add one in Integrations.
+          </p>
+        ) : (
+          <Select value={platformAccountId} onValueChange={setPlatformAccountId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select account" />
+            </SelectTrigger>
+            <SelectContent>
+              {compatibleAccounts.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  @{a.handle}
+                  {!a.isConnected && " (mock)"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
 
-          <div className="space-y-2">
-            <Label>Schedule Time</Label>
-            <Input
-              type="datetime-local"
-              value={scheduledFor}
-              min={formatDatetimeLocalValue(new Date())}
-              onChange={(e) => setScheduledFor(e.target.value)}
+      <div className="space-y-2">
+        <Label>Schedule Time</Label>
+        <Input
+          type="datetime-local"
+          value={scheduledFor}
+          min={formatDatetimeLocalValue(new Date())}
+          onChange={(e) => setScheduledFor(e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">
+          Local time, must be in the future. This queues a worker job. It does
+          not publish until that job is due.
+        </p>
+        {draft.platform === "INSTAGRAM" && draft.mediaUrls.length === 0 && (
+          <p className="text-xs text-amber-300">
+            Real Instagram will refuse this schedule without a public https image or video.
+          </p>
+        )}
+        {draft.platform === "YOUTUBE" && (
+          <p className="text-xs text-amber-300">
+            Real YouTube will not live-publish a text post. Description updates stay opt-in.
+          </p>
+        )}
+        {possibleLiveWrite && (
+          <label className="flex items-start gap-2 text-xs text-amber-200">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={checkedNoLivePost}
+              onChange={(e) => setCheckedNoLivePost(e.target.checked)}
             />
-            <p className="text-xs text-muted-foreground">
-              Jeff talks to Bob; this queue is the engine. Local time, must be
-              in the future. Scheduling creates a worker job — it does not
-              publish until that job is due.
-            </p>
-            {draft.platform === "INSTAGRAM" && draft.mediaUrls.length === 0 && (
-              <p className="text-xs text-amber-300">
-                Real Instagram will refuse this schedule without a public https image or video.
-              </p>
-            )}
-            {draft.platform === "YOUTUBE" && (
-              <p className="text-xs text-amber-300">
-                Real YouTube will not live-publish a text post. Description updates stay opt-in.
-              </p>
-            )}
-            {possibleLiveWrite && (
-              <label className="flex items-start gap-2 text-xs text-amber-200">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={checkedNoLivePost}
-                  onChange={(e) => setCheckedNoLivePost(e.target.checked)}
-                />
-                I checked Facebook / Instagram / YouTube. No live post. Schedule is still not publish.
-              </label>
-            )}
-            {draft.platform === "TWITTER" && (
-              <p className="text-xs text-amber-300">
-                Twitter/X is schema leftover. StoryLiner will refuse this schedule. No tweet will go out.
-              </p>
-            )}
-            {(draft.platform === "TIKTOK" ||
-              draft.platform === "BLUESKY" ||
-              draft.platform === "TWITCH") && (
-              <p className="text-xs text-amber-300">
-                {draft.platform} is not a live destination. Real mode will refuse this schedule.
-              </p>
-            )}
-          </div>
-        </div>
+            I checked Facebook / Instagram / YouTube. No live post. Schedule is still not publish.
+          </label>
+        )}
+        {draft.platform === "TWITTER" && (
+          <p className="text-xs text-amber-300">
+            Twitter/X is schema leftover. StoryLiner will refuse this schedule. No tweet will go out.
+          </p>
+        )}
+        {(draft.platform === "TIKTOK" ||
+          draft.platform === "BLUESKY" ||
+          draft.platform === "TWITCH") && (
+          <p className="text-xs text-amber-300">
+            {draft.platform} is not a live destination. Real mode will refuse this schedule.
+          </p>
+        )}
+      </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>
+      <div className={variant === "dialog" ? "flex justify-end gap-2" : "flex flex-wrap gap-2"}>
+        {variant === "dialog" && onCancel && (
+          <Button variant="outline" onClick={onCancel} disabled={isPending}>
             Cancel
           </Button>
-          <Button
-            onClick={handleSchedule}
-            disabled={
-              isPending ||
-              !platformAccountId ||
-              !scheduledFor ||
-              compatibleAccounts.length === 0 ||
-              (possibleLiveWrite && !checkedNoLivePost)
-            }
-          >
-            {isPending ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Scheduling…
-              </>
-            ) : (
-              <>
-                <CalendarClock className="h-3.5 w-3.5" />
-                Schedule
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+        )}
+        <Button
+          onClick={handleSchedule}
+          disabled={
+            isPending ||
+            !platformAccountId ||
+            !scheduledFor ||
+            compatibleAccounts.length === 0 ||
+            (possibleLiveWrite && !checkedNoLivePost)
+          }
+        >
+          {isPending ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Scheduling…
+            </>
+          ) : (
+            <>
+              <CalendarClock className="h-3.5 w-3.5" />
+              Schedule
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+
+  return form;
+}
+
+function ScheduleDialog({
+  draft,
+  open,
+  onClose,
+  onScheduled,
+}: {
+  draft: DraftWithRelations;
+  open: boolean;
+  onClose: () => void;
+  onScheduled: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Schedule this approved snapshot</DialogTitle>
+        </DialogHeader>
+        <ScheduleForm
+          draft={draft}
+          variant="dialog"
+          onCancel={onClose}
+          onScheduled={onScheduled}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -602,10 +629,14 @@ function DraftCard({
   const mediaPreview = previewablePromoMediaUrl(draft.mediaUrls[0]);
   const platformNote = reviewDeskPlatformNote(draft.platform);
   const isDesk = variant === "desk";
-  const canDecide = reviewDeskCanDecide(draft.status);
   const canMutate = reviewDeskCanMutateCreative(draft.status);
-  const canCopy = reviewDeskCanCopy(draft.status);
-  const canArchive = reviewDeskCanArchive(draft.status);
+  const tools = reviewCardTools(draft.status);
+  const decisionRail = reviewDecisionRail({
+    status: draft.status,
+    surface: isDesk ? "desk" : "queue",
+    possibleLiveWrite,
+    riskLevel: draft.riskLevel,
+  });
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -613,6 +644,32 @@ function DraftCard({
       cardRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, [focused]);
+
+  function handleDecision(id: ReviewDecisionId) {
+    if (id === "approve") {
+      if (draft.riskLevel === "HIGH") {
+        setConfirmHighRisk(true);
+      } else {
+        handleApprove(false);
+      }
+      return;
+    }
+    if (id === "hold") {
+      setConfirmHold(true);
+      return;
+    }
+    if (id === "deny") {
+      setConfirmDeny(true);
+      return;
+    }
+    if (id === "resume") {
+      handleResume();
+      return;
+    }
+    if (id === "schedule") {
+      setShowSchedule(true);
+    }
+  }
 
   return (
     <>
@@ -986,125 +1043,69 @@ function DraftCard({
             </div>
           )}
 
-          {/* Action buttons — Approve / Hold / Deny never publish */}
-          <div className="space-y-2 pt-1 border-t border-border">
-            <p className="text-[11px] text-muted-foreground">
-              {reviewCardNextAction({ status: draft.status })}
-            </p>
-            <div className="flex items-center gap-2 flex-wrap">
-              {canDecide && (draft.status === "IN_REVIEW" || draft.status === "HELD") && (
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    draft.riskLevel === "HIGH"
-                      ? setConfirmHighRisk(true)
-                      : handleApprove(false)
-                  }
-                  disabled={isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                >
-                  {isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" />
+          <div className="space-y-3 pt-1 border-t border-border">
+            <ReviewDecisionRail
+              rail={decisionRail}
+              pending={isPending}
+              onDecision={handleDecision}
+              scheduleForm={
+                isDesk && draft.status === "APPROVED" ? (
+                  <ScheduleForm
+                    draft={draft}
+                    variant="inline"
+                    onScheduled={onAction}
+                  />
+                ) : null
+              }
+            />
+            {(tools.edit || tools.copy || tools.archive) && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Change this draft
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {tools.edit && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditingCaption(!editingCaption)}
+                      disabled={isPending}
+                      title={
+                        draft.status === "APPROVED"
+                          ? "Saving an edit returns this to Needs Review. This does not publish."
+                          : undefined
+                      }
+                    >
+                      Edit
+                    </Button>
                   )}
-                  Approve
-                </Button>
-              )}
-
-              {canDecide && (draft.status === "IN_REVIEW" || draft.status === "APPROVED") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setConfirmHold(true)}
-                  disabled={isPending}
-                  title="Park this draft. Does not publish."
-                >
-                  <Pause className="h-3.5 w-3.5" />
-                  Hold
-                </Button>
-              )}
-
-              {canDecide && (draft.status === "IN_REVIEW" || draft.status === "HELD") && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setConfirmDeny(true)}
-                  disabled={isPending}
-                  className="text-rose-400 hover:text-rose-300 hover:bg-rose-600/10"
-                  title="Deny this draft. Does not publish."
-                >
-                  <X className="h-3.5 w-3.5" />
-                  <span className="ml-1">Deny</span>
-                </Button>
-              )}
-
-              {canDecide && draft.status === "HELD" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleResume}
-                  disabled={isPending}
-                >
-                  <Undo2 className="h-3.5 w-3.5" />
-                  Back to review
-                </Button>
-              )}
-
-              {canDecide && draft.status === "APPROVED" && (
-                <Button
-                  size="sm"
-                  onClick={() => setShowSchedule(true)}
-                  disabled={isPending}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <CalendarClock className="h-3.5 w-3.5" />
-                  Schedule
-                </Button>
-              )}
-
-              {canMutate && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setEditingCaption(!editingCaption)}
-                disabled={isPending}
-                title={
-                  draft.status === "APPROVED"
-                    ? "Saving an edit returns this to Needs Review. This does not publish."
-                    : undefined
-                }
-              >
-                Edit
-              </Button>
-              )}
-
-              {canCopy && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleDuplicate}
-                disabled={isPending}
-                title="Duplicate draft"
-              >
-                <Copy className="h-3.5 w-3.5" />
-                <span className="ml-1">Copy</span>
-              </Button>
-              )}
-
-              {canArchive && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setConfirmArchive(true)}
-                disabled={isPending}
-                className="text-muted-foreground hover:text-foreground ml-auto"
-                title="Archive draft"
-              >
-                <Archive className="h-3.5 w-3.5" />
-              </Button>
-              )}
-            </div>
+                  {tools.copy && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDuplicate}
+                      disabled={isPending}
+                      title="Duplicate draft"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      <span className="ml-1">Copy</span>
+                    </Button>
+                  )}
+                  {tools.archive && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setConfirmArchive(true)}
+                      disabled={isPending}
+                      className="text-muted-foreground hover:text-foreground ml-auto"
+                      title="Archive draft"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1308,7 +1309,7 @@ export function ReviewQueueClient({
           <Badge variant="destructive">{denied.length} denied</Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          Bob drafts. Jeff decides here. Approve / Hold / Deny never publish.
+          {REVIEW_QUEUE_DECISION_HELP}
         </p>
       </div>
 

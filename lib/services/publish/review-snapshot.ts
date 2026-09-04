@@ -1,4 +1,5 @@
 import type { ContentStatus } from "@prisma/client";
+import { reviewDecisionHeading } from "@/lib/services/publish/review-decision";
 
 /**
  * Generate → Guard → Review snapshot identity.
@@ -190,22 +191,7 @@ export function reviewGuardBanner(options: {
 }
 
 export function reviewCardNextAction(options: { status: string }): string {
-  switch (options.status) {
-    case "IN_REVIEW":
-      return "Next: Approve, Hold, or Deny this snapshot. None of those publish.";
-    case "HELD":
-      return "Next: Back to review or Approve this snapshot. Hold is not publish.";
-    case "APPROVED":
-      return "Next: Schedule is a separate yes. Approve already happened and did not publish.";
-    case "REJECTED":
-      return "Denied. Copy it for another pass. This did not publish.";
-    case "SCHEDULED":
-      return "Next: the worker publishes when this job is due. This desk has no Publish button.";
-    case "PUBLISHED":
-      return "The worker already published this. This desk never publishes.";
-    default:
-      return "Review this snapshot. Approve / Hold / Deny never publish.";
-  }
+  return reviewDecisionHeading(options.status);
 }
 
 export function reviewQueueFocusHref(draftId: string): string {
