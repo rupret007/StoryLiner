@@ -111,8 +111,15 @@ export function reviewDecisionTone(id: ReviewDecisionId): ReviewDecisionTone {
   return "secondary";
 }
 
-export function reviewDecisionPublishes(_id: ReviewDecisionId): false {
-  return false;
+export function reviewDecisionPublishes(id: ReviewDecisionId): false {
+  switch (id) {
+    case "approve":
+    case "hold":
+    case "deny":
+    case "resume":
+    case "schedule":
+      return false;
+  }
 }
 
 export function reviewDecisionConsequence(
