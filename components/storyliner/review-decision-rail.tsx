@@ -42,11 +42,13 @@ function decisionVariant(
 export function ReviewDecisionRail({
   rail,
   pending,
+  blocked = false,
   onDecision,
   scheduleForm,
 }: {
   rail: ReviewDecisionRailView;
   pending: boolean;
+  blocked?: boolean;
   onDecision: (id: ReviewDecisionId) => void;
   scheduleForm?: ReactNode;
 }) {
@@ -103,7 +105,7 @@ export function ReviewDecisionRail({
                       size="sm"
                       variant={decisionVariant(decision)}
                       className={decisionButtonClass(decision)}
-                      disabled={pending}
+                      disabled={pending || blocked}
                       aria-describedby={consequenceId}
                       onClick={() => onDecision(decision.id)}
                     >
