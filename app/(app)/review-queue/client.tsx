@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -66,6 +67,7 @@ import {
   resumeHeldSuccessToast,
   reviewQueueInitialTab,
   scheduleSuccessToast,
+  sanitizeMediaUrls,
   shouldOpenApprovedTabAfterApprove,
   shouldOpenHeldTabAfterHold,
   shouldOpenNeedsReviewTabAfterCopy,
@@ -97,6 +99,13 @@ import {
   reviewDeskScheduleHref,
 } from "@/lib/services/publish/review-desk";
 import { PromoPipeline } from "@/components/storyliner/promo-pipeline";
+import { attachDraftMediaSchema } from "@/lib/schemas/content";
+import {
+  reviewEditDirty,
+  reviewEditMedia,
+  useReviewEditSessions,
+  type ReviewEditSessions,
+} from "@/components/storyliner/review-edit-session";
 import {
   approveDraft,
   denyDraft,
@@ -119,7 +128,7 @@ import type {
   PlatformAccount,
 } from "@prisma/client";
 
-type DraftWithRelations = Draft & {
+export type DraftWithRelations = Draft & {
   band: Band & {
     voiceProfile: BandVoiceProfile | null;
     platformAccounts: PlatformAccount[];
@@ -163,16 +172,19 @@ function ScheduleForm({
   variant,
   onCancel,
   onScheduled,
+  blocked = false,
 }: {
   draft: DraftWithRelations;
   variant: "dialog" | "inline";
   onCancel?: () => void;
   onScheduled: () => void;
+  blocked?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [platformAccountId, setPlatformAccountId] = useState("");
   const [scheduledFor, setScheduledFor] = useState(defaultScheduleLocalValue);
   const [checkedNoLivePost, setCheckedNoLivePost] = useState(false);
+  const sending = useRef(false);
   const possibleLiveWrite = draftHasPossibleLiveWrite(draft.reviewNotes);
 
   const compatibleAccounts = draft.band.platformAccounts.filter(
@@ -180,6 +192,7 @@ function ScheduleForm({
   );
 
   function handleSchedule() {
+    if (blocked || sending.current) return;
     if (!platformAccountId) {
       toast.error("Select a platform account first.");
       return;
@@ -193,6 +206,7 @@ function ScheduleForm({
       return;
     }
 
+    sending.current = true;
     startTransition(async () => {
       try {
         await scheduleApprovedDraft({
@@ -207,12 +221,14 @@ function ScheduleForm({
         onScheduled();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Scheduling failed.");
+      } finally {
+        sending.current = false;
       }
     });
   }
 
   const form = (
-    <div className={variant === "dialog" ? "space-y-4 py-2" : "space-y-3"}>
+    <fieldset disabled={blocked || isPending} className={variant === "dialog" ? "space-y-4 py-2 min-w-0" : "space-y-3 min-w-0"}>
       {variant === "dialog" && (
         <>
           <div className="flex items-center gap-2 mb-2">
@@ -322,7 +338,7 @@ function ScheduleForm({
           )}
         </Button>
       </div>
-    </div>
+    </fieldset>
   );
 
   return form;
@@ -344,6 +360,7 @@ function ScheduleDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Schedule this approved snapshot</DialogTitle>
+          <DialogDescription>Choose an account and time for the exact saved creative below. Scheduling queues work; it does not confirm a live post.</DialogDescription>
         </DialogHeader>
         <ScheduleForm
           draft={draft}
@@ -380,8 +397,8 @@ function ConfirmDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">{description}</p>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={isPending}>
             Cancel
@@ -399,8 +416,9 @@ function ConfirmDialog({
   );
 }
 
-function DraftCard({
-  draft,
+export function DraftCard({
+  draft: incomingDraft,
+  editSessions,
   onAction,
   onApproved,
   onHeld,
@@ -410,6 +428,7 @@ function DraftCard({
   variant = "queue",
 }: {
   draft: DraftWithRelations;
+  editSessions: ReviewEditSessions<DraftWithRelations>;
   onAction: () => void;
   onApproved?: () => void;
   onHeld?: () => void;
@@ -418,17 +437,50 @@ function DraftCard({
   focused?: boolean;
   variant?: "queue" | "desk";
 }) {
+  const edit = editSessions.read(incomingDraft);
+  const dirty = reviewEditDirty(edit);
+  const draft = { ...edit.source, ...(edit.latest ?? edit.base) };
   const [isPending, startTransition] = useTransition();
+  const decisionPending = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [editingCaption, setEditingCaption] = useState(false);
-  const [editedCaption, setEditedCaption] = useState(draft.caption);
+  const editingCaption = edit.captionOpen;
+  const setEditingCaption = (open: boolean) => editSessions.setCaptionOpen(incomingDraft, open);
+  const editedCaption = edit.caption;
+  const setEditedCaption = (value: string) => editSessions.edit(incomingDraft, "caption", value);
   const [showHistory, setShowHistory] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [confirmDeny, setConfirmDeny] = useState(false);
   const [confirmHold, setConfirmHold] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [confirmHighRisk, setConfirmHighRisk] = useState(false);
-  const [mediaUrlInput, setMediaUrlInput] = useState(draft.mediaUrls[0] ?? "");
+  const [confirmationAt, setConfirmationAt] = useState<string | null>(null);
+  const mediaUrlInput = edit.mediaFirst;
+  const setMediaUrlInput = (value: string) => editSessions.edit(incomingDraft, "media", value);
+  const editBlocked = dirty.any || Boolean(edit.pending || edit.latest || edit.issue || edit.refreshing);
+  const busy = isPending || Boolean(edit.pending);
+  const decisionBlocked = editBlocked || decisionPending.current;
+  const confirmationSnapshot = JSON.stringify([draft.id, draft.status, cardReceipt(draft)]);
+  useEffect(() => {
+    setConfirmDeny(false); setConfirmHold(false); setConfirmArchive(false);
+    setConfirmHighRisk(false); setShowSchedule(false);
+  }, [confirmationSnapshot, editBlocked]);
+
+  function canDecide() {
+    const current = editSessions.read(incomingDraft);
+    return !decisionPending.current && !current.pending && !current.latest && !current.issue &&
+      !current.refreshing && !reviewEditDirty(current).any;
+  }
+
+  function startDecision(work: () => Promise<void>) {
+    if (!canDecide()) return;
+    decisionPending.current = true;
+    startTransition(async () => {
+      try { await work(); }
+      finally { decisionPending.current = false; }
+    });
+  }
   const possibleLiveWrite = draftHasPossibleLiveWrite(draft.reviewNotes);
   const captionMutationSourceStatus =
     draft.status === "APPROVED" || draft.status === "HELD"
@@ -436,7 +488,8 @@ function DraftCard({
       : "IN_REVIEW";
 
   function handleApprove(confirmHighRiskApprove = false) {
-    startTransition(async () => {
+    if (confirmHighRiskApprove && confirmationAt !== confirmationSnapshot) return;
+    startDecision(async () => {
       try {
         await approveDraft(
           draft.id,
@@ -460,8 +513,9 @@ function DraftCard({
   }
 
   function handleHold() {
+    if (confirmationAt !== confirmationSnapshot) return;
     setConfirmHold(false);
-    startTransition(async () => {
+    startDecision(async () => {
       try {
         await holdDraft(draft.id, cardReceipt(draft));
         toast.success(holdSuccessToast({ possibleLiveWrite }));
@@ -478,8 +532,9 @@ function DraftCard({
   }
 
   function handleDeny() {
+    if (confirmationAt !== confirmationSnapshot) return;
     setConfirmDeny(false);
-    startTransition(async () => {
+    startDecision(async () => {
       try {
         await denyDraft(draft.id, cardReceipt(draft), "Denied from review queue");
         toast.success(denySuccessToast({ possibleLiveWrite }));
@@ -492,7 +547,7 @@ function DraftCard({
   }
 
   function handleResume() {
-    startTransition(async () => {
+    startDecision(async () => {
       try {
         await resumeHeldDraft(draft.id, cardReceipt(draft));
         toast.success(resumeHeldSuccessToast({ possibleLiveWrite }));
@@ -508,16 +563,22 @@ function DraftCard({
   }
 
   function handleArchive() {
+    if (confirmationAt !== confirmationSnapshot) return;
     setConfirmArchive(false);
-    startTransition(async () => {
-      await archiveDraft(draft.id, cardReceipt(draft));
-      toast.success("Draft archived.");
-      onAction();
+    startDecision(async () => {
+      try {
+        await archiveDraft(draft.id, cardReceipt(draft));
+        toast.success("Draft archived.");
+        onAction();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Archive not confirmed.");
+        onAction();
+      }
     });
   }
 
   function handleDuplicate() {
-    startTransition(async () => {
+    startDecision(async () => {
       try {
         await duplicateDraft(draft.id);
         toast.success(
@@ -549,7 +610,7 @@ function DraftCard({
   }
 
   function handleRewrite(directive: string) {
-    startTransition(async () => {
+    startDecision(async () => {
       try {
         await rewriteDraftAction({
           draftId: draft.id,
@@ -573,46 +634,51 @@ function DraftCard({
   }
 
   function handleSaveEdit() {
-    startTransition(async () => {
-      try {
-        await updateDraftCaption(draft.id, editedCaption, cardReceipt(draft));
-        setEditingCaption(false);
-        toast.success(
-          captionMutationSuccessToast({
-            kind: "edit",
-            fromStatus: captionMutationSourceStatus,
-            possibleLiveWrite,
-          })
-        );
-        finishReturnedToReview();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Caption save failed.");
-        onAction();
-      }
-    });
+    void saveCreative("caption");
   }
 
   function handleSaveMedia() {
-    startTransition(async () => {
-      try {
-        await attachDraftMedia({
-          draftId: draft.id,
-          mediaUrls: mediaUrlInput.trim() ? [mediaUrlInput.trim()] : [],
-          reviewedSnapshot: cardReceipt(draft),
-        });
-        toast.success(
-          mediaMutationSuccessToast({
-            cleared: !mediaUrlInput.trim(),
-            fromStatus: captionMutationSourceStatus,
-            possibleLiveWrite,
-          })
-        );
-        finishReturnedToReview();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not save media URL.");
-        onAction();
+    void saveCreative("media");
+  }
+
+  async function saveCreative(field: "caption" | "media") {
+    if (decisionPending.current) return;
+    if (field === "media") {
+      const current = editSessions.read(incomingDraft);
+      const mediaUrls = reviewEditMedia(current);
+      const parsed = attachDraftMediaSchema.safeParse({ draftId: incomingDraft.id, mediaUrls, reviewedSnapshot: reviewSnapshotReceipt(current.base) });
+      if (!parsed.success || mediaUrls.some((url) => sanitizeMediaUrls([url]).length !== 1)) {
+        toast.error("Use a valid public HTTPS media URL, no longer than 2,000 characters. Up to five media URLs are supported. Your edits are kept.");
+        return;
       }
-    });
+    }
+    const request = editSessions.begin(incomingDraft, field);
+    if (!request) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const operation = field === "caption"
+        ? updateDraftCaption(request.id, request.caption, request.receipt)
+        : attachDraftMedia({ draftId: request.id, mediaUrls: request.mediaUrls, reviewedSnapshot: request.receipt });
+      const result = await Promise.race([
+        operation,
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Save response deadline exceeded")), 20000); }),
+      ]);
+      const confirmed = editSessions.finish(request, result);
+      if (!mounted.current) return;
+      if (!confirmed) {
+        toast.error("Save not confirmed. Your edits are kept.");
+        return;
+      }
+      toast.success(field === "caption"
+        ? captionMutationSuccessToast({ kind: "edit", fromStatus: captionMutationSourceStatus, possibleLiveWrite })
+        : mediaMutationSuccessToast({ cleared: request.mediaUrls.length === 0, fromStatus: captionMutationSourceStatus, possibleLiveWrite }));
+      finishReturnedToReview();
+    } catch {
+      editSessions.finish(request, undefined);
+      if (mounted.current) toast.error("Save not confirmed. Your edits are kept. Refresh saved version before trying again.");
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   const riskColor =
@@ -646,6 +712,10 @@ function DraftCard({
   }, [focused]);
 
   function handleDecision(id: ReviewDecisionId) {
+    if (!canDecide()) return;
+    // Bind dialog consent during render too, before passive effects close an
+    // old prompt. A refreshed card must never inherit the previous card's yes.
+    setConfirmationAt(confirmationSnapshot);
     if (id === "approve") {
       if (draft.riskLevel === "HIGH") {
         setConfirmHighRisk(true);
@@ -674,13 +744,14 @@ function DraftCard({
   return (
     <>
       <ScheduleDialog
+        key={confirmationSnapshot}
         draft={draft}
-        open={showSchedule}
+        open={showSchedule && confirmationAt === confirmationSnapshot && !decisionBlocked}
         onClose={() => setShowSchedule(false)}
         onScheduled={onAction}
       />
       <ConfirmDialog
-        open={confirmHold}
+        open={confirmHold && confirmationAt === confirmationSnapshot && !decisionBlocked}
         title="Hold this draft?"
         description={holdConfirmDescription({ possibleLiveWrite })}
         confirmLabel="Hold"
@@ -689,7 +760,7 @@ function DraftCard({
         isPending={isPending}
       />
       <ConfirmDialog
-        open={confirmDeny}
+        open={confirmDeny && confirmationAt === confirmationSnapshot && !decisionBlocked}
         title="Deny this draft?"
         description={denyConfirmDescription({ possibleLiveWrite })}
         confirmLabel="Deny"
@@ -699,7 +770,7 @@ function DraftCard({
         isPending={isPending}
       />
       <ConfirmDialog
-        open={confirmArchive}
+        open={confirmArchive && confirmationAt === confirmationSnapshot && !decisionBlocked}
         title="Archive this draft?"
         description="Removes this draft from the review queue. Archive does not publish, and it does not move the caption to Published Posts."
         confirmLabel="Archive"
@@ -708,7 +779,7 @@ function DraftCard({
         isPending={isPending}
       />
       <ConfirmDialog
-        open={confirmHighRisk}
+        open={confirmHighRisk && confirmationAt === confirmationSnapshot && !decisionBlocked}
         title="Approve this high-risk draft?"
         description={approveHighRiskConfirmDescription({ possibleLiveWrite })}
         confirmLabel="Approve anyway"
@@ -757,24 +828,70 @@ function DraftCard({
         </CardHeader>
 
         <CardContent className="px-4 pb-4 space-y-3">
+          <div className={`rounded-md border p-3 space-y-2 ${editBlocked ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-muted/20"}`}>
+            <p role="status" data-testid="draft-edit-status" className="text-sm font-medium">
+              {edit.pending ? "Saving this draft… Other decisions are paused."
+                : edit.issue === "missing" ? "Saved draft unavailable. Your local edits are kept. Refresh to verify its current status."
+                : edit.refreshing ? "Checking the saved version… Your edits are kept. If this takes too long, check again."
+                : edit.issue ? "Save not confirmed. Your edits are kept. Refresh saved version before trying again."
+                : edit.latest ? "A saved version needs your review. Compare it with your edits before saving."
+                : dirty.any ? "Unsaved edits — save or discard them before making another decision."
+                : edit.saved ? "Saved. This creative still needs a separate review decision. Nothing was scheduled or published."
+                : "Saved version — no unsaved edits."}
+            </p>
+            {editBlocked && <p className="text-xs text-muted-foreground">Edits stay with this draft while you move around this review queue. They are not stored after leaving or reloading this page.</p>}
+            {edit.latest && (
+              <div data-testid="draft-edit-comparison" className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                  <div className="min-w-0 rounded border border-border p-2 space-y-2">
+                    <h4 className="font-semibold">Your edits</h4>
+                    <p className="whitespace-pre-wrap break-words">{edit.caption}</p>
+                    <p className="break-words">Hashtags: {edit.base.hashtags.join(" ") || "None"}</p>
+                    <p className="break-all">Media: {reviewEditMedia(edit).join("\n") || "None"}</p>
+                    <p>Based on {edit.base.status}, v{edit.base.currentVersion}; guard {edit.base.riskLevel}: {edit.base.riskFlags.join(", ") || "No flags"}</p>
+                    {edit.base.reviewNotes && <p className="whitespace-pre-wrap break-words">Review notes: {edit.base.reviewNotes}</p>}
+                  </div>
+                  <div className="min-w-0 rounded border border-border p-2 space-y-2">
+                    <h4 className="font-semibold">Latest saved version</h4>
+                    <p className="whitespace-pre-wrap break-words">{edit.latest.caption}</p>
+                    <p className="break-words">Hashtags: {edit.latest.hashtags.join(" ") || "None"}</p>
+                    <p className="break-all">Media: {edit.latest.mediaUrls.join("\n") || "None"}</p>
+                    <p>{edit.latest.status}, v{edit.latest.currentVersion}; guard {edit.latest.riskLevel}: {edit.latest.riskFlags.join(", ") || "No flags"}</p>
+                    {edit.latest.reviewNotes && <p className="whitespace-pre-wrap break-words">Review notes: {edit.latest.reviewNotes}</p>}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Keep my edits retains only fields you changed, using this saved version as the new base. Use latest saved version discards your edits. Neither choice saves, approves, schedules, or publishes.</p>
+                {!reviewDeskCanMutateCreative(edit.latest.status) && <p className="text-xs text-amber-200">This draft is no longer editable. You can view the saved version, but cannot save over its current status.</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={busy || Boolean(edit.issue) || edit.refreshing || !reviewDeskCanMutateCreative(edit.latest.status)} onClick={() => editSessions.review(incomingDraft, true)}>Keep my edits</Button>
+                  <Button size="sm" variant="outline" disabled={busy || Boolean(edit.issue) || edit.refreshing} onClick={() => editSessions.review(incomingDraft, false)}>Use latest saved version</Button>
+                </div>
+              </div>
+            )}
+            {(edit.issue || edit.refreshing) && <Button size="sm" variant="outline" disabled={busy} onClick={() => { if (editSessions.requestRefresh(incomingDraft)) onAction(); }}>Refresh saved version</Button>}
+            {dirty.any && !edit.latest && !edit.issue && !edit.refreshing && <Button size="sm" variant="ghost" disabled={busy} onClick={() => editSessions.discard(incomingDraft)}>Discard edits</Button>}
+          </div>
           {/* Caption */}
           {editingCaption ? (
             <div className="space-y-2">
               <Textarea
+                aria-label="Caption"
+                disabled={busy || !canMutate}
                 value={editedCaption}
                 onChange={(e) => setEditedCaption(e.target.value)}
                 className="min-h-[100px] text-sm"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveEdit} disabled={isPending}>
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                <Button size="sm" onClick={handleSaveEdit} disabled={busy || !dirty.caption || Boolean(edit.latest || edit.issue || edit.refreshing) || !canMutate}>
+                  {edit.pending?.field === "caption" ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save caption"}
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
+                  disabled={busy || Boolean(edit.issue || edit.latest || edit.refreshing)}
                   onClick={() => {
                     setEditingCaption(false);
-                    setEditedCaption(draft.caption);
+                    setEditedCaption(edit.base.caption);
                   }}
                 >
                   Cancel
@@ -863,6 +980,11 @@ function DraftCard({
             </Link>
           )}
 
+          {dirty.any && (
+            <p className="text-xs text-amber-200">
+              Brand fit and guard below describe the saved version, not your unsaved edits.
+            </p>
+          )}
           {/* Brand fit */}
           {draft.brandFitScore !== null && (
             <div className="space-y-1">
@@ -921,7 +1043,7 @@ function DraftCard({
           </button>
           )}
 
-          {canMutate && isExpanded && (
+          {canMutate && (isExpanded || dirty.media) && (
             <div className="space-y-3 border-t border-border pt-3">
               {/* Quick rewrites */}
               <div>
@@ -936,7 +1058,7 @@ function DraftCard({
                       size="sm"
                       className="text-xs h-7"
                       onClick={() => handleRewrite(d.value)}
-                      disabled={isPending}
+                      disabled={busy || decisionBlocked}
                     >
                       {isPending ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -1015,18 +1137,21 @@ function DraftCard({
                   </p>
                 )}
                 <Input
+                  aria-label="Media URL"
+                  disabled={busy}
                   type="url"
                   placeholder="https://…/show-photo.jpg"
                   value={mediaUrlInput}
                   onChange={(e) => setMediaUrlInput(e.target.value)}
                 />
+                {edit.mediaRest.length > 0 && <div className="text-xs text-muted-foreground space-y-1"><p>{edit.mediaRest.length} additional media URL{edit.mediaRest.length === 1 ? "" : "s"} will be kept. Clearing this field removes only the first URL.</p>{edit.mediaRest.map((url, index) => <p className="break-all" key={`${index}:${url}`}>{url}</p>)}</div>}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleSaveMedia}
-                  disabled={isPending}
+                  disabled={busy || !dirty.media || Boolean(edit.latest || edit.issue || edit.refreshing)}
                 >
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save media URL"}
+                  {edit.pending?.field === "media" ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save media"}
                 </Button>
                 {(draft.status === "APPROVED" || draft.status === "HELD") && (
                   <p className="text-xs text-amber-300">
@@ -1047,12 +1172,15 @@ function DraftCard({
             <ReviewDecisionRail
               rail={decisionRail}
               pending={isPending}
+              blocked={editBlocked}
               onDecision={handleDecision}
               scheduleForm={
                 isDesk && draft.status === "APPROVED" ? (
                   <ScheduleForm
+                    key={confirmationSnapshot}
                     draft={draft}
                     variant="inline"
+                    blocked={busy || decisionBlocked}
                     onScheduled={onAction}
                   />
                 ) : null
@@ -1068,15 +1196,15 @@ function DraftCard({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setEditingCaption(!editingCaption)}
-                      disabled={isPending}
+                      onClick={() => setEditingCaption(true)}
+                      disabled={busy}
                       title={
                         draft.status === "APPROVED"
                           ? "Saving an edit returns this to Needs Review. This does not publish."
                           : undefined
                       }
                     >
-                      Edit
+                      Edit caption
                     </Button>
                   )}
                   {tools.copy && (
@@ -1084,7 +1212,7 @@ function DraftCard({
                       size="sm"
                       variant="outline"
                       onClick={handleDuplicate}
-                      disabled={isPending}
+                      disabled={busy || decisionBlocked}
                       title="Duplicate draft"
                     >
                       <Copy className="h-3.5 w-3.5" />
@@ -1095,8 +1223,13 @@ function DraftCard({
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => setConfirmArchive(true)}
-                      disabled={isPending}
+                      onClick={() => {
+                        if (canDecide()) {
+                          setConfirmationAt(confirmationSnapshot);
+                          setConfirmArchive(true);
+                        }
+                      }}
+                      disabled={busy || decisionBlocked}
                       className="text-muted-foreground hover:text-foreground ml-auto"
                       title="Archive draft"
                     >
@@ -1125,12 +1258,19 @@ export function ReviewQueueClient({
   focusMissing = false,
 }: ReviewQueueClientProps) {
   const router = useRouter();
-  const inReview = drafts.filter((d) => d.status === "IN_REVIEW");
-  const held = drafts.filter((d) => d.status === "HELD");
-  const approved = drafts.filter((d) => d.status === "APPROVED");
-  const denied = drafts.filter((d) => d.status === "REJECTED");
+  const editSessions = useReviewEditSessions(drafts);
+  // A confirmed action row is saved truth even before router.refresh catches
+  // up. Keep queue grouping, navigation and the decision card in agreement.
+  const displayedDrafts = drafts.map((incoming) => {
+    const session = editSessions.read(incoming);
+    return { ...session.source, ...(session.latest ?? session.base) };
+  });
+  const inReview = displayedDrafts.filter((d) => d.status === "IN_REVIEW");
+  const held = displayedDrafts.filter((d) => d.status === "HELD");
+  const approved = displayedDrafts.filter((d) => d.status === "APPROVED");
+  const denied = displayedDrafts.filter((d) => d.status === "REJECTED");
   const focusedDraft = focusDraftId
-    ? drafts.find((d) => d.id === focusDraftId)
+    ? displayedDrafts.find((d) => d.id === focusDraftId) ?? editSessions.retained(focusDraftId)
     : undefined;
   const [tab, setTab] = useState<string>(() =>
     reviewQueueTabForFocus(
@@ -1217,7 +1357,7 @@ export function ReviewQueueClient({
   }
 
   const pileIds = focusedDraft
-    ? reviewDeskSamePileIds(drafts, focusedDraft.id)
+    ? reviewDeskSamePileIds(displayedDrafts, focusedDraft.id)
     : [];
   const neighbors = focusedDraft
     ? reviewDeskNeighbors(pileIds, focusedDraft.id)
@@ -1285,7 +1425,9 @@ export function ReviewQueueClient({
           </p>
         </div>
         <DraftCard
+          key={focusedDraft.id}
           draft={focusedDraft}
+          editSessions={editSessions}
           variant="desk"
           focused
           onAction={refresh}
@@ -1345,6 +1487,7 @@ export function ReviewQueueClient({
                 <DraftCard
                   key={draft.id}
                   draft={draft}
+                  editSessions={editSessions}
                   focused={draft.id === focusDraftId}
                   onAction={refresh}
                   onApproved={() => handleApproved(draft.id)}
@@ -1368,6 +1511,7 @@ export function ReviewQueueClient({
                 <DraftCard
                   key={draft.id}
                   draft={draft}
+                  editSessions={editSessions}
                   focused={draft.id === focusDraftId}
                   onAction={refresh}
                   onApproved={() => handleApproved(draft.id)}
@@ -1398,6 +1542,7 @@ export function ReviewQueueClient({
                   <DraftCard
                     key={draft.id}
                     draft={draft}
+                    editSessions={editSessions}
                     focused={draft.id === focusDraftId}
                     onAction={refresh}
                     onHeld={() => handleHeld(draft.id)}
@@ -1423,6 +1568,7 @@ export function ReviewQueueClient({
                 <DraftCard
                   key={draft.id}
                   draft={draft}
+                  editSessions={editSessions}
                   focused={draft.id === focusDraftId}
                   onAction={refresh}
                   onCopied={handleCopied}

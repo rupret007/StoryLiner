@@ -440,8 +440,10 @@ export async function attachDraftMedia(rawInput: AttachDraftMediaInput) {
 
   const mediaUrls = sanitizeMediaUrls(input.mediaUrls);
   const provided = input.mediaUrls.map((url) => url.trim()).filter(Boolean);
-  if (provided.length > 0 && mediaUrls.length === 0) {
-    throw new Error("Media URL must be a public https:// link. http, data, and javascript URLs are rejected.");
+  // A save must represent the whole reviewed selection. Silently dropping an
+  // invalid entry from a mixed list makes a successful save lose media.
+  if (provided.some((url) => sanitizeMediaUrls([url]).length !== 1)) {
+    throw new Error("Every media URL must be an https:// link without embedded credentials. http, data, and javascript URLs are rejected. No media changes were saved.");
   }
 
   const updated = await prisma.$transaction(async (tx) => {

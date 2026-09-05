@@ -181,6 +181,21 @@ A stale browser card cannot approve or overwrite newer creative the reviewer
 has not seen. A race during the server action loses safely and nothing is
 scheduled or published.
 
+The client also freezes the **edit base**, rather than manufacturing a new
+receipt from refreshed props around old input. `useReviewEditSessions` keeps
+draft-keyed, React-mount-only caption/media buffers in the existing Review Queue.
+Each explicit field save captures its draft ID, original receipt, and request
+token. Only a matching confirmed server-action row advances that edit base;
+another unsaved field remains local. A newer saved snapshot requires comparison
+and an explicit keep/discard decision before another save. Unknown save results
+remain unconfirmed until a refresh and review, with no automatic retry.
+
+The existing caption/media actions and transactional compare-and-set remain the
+write authority. There is no new database table, browser storage, worker,
+provider, or publishing path. Media editing retains additional attached URLs;
+mixed valid/invalid lists are rejected instead of partially saved. Details and
+remaining boundaries: [review editing recovery](review-editing-recovery.md).
+
 The review queue opens a desk at `/review-queue?focus=` so Jeff can read
 the caption, media, guard, and voice before that yes. After Approve,
 Schedule is bound to that same snapshot. After Schedule the desk stays

@@ -152,6 +152,19 @@ The queue now opens a **review desk** when Jeff follows Generate or a Dashboard 
 
 All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. Approve / Hold / Deny / Schedule never publish.
 
+Caption and media edits now stay with their original draft while you move around
+the review queue. **Save caption** and **Save media** are separate, explicit
+writes; saving one keeps unfinished work in the other. Review decisions pause
+while edits are unresolved. If the saved draft changes, compare **Your edits**
+with the **Latest saved version**, then keep your edits for a new explicit save
+or use the saved version. A failed save retains your input and asks you to
+refresh and review before retrying — it never borrows a newer receipt silently.
+
+This recovery is in memory for the current review-page session, not a browser
+backup. Save before closing or reloading; browser leave warnings are best-effort.
+See [review editing and handoff](docs/review-editing-recovery.md) for the exact
+recovery boundaries and verification.
+
 | Action | Description |
 |---|---|
 | Approve | Next yes in Needs Review / On Hold. Marks the exact caption/media/guard snapshot as APPROVED, ready to schedule. A stale card or unseen rewrite refreshes for a new decision. Does **not** publish. |
@@ -307,6 +320,9 @@ Jest is required in CI. Suites include:
 | `tests/workflow/review-decisions.test.ts` | Approve / Hold / Deny status gates |
 | `tests/workflow/approval-snapshot-fence.test.ts` | Approve / Hold / Deny bind to caption/media/guard snapshot |
 | `tests/workflow/caption-review-fence.test.ts` | Caption edit returns to review and refuses unseen creative |
+| `tests/workflow/review-editing-ui.test.tsx` | Actual review-screen edits, cross-draft navigation, failed saves, conflicts, and blocked decisions |
+| `tests/workflow/review-decision-blocked-ui.test.tsx` | Disabled decisions do not pretend an unsaved edit is a network request |
+| `tests/workflow/media-edit-integrity.test.ts` | Full media selection, exact saved receipts, and all-or-nothing URL validation |
 | `tests/workflow/rewrite-review-fence.test.ts` | Rewrite returns to review and refuses a stale card |
 | `tests/services/generate-guard-review.test.ts` | Generate → Guard → Review next-action handoff |
 | `tests/services/local-deployment-boundary.test.ts` | Default Compose stays loopback-only while request-level auth is absent |
