@@ -144,6 +144,22 @@ Generate → Guard → Review → Approve → Schedule → Publish
 6. **Schedule** — Select a platform account and future datetime; creates `ScheduledPost` + `Job` in a single transaction
 7. **Publish** — Worker processes due jobs via social adapter → `PublishedPost` record created → metrics visible
 
+### Draft from a saved campaign
+
+In **Campaign Builder**, choose **Generate** on an active campaign. Content Studio
+shows its saved band, content type, campaign target date, and linked event facts
+before generation. Facts are read-only; your optional operator note is separate.
+Missing facts stay missing. Invalid or changed links require a deliberate choice,
+not a fallback to another band. **Start unlinked draft** clears the old context.
+
+Linked generation is currently **mock-only**. Exporting these additional saved
+fields to the optional live AI adapter needs explicit owner privacy approval;
+this change does not enable it. Generated results name their originating campaign
+and open the exact guarded draft in Review. Nothing publishes automatically.
+
+See [campaign context and handoff](docs/campaign-generation-context.md) for source
+checks, in-session recovery, database proof, and remaining boundaries.
+
 ## Review Queue
 
 Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes.
@@ -192,8 +208,8 @@ Controlled by `LLM_ADAPTER` in `.env.local`:
 
 | Value | Behavior |
 |---|---|
-| `mock` (default) | Uses per-band realistic content pools with distinct Stalemate / Rad Dad voices |
-| `openai` | Uses the configured OpenAI model for generation, rewrites, risk assessment, talking points, and engagement prompts; requires `OPENAI_API_KEY` |
+| `mock` (default) | Uses per-band content pools for unlinked drafts; linked campaign/event drafts use saved facts without invented missing details |
+| `openai` | Existing unlinked generation, rewrites, risk assessment, talking points, and engagement prompts; requires `OPENAI_API_KEY`. New linked campaign/event generation is blocked pending owner privacy approval. |
 
 Any other `LLM_ADAPTER` value fails closed instead of silently selecting mock
 mode. Mock mode makes no provider calls. OpenAI mode sends the relevant band
@@ -325,6 +341,13 @@ Jest is required in CI. Suites include:
 | `tests/workflow/media-edit-integrity.test.ts` | Full media selection, exact saved receipts, and all-or-nothing URL validation |
 | `tests/workflow/rewrite-review-fence.test.ts` | Rewrite returns to review and refuses a stale card |
 | `tests/services/generate-guard-review.test.ts` | Generate → Guard → Review next-action handoff |
+| `tests/services/campaign-context.test.ts` | Bounded saved-fact projection, ownership, receipts, absent facts, explicit display time zone |
+| `tests/services/campaign-generation.test.ts` | Authoritative context, stale/foreign links, mock-only privacy gate, atomic persistence contract |
+| `tests/services/studio-generation-result.test.ts` | Production-safe action outcomes, fixed refusal codes and no raw database/provider error leakage |
+| `tests/services/campaign-mock-generation.test.ts` | Saved campaign/event facts reach offline captions without fabricated dates or times |
+| `tests/workflow/campaign-builder-continuity.test.tsx` | Real Campaign Builder markup, valid navigation, unavailable campaigns and explicit bands |
+| `tests/workflow/campaign-studio-ui.test.tsx` | Actual Studio controls, linked/manual context, single-flight generation, pinned result and retained-input recovery |
+| `tests/services/postgres-fixture-boundary.test.ts` | Disposable PostgreSQL suite refuses non-fixture URLs, environment files and credentials |
 | `tests/services/local-deployment-boundary.test.ts` | Default Compose stays loopback-only while request-level auth is absent |
 | `tests/services/review-desk.test.ts` | Review desk pipeline, facts, neighbors, scheduled walk, no publish |
 | `tests/services/review-decision.test.ts` | Approve / Hold / Deny / Schedule rail, next yes, no live claim |
@@ -332,6 +355,13 @@ Jest is required in CI. Suites include:
 | `tests/workflow/archive-snapshot-fence.test.ts` | Archive / resume refuse a stale card |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
 | `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |
+
+`npm run test:postgres` is a separate, required CI job using a fresh synthetic
+PostgreSQL service, not an operator database. Its actual Prisma tests cover
+linked persistence, changed-source refusal, foreign-band refusal and rollback
+after a later version insert fails. It is intentionally not part of `npm test`;
+see [fixture requirements](docs/campaign-generation-context.md#verification) before
+running it locally. No seed or live provider is used.
 
 ## Project Structure
 

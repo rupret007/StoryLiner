@@ -104,11 +104,11 @@ source test paths are excluded.
 
 ## Next work, not included
 
-Campaign Builder currently links campaign context into Content Studio without
-fully carrying it through the existing generation controls. A future focused
-product session should validate band/campaign/event consistency and carry
-verified event facts into generation. Do not mix that work into edit recovery.
-Calendar date/time display consistency is also separate.
+At the end of the review-edit recovery slice, Campaign Builder did not fully
+carry campaign context through Content Studio. The subsequent focused
+[campaign-context slice](campaign-generation-context.md) addresses that gap for
+offline linked generation; it was not part of the review-editing work described
+above. Calendar-wide date/time consistency remains separate.
 
 The unchanged dependency baseline has outstanding advisory findings. Review
 those separately with a compatible dependency plan; this PR does not claim a

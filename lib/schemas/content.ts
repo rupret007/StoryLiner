@@ -21,15 +21,27 @@ export const generateContentSchema = z.object({
   ]).optional(),
   context: z.object({
     eventDetails: z.string().max(500).optional(),
-    showDate: z.string().optional(),
-    venue: z.string().optional(),
-    city: z.string().optional(),
-    ticketUrl: z.string().url().optional().or(z.literal("")),
+    showDate: z.string().max(300).optional(),
+    venue: z.string().max(300).optional(),
+    city: z.string().max(300).optional(),
+    ticketUrl: z.string().max(2000).url().optional().or(z.literal("")),
     additionalContext: z.string().max(500).optional(),
   }).optional(),
   campaignId: z.string().cuid().optional(),
   eventId: z.string().cuid().optional(),
+  contextReceipt: z.string().min(1).max(20000).optional(),
   mediaUrls: z.array(z.string().max(2000)).max(5).optional(),
+}).superRefine((input, ctx) => {
+  const linked = Boolean(input.campaignId || input.eventId);
+  if (linked && !input.contextReceipt) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contextReceipt"], message: "Review the linked campaign or event facts before generating." });
+  }
+  if (!linked && input.contextReceipt) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contextReceipt"], message: "A linked receipt cannot be reused for an unlinked draft." });
+  }
+  if (linked && input.context && Object.entries(input.context).some(([key, value]) => key !== "additionalContext" && value !== undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["context"], message: "Saved campaign and event facts cannot be overridden here. Add an operator note separately." });
+  }
 });
 
 export const reviewSnapshotReceiptSchema = z.object({
