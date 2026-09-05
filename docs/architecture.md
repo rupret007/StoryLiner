@@ -82,17 +82,27 @@ scripts/
 
 ```
 User (Content Studio)
-  → generateContentAction (server action)
+  → generateStudioDraftAction (server action; saved / blocked code / unconfirmed)
   → generateContentSchema.parse() (Zod validation)
   → generateContent() (service layer)
-    → LLMAdapter.generateContent() (mock or real)
+    → loadGenerationContext() (active band; exact campaign/event ownership and receipt)
+    → linked context: mock-only privacy gate, saved facts + separate operator note
+    → LLMAdapter.generateContent() (linked: mock; unlinked: existing configured adapter)
     → evaluateGuardrails() (always runs; isAutoPublish is explicitly false)
-    → prisma.generationRun.create()
-    → prisma.draft.create(status: IN_REVIEW)
-    → prisma.draftVersion.create(version: 1)
+    → serializable transaction:
+      → re-read source context and compare receipts
+      → generationRun.create() (effective context + source provenance)
+      → draft.create(status: IN_REVIEW)
+      → draftVersion.create(version: 1)
   → Studio shows the guarded snapshot (caption, media, flags)
   → Next action is /review-queue?focus=draftId — the review desk, not approve, not publish
 ```
+
+Campaign Builder and Studio share the bounded saved-fact projection. Invalid
+explicit selections do not silently fall back. The receipt is a source comparison,
+not authentication; the existing loopback-only, single-operator boundary remains.
+See [campaign generation context](campaign-generation-context.md) for persistence,
+privacy, timestamp and recovery limits.
 
 ## Dashboard Decision Guide
 

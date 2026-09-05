@@ -7,6 +7,7 @@ import type {
   RiskAssessment,
 } from "./types";
 import { hashtagCapForVoice, resolveStoryLinerVoice } from "./voice";
+import { generationContextLines } from "@/lib/services/content/campaign-context";
 
 // Realistic mock content pools per band archetype
 const stalematePool = {
@@ -87,19 +88,30 @@ export class MockLlmAdapter implements LLMAdapter {
     const voice = resolveStoryLinerVoice(band.name);
     const isRD = voice === "rad-dad";
     const pool = isRD ? radDadPool : voice === "stalemate" ? stalematePool : unknownPool;
+    const savedContext = options.contextSource === "saved-campaign-event";
 
     const vars: Record<string, string> = {
       venue: context?.venue ?? "the venue",
-      date: context?.showDate ?? "Saturday",
+      date: context?.showDate ?? (savedContext ? "[show date not supplied]" : "Saturday"),
       city: context?.city ?? "the city",
-      time: "8pm",
+      time: context?.doorsTime ?? (savedContext ? "[doors time not supplied]" : "8pm"),
       bandname: band.name,
     };
 
     let caption: string;
     const type = campaignType.toLowerCase();
 
-    if (type.includes("show") || type.includes("announcement") || type.includes("reminder") || type.includes("last_call") || type.includes("day_of")) {
+    if (savedContext) {
+      // Keep the established voice pools unchanged. The saved-context path uses
+      // only their first factual show template, not demos about invented lineups,
+      // attendance, dates, songs, or durations. All supplied facts remain visible.
+      const showLead = Boolean(context?.showDate && context?.venue &&
+        ["SHOW_ANNOUNCEMENT", "REMINDER", "DAY_OF_SHOW", "LAST_CALL"].includes(campaignType));
+      const lead = showLead ? fillTemplate(pool.show[0], vars) : band.name;
+      const details = generationContextLines(context ?? {}).filter((line) =>
+        !showLead || (!line.startsWith("Venue:") && !line.startsWith("Show date:")));
+      caption = [lead, ...details].join("\n\n");
+    } else if (type.includes("show") || type.includes("announcement") || type.includes("reminder") || type.includes("last_call") || type.includes("day_of")) {
       caption = fillTemplate(pickRandom(pool.show), vars);
     } else if (type.includes("recap") || type.includes("thank")) {
       caption = fillTemplate(pickRandom(pool.recap), vars);
@@ -111,11 +123,11 @@ export class MockLlmAdapter implements LLMAdapter {
       caption = fillTemplate(pickRandom(pool.general), vars);
     }
 
-    if (contentLength === "LONG" && context?.additionalContext) {
+    if (!savedContext && contentLength === "LONG" && context?.additionalContext) {
       caption += `\n\n${context.additionalContext}`;
     }
 
-    if (context?.ticketUrl && contentLength !== "SHORT") {
+    if (!savedContext && context?.ticketUrl && contentLength !== "SHORT") {
       caption += `\n\nTickets: ${context.ticketUrl}`;
     }
 
@@ -147,7 +159,7 @@ export class MockLlmAdapter implements LLMAdapter {
           ? ["I'll be there", "Been waiting for this room", "See you if I can"]
           : ["See you there", "Thanks for posting", "Noted"],
       brandFitScore,
-      confidenceNotes: `Generated using mock adapter. Voice profile ${voiceProfile ? "applied" : "not configured"}.`,
+      confidenceNotes: `Generated using mock adapter. Voice profile ${voiceProfile ? "applied" : "not configured"}.${savedContext ? " Saved context retained without invented event facts; length is a preference, not permission to omit facts. Review all copy before use." : ""}`,
       riskFlags: [],
     };
   }
