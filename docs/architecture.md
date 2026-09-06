@@ -224,9 +224,12 @@ mixed valid/invalid lists are rejected instead of partially saved. Details and
 remaining boundaries: [review editing recovery](review-editing-recovery.md).
 
 The review queue opens a desk at `/review-queue?focus=` so Jeff can read
-the caption, media, guard, and voice before that yes. After Approve,
-Schedule is bound to that same snapshot. After Schedule the desk stays
-open on the job — Publish is the worker, never a desk button.
+the caption, media, guard, saved campaign/event facts, and voice before
+that yes. Linked snapshots show the same facts Studio generated with,
+including honest missing doors/set/ticket or a no-event line. Scheduled
+for uses America/Chicago. After Approve, Schedule is bound to that same
+snapshot. After Schedule the desk stays open on the job — Publish is the
+worker, never a desk button. See [review desk facts](review-desk-facts.md).
 
 ## Guardrail Architecture
 

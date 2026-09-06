@@ -97,12 +97,34 @@ function publicTicket(value: unknown): string | null {
   return raw;
 }
 
-function displayInstant(value: string): string {
+/** Central display for a saved instant. Not a per-event timezone claim. */
+export function displayCampaignInstant(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error("Invalid instant");
+  }
   return `${new Intl.DateTimeFormat("en-US", {
     timeZone: CAMPAIGN_CONTEXT_TIME_ZONE,
     weekday: "long", year: "numeric", month: "long", day: "numeric",
     hour: "numeric", minute: "2-digit", timeZoneName: "short",
-  }).format(new Date(value))} (${CAMPAIGN_CONTEXT_TIME_ZONE})`;
+  }).format(date)} (${CAMPAIGN_CONTEXT_TIME_ZONE})`;
+}
+
+/** Honest missing-fact labels. Absent fields stay absent — no invented Saturday/8pm. */
+export function missingCampaignFacts(
+  facts: Pick<GenerationContextFacts, "venue" | "city" | "doorsTime" | "setTime" | "ticketUrl">,
+  hasEvent: boolean,
+): string[] {
+  if (!hasEvent) {
+    return ["No event linked — event dates, venue, and times are not supplied"];
+  }
+  return [
+    ...(!facts.venue ? ["Venue not saved"] : []),
+    ...(!facts.city ? ["City not saved"] : []),
+    ...(!facts.doorsTime ? ["Doors time not saved"] : []),
+    ...(!facts.setTime ? ["Set time not saved"] : []),
+    ...(!facts.ticketUrl ? ["Ticket link not saved"] : []),
+  ];
 }
 
 /** Pure shared projection. Throws instead of presenting an unusable linked campaign. */
@@ -130,11 +152,11 @@ export function buildCampaignContextView(source: CampaignContextSource): Campaig
   const facts: GenerationContextFacts = {
     ...(campaignName ? { campaignName } : {}),
     ...(campaignDescription ? { campaignDescription } : {}),
-    ...(campaignTargetDate ? { campaignTargetDate: displayInstant(campaignTargetDate) } : {}),
+    ...(campaignTargetDate ? { campaignTargetDate: displayCampaignInstant(campaignTargetDate) } : {}),
     ...(eventTitle ? { eventDetails: eventTitle } : {}),
-    ...(eventDate ? { showDate: displayInstant(eventDate) } : {}),
-    ...(doorsTime ? { doorsTime: displayInstant(doorsTime) } : {}),
-    ...(setTime ? { setTime: displayInstant(setTime) } : {}),
+    ...(eventDate ? { showDate: displayCampaignInstant(eventDate) } : {}),
+    ...(doorsTime ? { doorsTime: displayCampaignInstant(doorsTime) } : {}),
+    ...(setTime ? { setTime: displayCampaignInstant(setTime) } : {}),
     ...(venue ? { venue } : {}),
     ...(city ? { city } : {}),
     ...(ticketUrl ? { ticketUrl } : {}),
@@ -155,13 +177,7 @@ export function buildCampaignContextView(source: CampaignContextSource): Campaig
     bandId, bandName, campaignId: campaign?.id ?? null, eventId: event?.id ?? null,
     campaignType: campaign?.type ?? null, campaignName, campaignDescription,
     eventTitle, facts, receipt,
-    missingFacts: event ? [
-      ...(!venue ? ["Venue not saved"] : []),
-      ...(!city ? ["City not saved"] : []),
-      ...(!doorsTime ? ["Doors time not saved"] : []),
-      ...(!setTime ? ["Set time not saved"] : []),
-      ...(!ticketUrl ? ["Ticket link not saved"] : []),
-    ] : ["No event linked — event dates, venue, and times are not supplied"],
+    missingFacts: missingCampaignFacts(facts, Boolean(event)),
   };
 }
 

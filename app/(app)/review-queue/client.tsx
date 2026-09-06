@@ -92,6 +92,7 @@ import {
   reviewDeskCanMutateCreative,
   reviewDeskChromeNote,
   reviewDeskFactRows,
+  reviewDeskFactsNote,
   reviewDeskNeighbors,
   reviewDeskPlatformNote,
   reviewDeskQueueHref,
@@ -692,6 +693,7 @@ export function DraftCard({
     riskFlags: draft.riskFlags,
   });
   const deskFacts = reviewDeskFactRows(draft);
+  const factsNote = reviewDeskFactsNote(draft.generationRun?.inputContext);
   const mediaPreview = previewablePromoMediaUrl(draft.mediaUrls[0]);
   const platformNote = reviewDeskPlatformNote(draft.platform);
   const isDesk = variant === "desk";
@@ -954,19 +956,26 @@ export function DraftCard({
             </div>
           )}
 
-          {isDesk && deskFacts.length > 0 && (
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-md border border-border bg-muted/20 p-3">
-              {deskFacts.map((fact) => (
-                <div key={fact.label} className="space-y-0.5">
-                  <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {fact.label}
-                  </dt>
-                  <dd className="text-xs text-foreground whitespace-pre-wrap">
-                    {fact.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+          {isDesk && (deskFacts.length > 0 || factsNote) && (
+            <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              {deskFacts.length > 0 && (
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {deskFacts.map((fact) => (
+                    <div key={fact.label} className="space-y-0.5">
+                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {fact.label}
+                      </dt>
+                      <dd className="text-xs text-foreground whitespace-pre-wrap break-words">
+                        {fact.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {factsNote && (
+                <p className="text-xs text-muted-foreground">{factsNote}</p>
+              )}
+            </div>
           )}
           {isDesk && platformNote && (
             <p className="text-xs text-amber-200">{platformNote}</p>

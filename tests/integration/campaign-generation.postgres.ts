@@ -156,6 +156,7 @@ describe("campaign generation with actual PostgreSQL transactions", () => {
       city: f.event.city,
       ticketUrl: f.event.ticketUrl,
       additionalContext: f.input.context?.additionalContext,
+      missingFacts: f.context.missingFacts,
       source: { kind: "saved-campaign-event", bandId: f.band.id,
         campaignId: f.campaign.id, eventId: f.event.id, receipt: f.context.receipt },
     });
