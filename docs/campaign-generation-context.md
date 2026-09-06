@@ -117,5 +117,7 @@ atomic persistence and fixture boundary. Keep the PR draft and unmerged.
 Owner decision: whether the optional live AI adapter may receive the newly linked
 campaign/event facts and operator note. If approved later, implement explicit
 provider parity and no-fabrication tests in a separate scoped change. General
-campaign CRUD, calendar-wide timezone consistency, durable recovery and multi-user
-auth remain outside this slice. Never auto-publish.
+campaign CRUD, durable recovery and multi-user auth remain outside this slice.
+The later [Calendar planning slice](calendar-planning.md) applies the explicit
+Chicago display convention to Calendar; it does not change scheduling inputs,
+add per-event timezone data or expand provider access. Never auto-publish.

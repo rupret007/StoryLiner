@@ -121,7 +121,7 @@ App runs at [http://localhost:3000](http://localhost:3000)
 | `/bands/[id]` | Band detail: voice profile, platforms, knowledge entries, in-review drafts |
 | `/content-studio` | Generate platform-specific content with band voice, tone, and context |
 | `/campaign-builder` | View and manage campaign groupings |
-| `/calendar` | Upcoming posts, events, and streams in one view |
+| `/calendar` | Upcoming posts, events, and streams grouped by Central date, with saved event/doors/set times |
 | `/review-queue` | Approve / Hold / Deny / edit / rewrite / schedule / archive drafts |
 | `/scheduled-posts` | Queued worker jobs. Unschedule pending posts or return failed writes — neither publishes. |
 | `/published-posts` | Published post history with engagement metrics |
@@ -159,6 +159,22 @@ and open the exact guarded draft in Review. Nothing publishes automatically.
 
 See [campaign context and handoff](docs/campaign-generation-context.md) for source
 checks, in-session recovery, database proof, and remaining boundaries.
+
+## Calendar Planning
+
+Calendar shows the next 30 days of scheduled posts, shows and streams in
+chronological order. Day headings and clock times use **Central time
+(America/Chicago)**, matching Campaign Builder and Studio. Each time includes
+CDT or CST, so the repeated hour when daylight saving ends remains distinct.
+
+Show cards expose the saved event, doors and set times. Missing doors/set times
+say **Not saved**; a time on another day includes that date. No start time is
+guessed from another field. This is a display convention, not a new per-event
+timezone setting or a change to saved schedules. Post cards retain the existing
+review links and possible-write warnings. Calendar adds no publishing actions.
+
+See [Calendar planning and handoff](docs/calendar-planning.md) for the timezone
+boundary, read-only behavior and verification.
 
 ## Review Queue
 

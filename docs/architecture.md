@@ -120,6 +120,23 @@ This keeps a normal content task from hiding a possible live-post uncertainty.
 The decision logic lives in `lib/services/dashboard-next-action.ts` and has
 branch coverage in `tests/services/dashboard-next-action.test.ts`.
 
+## Calendar Planning
+
+`/calendar` retains its three bounded Prisma reads: scheduled posts, uncancelled
+events and incomplete/uncancelled streams from now through 30 days out. Results
+sort by their saved absolute instant. `lib/services/calendar-timeline.ts` groups
+and formats them in America/Chicago, using the same zone for the day key,
+heading, clock and related event facts. CST/CDT labels distinguish the repeated
+hour at daylight-saving end. Semantic `time` elements retain the original ISO
+instant; group headings use the Chicago calendar date.
+
+Event cards display `eventDate`, optional `doorsTime` and optional `setTime`.
+Absent optional fields remain absent, and a related time on a different Chicago
+day includes its full date. These projections do not change the schema or
+database values. Existing post review links and queue warnings remain; stream
+cards stay informational. No provider, scheduling or worker code is called by
+this slice. See [Calendar handoff](calendar-planning.md) for proof and limits.
+
 ## Data Flow: Review → Publish
 
 ```
