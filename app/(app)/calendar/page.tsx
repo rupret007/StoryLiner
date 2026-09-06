@@ -1,12 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BandChip } from "@/components/storyliner/band-chip";
 import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { EmptyState } from "@/components/storyliner/empty-state";
 import { Calendar as CalendarIcon } from "lucide-react";
 import Link from "next/link";
-import { formatDateTime, formatDate } from "@/lib/utils";
+import {
+  calendarDayKey,
+  calendarDayLabel,
+  calendarRelatedTimeLabel,
+  calendarTimeLabel,
+} from "@/lib/services/calendar-timeline";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
 import {
@@ -50,7 +54,6 @@ export default async function CalendarPage() {
     }),
   ]);
 
-  // Group all items by date
   type CalendarItem =
     | { type: "post"; date: Date; data: typeof scheduledPosts[0] }
     | { type: "event"; date: Date; data: typeof events[0] }
@@ -62,19 +65,25 @@ export default async function CalendarPage() {
     ...livestreams.map((l) => ({ type: "stream" as const, date: l.scheduledFor, data: l })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // Group by day
+  // Day headings and clock labels use the same explicit planning timezone.
+  // Keep absolute-time ordering, including the repeated hour when DST ends.
   const grouped = new Map<string, CalendarItem[]>();
   for (const item of allItems) {
-    const key = item.date.toISOString().split("T")[0];
+    const key = calendarDayKey(item.date);
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(item);
   }
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Next 30 days — {allItems.length} items across {grouped.size} days
-      </p>
+      <div className="space-y-1">
+        <p className="text-sm text-muted-foreground">
+          Next 30 days — {allItems.length} items across {grouped.size} days
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Times shown in Central time (America/Chicago). CDT or CST follows each saved time.
+        </p>
+      </div>
 
       {allItems.length === 0 ? (
         <EmptyState
@@ -85,17 +94,17 @@ export default async function CalendarPage() {
       ) : (
         <div className="space-y-6">
           {Array.from(grouped.entries()).map(([dateKey, items]) => (
-            <div key={dateKey}>
+            <section key={dateKey} data-calendar-day={dateKey} aria-labelledby={`calendar-day-${dateKey}`}>
               <div className="flex items-center gap-3 mb-3">
-                <div className="text-sm font-semibold text-foreground">
-                  {formatDate(new Date(dateKey + "T12:00:00"))}
-                </div>
+                <h2 id={`calendar-day-${dateKey}`} className="text-sm font-semibold text-foreground">
+                  <time dateTime={dateKey}>{calendarDayLabel(items[0].date)}</time>
+                </h2>
                 <div className="h-px flex-1 bg-border" />
               </div>
               <div className="space-y-2">
                 {items.map((item) => {
                   if (item.type === "post") {
-                    const post = item.data as typeof scheduledPosts[0];
+                    const post = item.data;
                     const writeStarted = post.job
                       ? jobMayHaveStartedAdapterWrite(post.job.payload)
                       : false;
@@ -107,70 +116,84 @@ export default async function CalendarPage() {
                     return (
                       <Link
                         key={`post-${post.id}`}
+                        data-calendar-item={`post-${post.id}`}
                         href={reviewQueueFocusHref(post.draft.id)}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border hover:border-primary/40 transition-colors"
+                        className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border hover:border-primary/40 transition-colors"
                       >
-                        <PlatformIcon platform={post.draft.platform} />
+                        <div className="shrink-0 pt-0.5"><PlatformIcon platform={post.draft.platform} /></div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground line-clamp-1">{post.draft.caption}</p>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <time dateTime={post.scheduledFor.toISOString()} className="text-sm font-semibold tabular-nums">
+                              {calendarTimeLabel(post.scheduledFor)}
+                            </time>
+                            <Badge variant={badge.variant} className="text-xs">{badge.label}</Badge>
+                          </div>
+                          <p className="text-sm text-foreground line-clamp-2 break-words mt-1">{post.draft.caption}</p>
                           <BandChip name={post.band.name} color={post.band.coverColor} />
                           {writeStarted && (
                             <p className="text-xs text-amber-200 mt-1">
-                              {writeStartedQueueWarning({
-                                jobFailed: jobStatus === "FAILED",
-                              })}
+                              {writeStartedQueueWarning({ jobFailed: jobStatus === "FAILED" })}
                             </p>
                           )}
                         </div>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          {formatDateTime(post.scheduledFor).split(",")[1]?.trim()}
-                        </span>
-                        <Badge variant={badge.variant} className="text-xs shrink-0">
-                          {badge.label}
-                        </Badge>
                       </Link>
                     );
                   }
                   if (item.type === "event") {
-                    const event = item.data as typeof events[0];
+                    const event = item.data;
                     return (
-                      <div key={`event-${event.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
-                        <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <div key={`event-${event.id}`} data-calendar-item={`event-${event.id}`} className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border">
+                        <div className="h-8 w-8 shrink-0 rounded-lg bg-primary/20 flex items-center justify-center">
                           <CalendarIcon className="h-4 w-4 text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground font-medium">{event.title}</p>
-                          {event.venue && (
-                            <p className="text-xs text-muted-foreground">{event.venue}{event.city ? `, ${event.city}` : ""}</p>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <p className="min-w-0 max-w-full text-sm text-foreground font-medium break-words">{event.title}</p>
+                            <Badge variant="secondary" className="text-xs">Show</Badge>
+                          </div>
+                          {(event.venue || event.city) && (
+                            <p className="text-xs text-muted-foreground break-words">{[event.venue, event.city].filter(Boolean).join(", ")}</p>
                           )}
                           <BandChip name={event.band.name} color={event.band.coverColor} />
+                          <dl className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
+                            <div>
+                              <dt className="text-muted-foreground">Event</dt>
+                              <dd><time dateTime={event.eventDate.toISOString()}>{calendarTimeLabel(event.eventDate)}</time></dd>
+                            </div>
+                            <div>
+                              <dt className="text-muted-foreground">Doors</dt>
+                              <dd>{event.doorsTime ? <time dateTime={event.doorsTime.toISOString()}>{calendarRelatedTimeLabel(event.doorsTime, event.eventDate)}</time> : "Not saved"}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-muted-foreground">Set</dt>
+                              <dd>{event.setTime ? <time dateTime={event.setTime.toISOString()}>{calendarRelatedTimeLabel(event.setTime, event.eventDate)}</time> : "Not saved"}</dd>
+                            </div>
+                          </dl>
                         </div>
-                        <Badge variant="secondary" className="text-xs shrink-0">Show</Badge>
                       </div>
                     );
                   }
-                  if (item.type === "stream") {
-                    const stream = item.data as typeof livestreams[0];
-                    return (
-                      <div key={`stream-${stream.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-card border border-primary/20">
-                        <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                          <span className="text-xs font-bold text-primary">LIVE</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground font-medium">{stream.title}</p>
-                          <BandChip name={stream.band.name} color={stream.band.coverColor} />
-                        </div>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          {formatDateTime(stream.scheduledFor).split(",")[1]?.trim()}
-                        </span>
-                        <Badge variant="default" className="text-xs shrink-0">Stream</Badge>
+                  const stream = item.data;
+                  return (
+                    <div key={`stream-${stream.id}`} data-calendar-item={`stream-${stream.id}`} className="flex items-start gap-3 p-3 rounded-lg bg-card border border-primary/20">
+                      <div className="h-8 w-8 shrink-0 rounded-lg bg-primary/20 flex items-center justify-center">
+                        <span className="text-xs font-bold text-primary">LIVE</span>
                       </div>
-                    );
-                  }
-                  return null;
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <time dateTime={stream.scheduledFor.toISOString()} className="text-sm font-semibold tabular-nums">
+                            {calendarTimeLabel(stream.scheduledFor)}
+                          </time>
+                          <Badge variant="default" className="text-xs">Stream</Badge>
+                        </div>
+                        <p className="text-sm text-foreground font-medium break-words mt-1">{stream.title}</p>
+                        <BandChip name={stream.band.name} color={stream.band.coverColor} />
+                      </div>
+                    </div>
+                  );
                 })}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
