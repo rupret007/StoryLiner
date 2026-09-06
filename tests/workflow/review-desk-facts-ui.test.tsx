@@ -108,6 +108,8 @@ function linkedDraft(): ReviewDraft {
           "content creator",
         ],
         bannedTopics: ["political opinions"],
+        goodExamples: [],
+        badExamples: [],
         createdAt: INITIAL_TIME,
         updatedAt: INITIAL_TIME,
       },
