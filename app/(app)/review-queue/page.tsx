@@ -77,7 +77,7 @@ export default async function ReviewQueuePage({
           {PROMO_PIPELINE_PATH}
         </p>
         <p className="text-sm text-muted-foreground">
-          Open a snapshot to review the caption, media, guard, and voice.
+          Open a snapshot to review the caption, media, guard, saved facts, and voice.
           {` ${REVIEW_DESK_NO_PUBLISH} `}
           Live destinations stay Facebook, Instagram, and YouTube.
         </p>

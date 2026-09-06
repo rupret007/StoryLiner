@@ -82,6 +82,7 @@ export async function generateContent(input: GenerateContentInput): Promise<Draf
         platform: input.platform,
         inputContext: {
           ...(context ?? {}),
+          ...(linked ? { missingFacts: linked.missingFacts } : {}),
           source: linked ? {
             kind: "saved-campaign-event",
             bandId: band.id,

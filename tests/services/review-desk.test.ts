@@ -25,13 +25,17 @@ import {
   reviewDeskChromeNote,
   reviewDeskDoesNotPublish,
   reviewDeskFactRows,
+  reviewDeskFactsNote,
   reviewDeskFocusMissing,
   reviewDeskNeighbors,
   reviewDeskPlatformNote,
   reviewDeskQueueHref,
   reviewDeskSamePileIds,
   reviewDeskScheduleHref,
+  REVIEW_DESK_SAVED_FACTS_NOTE,
+  REVIEW_DESK_UNLINKED_FACTS_NOTE,
 } from "@/lib/services/publish/review-desk";
+import { displayCampaignInstant } from "@/lib/services/content/campaign-context";
 import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
 
 function readRepo(relative: string) {
@@ -143,7 +147,13 @@ describe("review desk focus after Approve → Schedule", () => {
         { label: "Worker job", value: "PENDING" },
       ])
     );
-    expect(rows.some((row) => row.label === "Scheduled for")).toBe(true);
+    expect(rows).toContainEqual({
+      label: "Scheduled for",
+      value: displayCampaignInstant("2026-09-20T19:00:00.000Z"),
+    });
+    expect(rows.find((row) => row.label === "Scheduled for")?.value).toContain(
+      "America/Chicago"
+    );
     expect(reviewDeskScheduleHref()).toBe("/scheduled-posts");
   });
 });
@@ -247,19 +257,211 @@ describe("review desk facts Jeff needs", () => {
     );
   });
 
+  it("surfaces the saved campaign/event snapshot Studio generated with, including honest gaps", () => {
+    const rows = reviewDeskFactRows({
+      generationRun: {
+        campaignType: "SHOW_ANNOUNCEMENT",
+        inputContext: {
+          campaignName: "Lincoln Hall — Pop Punk Night",
+          campaignDescription: "Announce the room. Do not invent an opener.",
+          campaignTargetDate: "Saturday, September 19, 2026 at 7:00 PM CDT (America/Chicago)",
+          eventDetails: "Lincoln Hall — Pop Punk Night",
+          showDate: "Saturday, September 19, 2026 at 7:00 PM CDT (America/Chicago)",
+          venue: "Lincoln Hall",
+          city: "Chicago",
+          ticketUrl: "https://example.test/lincoln-tickets",
+          additionalContext: "Jeff: name the room, not the ticket FOMO.",
+          missingFacts: ["Doors time not saved", "Set time not saved"],
+          source: {
+            kind: "saved-campaign-event",
+            campaignId: "campaign-1",
+            eventId: "event-1",
+            receipt: "storyliner-campaign-context-v1",
+            displayTimeZone: "America/Chicago",
+          },
+        },
+      },
+      band: {
+        voiceProfile: {
+          toneRules: [
+            "Never beg.",
+            "No exclamation marks unless absolutely unavoidable.",
+            "Do not explain the joke.",
+            "Do not use the word 'journey'.",
+            "Dry is better than hype.",
+          ],
+          bannedPhrases: [
+            "journey",
+            "excited to announce",
+            "don't miss out",
+            "limited tickets",
+            "grab your tickets now",
+            "unforgettable experience",
+            "community",
+          ],
+        },
+      },
+    });
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { label: "Origin", value: "Saved campaign" },
+        { label: "Campaign", value: "Lincoln Hall — Pop Punk Night" },
+        { label: "Event", value: "Lincoln Hall — Pop Punk Night" },
+        {
+          label: "Campaign target date",
+          value: "Saturday, September 19, 2026 at 7:00 PM CDT (America/Chicago)",
+        },
+        {
+          label: "Ticket URL",
+          value: "https://example.test/lincoln-tickets",
+        },
+      ])
+    );
+    expect(rows.some((row) => row.label === "Doors")).toBe(false);
+    expect(rows.some((row) => row.label === "Set time")).toBe(false);
+    expect(rows).toContainEqual({
+      label: "Operator note",
+      value: "Jeff: name the room, not the ticket FOMO.",
+    });
+    expect(rows).toContainEqual({
+      label: "Not saved",
+      value: "Doors time not saved · Set time not saved",
+    });
+    expect(rows.find((row) => row.label === "Voice")?.value).toContain("Dry is better than hype.");
+    expect(rows.find((row) => row.label === "Never say")?.value).toContain("community");
+    expect(JSON.stringify(rows)).not.toMatch(/8:00\s*PM/);
+    expect(JSON.stringify(rows)).not.toMatch(/fault.?lines/i);
+    expect(reviewDeskFactsNote({
+      source: { kind: "saved-campaign-event" },
+    })).toBe(REVIEW_DESK_SAVED_FACTS_NOTE);
+  });
+
+  it("does not invent event times for a saved campaign without an event", () => {
+    const rows = reviewDeskFactRows({
+      campaign: { name: "September reminder", type: "REMINDER" },
+      generationRun: {
+        campaignType: "REMINDER",
+        inputContext: {
+          campaignName: "September reminder",
+          campaignTargetDate: "Friday, October 2, 2026 at 7:00 PM CDT (America/Chicago)",
+          missingFacts: ["No event linked — event dates, venue, and times are not supplied"],
+          source: {
+            kind: "saved-campaign-event",
+            campaignId: "campaign-2",
+            eventId: null,
+            displayTimeZone: "America/Chicago",
+          },
+        },
+      },
+    });
+
+    expect(rows).toContainEqual({ label: "Origin", value: "Saved campaign" });
+    expect(rows).toContainEqual({
+      label: "Not saved",
+      value: "No event linked — event dates, venue, and times are not supplied",
+    });
+    expect(rows.some((row) => row.label === "Show date")).toBe(false);
+    expect(rows.some((row) => row.label === "Venue")).toBe(false);
+    expect(JSON.stringify(rows)).not.toMatch(/\b8pm\b/i);
+    expect(JSON.stringify(rows)).not.toMatch(/Saturday/);
+  });
+
+  it("derives missing saved facts when an older linked snapshot omitted the list", () => {
+    const facts = generationContextFacts({
+      venue: "Lincoln Hall",
+      city: "Chicago",
+      showDate: "Saturday, September 19, 2026 at 7:00 PM CDT (America/Chicago)",
+      source: { kind: "saved-campaign-event", eventId: "event-1" },
+    });
+    expect(facts.origin).toBe("saved-campaign-event");
+    expect(facts.missingFacts).toEqual([
+      "Doors time not saved",
+      "Set time not saved",
+      "Ticket link not saved",
+    ]);
+    expect(facts.doorsTime).toBeNull();
+    expect(facts.setTime).toBeNull();
+  });
+
+  it("keeps unlinked operator facts from becoming a saved-campaign claim", () => {
+    const rows = reviewDeskFactRows({
+      generationRun: {
+        campaignType: "REHEARSAL",
+        inputContext: {
+          venue: "Operator supplied room",
+          eventDetails: "Operator supplied detail",
+          additionalContext: "Manual note",
+          source: { kind: "operator-supplied", bandId: "band-1" },
+        },
+      },
+    });
+    expect(rows).toContainEqual({ label: "Origin", value: "Unlinked draft" });
+    expect(rows).toContainEqual({ label: "Venue", value: "Operator supplied room" });
+    expect(rows).toContainEqual({ label: "Operator note", value: "Manual note" });
+    expect(rows.some((row) => row.label === "Not saved")).toBe(false);
+    expect(reviewDeskFactsNote({
+      source: { kind: "operator-supplied" },
+    })).toBe(REVIEW_DESK_UNLINKED_FACTS_NOTE);
+  });
+
+  it("refuses non-https ticket links and does not echo a generation receipt", () => {
+    const rows = reviewDeskFactRows({
+      generationRun: {
+        campaignType: "SHOW_ANNOUNCEMENT",
+        inputContext: {
+          ticketUrl: "javascript:alert(1)",
+          source: {
+            kind: "saved-campaign-event",
+            eventId: "event-1",
+            receipt: "do-not-show-this-receipt",
+          },
+        },
+      },
+    });
+    expect(rows.some((row) => row.label === "Ticket URL")).toBe(false);
+    expect(JSON.stringify(rows)).not.toContain("do-not-show-this-receipt");
+    expect(JSON.stringify(rows)).not.toContain("javascript:");
+  });
+
   it("omits empty leftover fields so Jeff is not reading blanks", () => {
     expect(reviewDeskFactRows({})).toEqual([]);
-    expect(generationContextFacts("not-an-object")).toEqual({
+    expect(generationContextFacts("not-an-object")).toMatchObject({
+      origin: "unknown",
       venue: null,
       city: null,
       showDate: null,
+      missingFacts: [],
     });
-    expect(generationContextFacts({ venue: "  " })).toEqual({
+    expect(generationContextFacts({ venue: "  " })).toMatchObject({
+      origin: "unknown",
       venue: null,
       city: null,
       showDate: null,
+      missingFacts: [],
     });
+    expect(reviewDeskFactsNote({ venue: "Lincoln Hall" })).toBeNull();
   });
+
+  it.each(["UTC", "Asia/Tokyo", "America/Los_Angeles"])(
+    "keeps Scheduled for in America/Chicago when the host timezone is %s",
+    (hostTimezone) => {
+      const previousTimezone = process.env.TZ;
+      try {
+        process.env.TZ = hostTimezone;
+        const rows = reviewDeskFactRows({
+          scheduledPost: { scheduledFor: new Date("2026-09-06T00:30:00.000Z") },
+        });
+        expect(rows).toContainEqual({
+          label: "Scheduled for",
+          value: "Saturday, September 5, 2026 at 7:30 PM CDT (America/Chicago)",
+        });
+      } finally {
+        if (previousTimezone === undefined) delete process.env.TZ;
+        else process.env.TZ = previousTimezone;
+      }
+    }
+  );
 
   it("previews only public https images", () => {
     expect(
@@ -299,6 +501,7 @@ describe("review desk wiring after leftover #30", () => {
     expect(client).toMatch(/reviewDeskSamePileIds/);
     expect(client).toMatch(/reviewDeskNeighbors/);
     expect(client).toMatch(/reviewDeskFactRows/);
+    expect(client).toMatch(/reviewDeskFactsNote/);
     expect(client).toMatch(/variant="desk"/);
     expect(client).toMatch(/Open review desk/);
     expect(client).toMatch(/reviewDeskQueueHref/);

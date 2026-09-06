@@ -120,4 +120,6 @@ provider parity and no-fabrication tests in a separate scoped change. General
 campaign CRUD, durable recovery and multi-user auth remain outside this slice.
 The later [Calendar planning slice](calendar-planning.md) applies the explicit
 Chicago display convention to Calendar; it does not change scheduling inputs,
-add per-event timezone data or expand provider access. Never auto-publish.
+add per-event timezone data or expand provider access. The [review desk facts
+slice](review-desk-facts.md) shows those same saved facts — and honest gaps —
+on the existing review snapshot. Never auto-publish.

@@ -108,7 +108,9 @@ At the end of the review-edit recovery slice, Campaign Builder did not fully
 carry campaign context through Content Studio. The subsequent focused
 [campaign-context slice](campaign-generation-context.md) addresses that gap for
 offline linked generation; it was not part of the review-editing work described
-above. Calendar-wide date/time consistency remains separate.
+above. Calendar-wide date/time consistency was handled separately in
+[calendar planning](calendar-planning.md). The review desk now shows those
+saved generation facts in [review desk facts](review-desk-facts.md).
 
 The unchanged dependency baseline has outstanding advisory findings. Review
 those separately with a compatible dependency plan; this PR does not claim a

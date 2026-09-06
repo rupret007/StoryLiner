@@ -5,7 +5,19 @@
  * to `/review-queue?focus=`. That leftover is a ring on a card in a pile.
  * This desk is the product: one snapshot, the six-step path, and the
  * facts needed to decide. Nothing on this desk publishes.
+ *
+ * After #37, linked generation stores saved campaign/event facts on
+ * GenerationRun.inputContext. The desk must show those facts — including
+ * honest missing doors/set/ticket — and Central scheduled times. It must
+ * not invent Saturday/8pm or hide voice rules.
  */
+
+import {
+  CAMPAIGN_CONTEXT_TIME_ZONE,
+  displayCampaignInstant,
+  missingCampaignFacts,
+  type GenerationContextFacts,
+} from "@/lib/services/content/campaign-context";
 
 export const PROMO_PIPELINE_STEPS = [
   "generate",
@@ -272,26 +284,143 @@ export function previewablePromoMediaUrl(
   }
 }
 
-export function generationContextFacts(inputContext: unknown): {
+export type ReviewGenerationOrigin =
+  | "saved-campaign-event"
+  | "operator-supplied"
+  | "unknown";
+
+export type ReviewGenerationContextFacts = {
+  origin: ReviewGenerationOrigin;
+  campaignName: string | null;
+  campaignDescription: string | null;
+  campaignTargetDate: string | null;
+  eventDetails: string | null;
+  showDate: string | null;
   venue: string | null;
   city: string | null;
-  showDate: string | null;
-} {
+  doorsTime: string | null;
+  setTime: string | null;
+  ticketUrl: string | null;
+  additionalContext: string | null;
+  displayTimeZone: string | null;
+  missingFacts: string[];
+};
+
+const EMPTY_GENERATION_FACTS: ReviewGenerationContextFacts = {
+  origin: "unknown",
+  campaignName: null,
+  campaignDescription: null,
+  campaignTargetDate: null,
+  eventDetails: null,
+  showDate: null,
+  venue: null,
+  city: null,
+  doorsTime: null,
+  setTime: null,
+  ticketUrl: null,
+  additionalContext: null,
+  displayTimeZone: null,
+  missingFacts: [],
+};
+
+function readContextText(ctx: Record<string, unknown>, key: string): string | null {
+  const value = ctx[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readPublicTicketUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+      return null;
+    }
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function readSourceRecord(ctx: Record<string, unknown>): Record<string, unknown> | null {
+  const source = ctx.source;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  return source as Record<string, unknown>;
+}
+
+function readStoredMissingFacts(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const facts = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return facts.length > 0 ? facts : [];
+}
+
+export function generationContextFacts(
+  inputContext: unknown
+): ReviewGenerationContextFacts {
   if (!inputContext || typeof inputContext !== "object" || Array.isArray(inputContext)) {
-    return { venue: null, city: null, showDate: null };
+    return { ...EMPTY_GENERATION_FACTS };
   }
 
   const ctx = inputContext as Record<string, unknown>;
-  const read = (key: string) => {
-    const value = ctx[key];
-    return typeof value === "string" && value.trim() ? value.trim() : null;
+  const source = readSourceRecord(ctx);
+  const kind = source && typeof source.kind === "string" ? source.kind : null;
+  const origin: ReviewGenerationOrigin =
+    kind === "saved-campaign-event"
+      ? "saved-campaign-event"
+      : kind === "operator-supplied"
+        ? "operator-supplied"
+        : "unknown";
+  const eventId =
+    source && typeof source.eventId === "string" && source.eventId.trim()
+      ? source.eventId.trim()
+      : null;
+  const displayTimeZone =
+    source && typeof source.displayTimeZone === "string" && source.displayTimeZone.trim()
+      ? source.displayTimeZone.trim()
+      : origin === "saved-campaign-event"
+        ? CAMPAIGN_CONTEXT_TIME_ZONE
+        : null;
+
+  const facts: ReviewGenerationContextFacts = {
+    origin,
+    campaignName: readContextText(ctx, "campaignName"),
+    campaignDescription: readContextText(ctx, "campaignDescription"),
+    campaignTargetDate: readContextText(ctx, "campaignTargetDate"),
+    eventDetails: readContextText(ctx, "eventDetails"),
+    showDate: readContextText(ctx, "showDate"),
+    venue: readContextText(ctx, "venue"),
+    city: readContextText(ctx, "city"),
+    doorsTime: readContextText(ctx, "doorsTime"),
+    setTime: readContextText(ctx, "setTime"),
+    ticketUrl: readPublicTicketUrl(readContextText(ctx, "ticketUrl")),
+    additionalContext: readContextText(ctx, "additionalContext"),
+    displayTimeZone,
+    missingFacts: [],
   };
 
-  return {
-    venue: read("venue"),
-    city: read("city"),
-    showDate: read("showDate"),
-  };
+  const storedMissing = readStoredMissingFacts(ctx.missingFacts);
+  facts.missingFacts =
+    storedMissing ??
+    (origin === "saved-campaign-event"
+      ? missingCampaignFacts(facts as GenerationContextFacts, Boolean(eventId))
+      : []);
+
+  return facts;
+}
+
+export const REVIEW_DESK_SAVED_FACTS_NOTE =
+  "These are the saved campaign/event facts from generation. Missing facts were not invented. Dates use America/Chicago, not a per-event timezone. This desk does not publish.";
+
+export const REVIEW_DESK_UNLINKED_FACTS_NOTE =
+  "Unlinked draft — facts below were supplied at generate, not a saved campaign. This desk does not publish.";
+
+export function reviewDeskFactsNote(inputContext: unknown): string | null {
+  const origin = generationContextFacts(inputContext).origin;
+  if (origin === "saved-campaign-event") return REVIEW_DESK_SAVED_FACTS_NOTE;
+  if (origin === "operator-supplied") return REVIEW_DESK_UNLINKED_FACTS_NOTE;
+  return null;
 }
 
 export type ReviewDeskFact = { label: string; value: string };
@@ -319,8 +448,15 @@ export function reviewDeskFactRows(draft: {
     draft.campaign?.type ?? draft.generationRun?.campaignType ?? null;
   const context = generationContextFacts(draft.generationRun?.inputContext);
 
-  if (draft.campaign?.name) {
-    rows.push({ label: "Campaign", value: draft.campaign.name });
+  if (context.origin === "saved-campaign-event") {
+    rows.push({ label: "Origin", value: "Saved campaign" });
+  } else if (context.origin === "operator-supplied") {
+    rows.push({ label: "Origin", value: "Unlinked draft" });
+  }
+
+  const campaignName = draft.campaign?.name?.trim() || context.campaignName;
+  if (campaignName) {
+    rows.push({ label: "Campaign", value: campaignName });
   }
   if (campaignType) {
     rows.push({
@@ -331,9 +467,32 @@ export function reviewDeskFactRows(draft: {
         .replace(/\b\w/g, (char) => char.toUpperCase()),
     });
   }
+  if (context.campaignDescription) {
+    rows.push({ label: "Campaign brief", value: context.campaignDescription });
+  }
+  if (context.campaignTargetDate) {
+    rows.push({ label: "Campaign target date", value: context.campaignTargetDate });
+  }
+  if (context.eventDetails) {
+    rows.push({ label: "Event", value: context.eventDetails });
+  }
+  if (context.showDate) rows.push({ label: "Show date", value: context.showDate });
   if (context.venue) rows.push({ label: "Venue", value: context.venue });
   if (context.city) rows.push({ label: "City", value: context.city });
-  if (context.showDate) rows.push({ label: "Show date", value: context.showDate });
+  if (context.doorsTime) rows.push({ label: "Doors", value: context.doorsTime });
+  if (context.setTime) rows.push({ label: "Set time", value: context.setTime });
+  if (context.ticketUrl) {
+    rows.push({ label: "Ticket URL", value: context.ticketUrl });
+  }
+  if (context.additionalContext) {
+    rows.push({
+      label: "Operator note",
+      value: context.additionalContext,
+    });
+  }
+  if (context.missingFacts.length > 0) {
+    rows.push({ label: "Not saved", value: context.missingFacts.join(" · ") });
+  }
   if (draft.ctaText?.trim()) {
     rows.push({ label: "CTA", value: draft.ctaText.trim() });
   }
@@ -351,13 +510,7 @@ export function reviewDeskFactRows(draft: {
     if (!Number.isNaN(when.getTime())) {
       rows.push({
         label: "Scheduled for",
-        value: when.toLocaleString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+        value: displayCampaignInstant(when),
       });
     }
   }
@@ -375,16 +528,14 @@ export function reviewDeskFactRows(draft: {
 
   const voiceRules = (draft.band?.voiceProfile?.toneRules ?? [])
     .map((rule) => rule.trim())
-    .filter(Boolean)
-    .slice(0, 4);
+    .filter(Boolean);
   if (voiceRules.length > 0) {
     rows.push({ label: "Voice", value: voiceRules.join(" · ") });
   }
 
   const banned = (draft.band?.voiceProfile?.bannedPhrases ?? [])
     .map((phrase) => phrase.trim())
-    .filter(Boolean)
-    .slice(0, 6);
+    .filter(Boolean);
   if (banned.length > 0) {
     rows.push({ label: "Never say", value: banned.join(" · ") });
   }

@@ -72,6 +72,7 @@ describe("actual campaign generation action/service", () => {
     const data = prismaMock.generationRun.create.mock.calls[0][0].data;
     expect(data.inputContext).toMatchObject({
       ...preview.facts, additionalContext: input.context?.additionalContext,
+      missingFacts: preview.missingFacts,
       source: { kind: "saved-campaign-event", campaignId: CAMPAIGN_ID, eventId: EVENT_ID, receipt: preview.receipt },
     });
     expect(JSON.stringify(adapterMock.generateContent.mock.calls)).not.toContain("PRIVATE FIXTURE");

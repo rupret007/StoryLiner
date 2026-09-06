@@ -10,6 +10,22 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 
 ---
 
+## Post-#38 leftover: review desk shows the saved generation facts
+
+**Evidence:** leftover #37 stored campaign/event facts, missing doors/set,
+and America/Chicago dates on `GenerationRun.inputContext`. The review desk
+still projected only venue/city/showDate, truncated voice/never-say, and
+printed Scheduled for in the host timezone. Jeff could approve a snapshot
+Studio had previewed more completely.
+
+**Fix:** the desk now shows origin, campaign/event facts, operator note,
+honest Not saved / no-event lines, the full voice and banned-phrase lists,
+and Central scheduled-for with CDT/CST. Unlinked drafts stay unlinked.
+No invented Saturday/8pm. Nothing publishes. Calendar #38 is unchanged.
+Parked Fault Lines #27 stays untouched. No X adapter.
+
+---
+
 ## Post-#34 leftover: Approve / Hold / Deny / Schedule as a decision rail
 
 **Evidence:** leftover #32/#34 left the four verbs as a flat wrap next to

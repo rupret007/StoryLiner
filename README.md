@@ -180,7 +180,7 @@ boundary, read-only behavior and verification.
 
 Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes.
 
-The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, campaign/voice facts, and a **decision rail**. Approve, Hold, Deny, and Schedule are separate verbs: each has a consequence, and only one is the next yes. Edit / Copy / Archive stay in a tools row. After Approve, the desk shows the schedule form on the card — it queues a worker job and does not publish. After Schedule the desk stays on the job — Publish is the worker, not a desk button. Junk or missing `?focus=` is an honest empty desk, not a silent pile.
+The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, the **same saved campaign/event facts Studio generated with** (including honest Not saved / no-event lines), the full voice and never-say lists, and a **decision rail**. Scheduled-for uses Central time (America/Chicago) with CDT or CST. Approve, Hold, Deny, and Schedule are separate verbs: each has a consequence, and only one is the next yes. Edit / Copy / Archive stay in a tools row. After Approve, the desk shows the schedule form on the card — it queues a worker job and does not publish. After Schedule the desk stays on the job — Publish is the worker, not a desk button. Junk or missing `?focus=` is an honest empty desk, not a silent pile.
 
 All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. Approve / Hold / Deny / Schedule never publish.
 
@@ -365,7 +365,8 @@ Jest is required in CI. Suites include:
 | `tests/workflow/campaign-studio-ui.test.tsx` | Actual Studio controls, linked/manual context, single-flight generation, pinned result and retained-input recovery |
 | `tests/services/postgres-fixture-boundary.test.ts` | Disposable PostgreSQL suite refuses non-fixture URLs, environment files and credentials |
 | `tests/services/local-deployment-boundary.test.ts` | Default Compose stays loopback-only while request-level auth is absent |
-| `tests/services/review-desk.test.ts` | Review desk pipeline, facts, neighbors, scheduled walk, no publish |
+| `tests/services/review-desk.test.ts` | Review desk pipeline, saved/unlinked facts, missing gaps, Central schedule, neighbors, no publish |
+| `tests/workflow/review-desk-facts-ui.test.tsx` | Actual desk renders saved facts, missing times, full voice, and Central scheduled-for |
 | `tests/services/review-decision.test.ts` | Approve / Hold / Deny / Schedule rail, next yes, no live claim |
 | `tests/workflow/schedule-snapshot-fence.test.ts` | Schedule binds to the approved caption/media/guard snapshot |
 | `tests/workflow/archive-snapshot-fence.test.ts` | Archive / resume refuse a stale card |
