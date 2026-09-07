@@ -80,6 +80,16 @@ Leaving/reloading the page can discard session input; this is not durable backup
 
 ## Verification
 
+Content Studio asks the browser to warn before native reload/close while typed
+context/media remains or generation is pending/unconfirmed. Clearing the inputs
+and resolving the generation state removes the warning; leaving the component
+removes its listener. A confirmed generated draft stays in the review queue,
+even though the working input fields remain session-only.
+
+This is a best-effort browser prompt requiring user interaction, not durable
+autosave or cancellation of a server request. SPA/history navigation and browser
+process termination remain outside this warning. Nothing is retried or published.
+
 The normal `npm test` suite includes actual Studio DOM and Campaign Builder
 rendering tests plus service, projection and mock-adapter tests. Full typecheck,
 lint and production build remain required. Fixture visual checks use the actual

@@ -120,6 +120,55 @@ async function type(id: string, value: string) {
 }
 
 describe("campaign-linked generation through actual Content Studio", () => {
+  function warnsBeforeLeaving() {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+
+  it.each([
+    ["venue", "Fixture venue"], ["city", "Fixture city"], ["date", "2026-10-31"],
+    ["ticket", "https://example.test/tickets"], ["notes", "Keep my instructions"],
+    ["media", "https://example.test/photo.jpg"],
+  ])("warns for typed %s and releases after clearing it without generating", async (id, value) => {
+    await render({ linkedContext: null, contextIdentity: "unlinked-a" });
+    expect(warnsBeforeLeaving()).toBe(false);
+    await type(id, value);
+    expect(warnsBeforeLeaving()).toBe(true);
+    expect(field(id).value).toBe(value);
+    await type(id, "");
+    expect(warnsBeforeLeaving()).toBe(false);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("warns during generation with empty input and releases after a confirmed result", async () => {
+    const request = deferred<SavedDraft>(); generate.mockReturnValue(request.promise);
+    await render();
+    expect(warnsBeforeLeaving()).toBe(false);
+    await click("Generate Draft");
+    expect(warnsBeforeLeaving()).toBe(true);
+    await act(async () => request.resolve(draft()));
+    expect(warnsBeforeLeaving()).toBe(false);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an unconfirmed generation warning until the explicit queue check, without retrying", async () => {
+    generate.mockRejectedValueOnce(new Error("Fixture unavailable"));
+    await render(); await click("Generate Draft");
+    expect(warnsBeforeLeaving()).toBe(true);
+    await click("I checked the review queue");
+    expect(warnsBeforeLeaving()).toBe(false);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes the leave listener when the Studio unmounts", async () => {
+    await render(); await type("notes", "Session-only input");
+    expect(warnsBeforeLeaving()).toBe(true);
+    await act(async () => root.render(<div>Another page</div>));
+    expect(warnsBeforeLeaving()).toBe(false);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it("loads the exact campaign link and sends its receipt/type, not editable copies of saved facts", async () => {
     const page = await ContentStudioPage({ searchParams: Promise.resolve({ bandId: BAND_A, campaignId: CAMPAIGN_A }) });
     await act(async () => root.render(page));
