@@ -1,5 +1,5 @@
 import type { ContentStatus } from "@prisma/client";
-import { reviewDecisionHeading } from "@/lib/services/publish/review-decision";
+import { reviewDeskNextAction } from "@/lib/services/publish/review-desk";
 
 /**
  * Generate → Guard → Review snapshot identity.
@@ -190,8 +190,12 @@ export function reviewGuardBanner(options: {
   };
 }
 
-export function reviewCardNextAction(options: { status: string }): string {
-  return reviewDecisionHeading(options.status);
+export function reviewCardNextAction(options: {
+  status: string;
+  inputContext?: unknown;
+  campaign?: { name?: string | null } | null;
+}): string {
+  return reviewDeskNextAction(options);
 }
 
 export function reviewQueueFocusHref(draftId: string): string {

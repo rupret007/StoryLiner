@@ -25,7 +25,10 @@ jest.mock("@/app/(app)/review-queue/actions", () => ({
 }));
 
 import { ReviewQueueClient } from "@/app/(app)/review-queue/client";
-import { REVIEW_DESK_SAVED_FACTS_NOTE } from "@/lib/services/publish/review-desk";
+import {
+  REVIEW_DESK_SAVED_FACTS_NOTE,
+  reviewDeskNextAction,
+} from "@/lib/services/publish/review-desk";
 
 type ReviewDraft = ComponentProps<typeof ReviewQueueClient>["drafts"][number];
 const DRAFT_ID = "clhf5gt0000000test0draftid1";
@@ -213,6 +216,13 @@ describe("review desk saved-fact honesty", () => {
     expect(text).toContain("content creator");
     expect(text).toContain("Saturday, September 5, 2026 at 7:30 PM CDT (America/Chicago)");
     expect(text).toContain(REVIEW_DESK_SAVED_FACTS_NOTE);
+    expect(text).toContain(
+      reviewDeskNextAction({
+        status: "SCHEDULED",
+        inputContext: linkedDraft().generationRun?.inputContext,
+        campaign: linkedDraft().campaign,
+      })
+    );
     expect(text).toContain("This desk has no Publish button");
     expect(text).not.toMatch(/8:00\s*PM/);
     expect(text).not.toMatch(/fault.?lines/i);
@@ -248,8 +258,34 @@ describe("review desk saved-fact honesty", () => {
     expect(text).toContain("Unlinked draft");
     expect(text).toContain("Operator supplied room");
     expect(text).toContain("Manual note");
+    expect(text).toContain(
+      "Check the unlinked generate facts, then Approve, Hold, or Deny. None of those publish."
+    );
     expect(text).not.toContain("Doors time not saved");
     expect(text).not.toContain("No event linked");
     expect(text).not.toMatch(/\b8pm\b/i);
+  });
+
+  it("names the campaign snapshot on the pile so Jeff knows which desk to open", async () => {
+    const draft = linkedDraft();
+    draft.status = "IN_REVIEW";
+    draft.scheduledPost = null;
+
+    await act(async () => {
+      root.render(<ReviewQueueClient drafts={[draft]} />);
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("Saved campaign · Lincoln Hall — Pop Punk Night · 2 facts not saved");
+    expect(text).toContain("Open review desk");
+    expect(text).toContain(
+      "Check saved campaign facts (2 facts not saved), then Approve, Hold, or Deny. None of those publish."
+    );
+    expect(text).not.toMatch(/8:00\s*PM/);
+    expect(
+      Array.from(container.querySelectorAll("button")).some(
+        (button) => button.textContent?.trim() === "Publish"
+      )
+    ).toBe(false);
   });
 });

@@ -10,6 +10,24 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 
 ---
 
+## Post-#39 leftover: next action names the campaign snapshot
+
+**Evidence:** leftover #39 put saved campaign/event facts on the review
+desk. Dashboard next-action still said “caption, media, guard, and voice”
+and skipped a HELD-only queue, sending Jeff to Studio or Schedule. Queue
+pile cards and Dashboard rows showed caption only — no campaign name,
+origin, or missing-fact count. The decision heading was status-only.
+
+**Fix:** Dashboard next-action keeps live-write first, then Needs Review,
+then held desk work, then Schedule. Review/held copy names the generation
+snapshot when present. Dashboard rows and queue pile cards show a one-line
+cue (`Saved campaign · name · N facts not saved` / `Unlinked draft`). The
+desk decision heading asks Jeff to check those facts before the yes.
+Unlinked stays unlinked. No invented Saturday/8pm. Nothing publishes.
+Parked Fault Lines #27 stays untouched. No X adapter.
+
+---
+
 ## Post-#38 leftover: review desk shows the saved generation facts
 
 **Evidence:** leftover #37 stored campaign/event facts, missing doors/set,

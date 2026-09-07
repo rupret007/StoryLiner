@@ -43,7 +43,17 @@ Linked generation now also stores `missingFacts` on `inputContext` so the desk
 can show the same gap list Studio had. Older linked rows without that list
 derive the same labels from present/absent saved fields plus `source.eventId`.
 
+## Post-#39 leftover: next-action clarity
+
+The desk already had the facts. Dashboard next-action, queue pile cards, and
+the decision heading did not name them, and a HELD-only queue skipped the
+desk. `reviewDeskSnapshotCue` and `reviewDeskNextAction` now put a one-line
+generation snapshot on Dashboard rows, pile cards, and the next-action copy.
+Ticket URLs and clock times stay off that line. Unlinked drafts stay
+unlinked. Nothing publishes.
+
 Karen review should check missing-fact honesty, Central scheduled-for, full
-voice visibility, and the absence of new write/provider paths. Keep the PR an
-OPEN DRAFT until separately reviewed. No merge, tag, signing, release, deploy,
-Pages, send/post, spend, or live customer operation is part of this work.
+voice visibility, held next-action routing, snapshot-cue honesty, and the
+absence of new write/provider paths. Keep the PR an OPEN DRAFT until
+separately reviewed. No merge, tag, signing, release, deploy, Pages,
+send/post, spend, or live customer operation is part of this work.

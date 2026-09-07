@@ -164,6 +164,19 @@ describe("review decision rail view", () => {
     ).toBe("inline");
   });
 
+  it("keeps the status heading unless the desk names generation facts", () => {
+    expect(reviewDecisionRail({ status: "IN_REVIEW" }).heading).toBe(
+      reviewDecisionHeading("IN_REVIEW")
+    );
+    expect(
+      reviewDecisionRail({
+        status: "IN_REVIEW",
+        heading:
+          "Check saved campaign facts (2 facts not saved), then Approve, Hold, or Deny. None of those publish.",
+      }).heading
+    ).toMatch(/saved campaign facts \(2 facts not saved\)/i);
+  });
+
   it("keeps Edit / Copy / Archive off SCHEDULED and PUBLISHED", () => {
     expect(reviewCardTools("IN_REVIEW")).toEqual({
       edit: true,
@@ -213,6 +226,7 @@ describe("review decision rail wiring", () => {
     const rail = readRepo("components/storyliner/review-decision-rail.tsx");
 
     expect(client).toMatch(/reviewDecisionRail\(/);
+    expect(client).toMatch(/heading: reviewDeskNextAction\(/);
     expect(client).toMatch(/<ReviewDecisionRail/);
     expect(client).toMatch(/REVIEW_QUEUE_DECISION_HELP/);
     expect(client).toMatch(/scheduleForm=/);

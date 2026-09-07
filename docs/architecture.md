@@ -111,10 +111,11 @@ It does not create a second queue and its button only navigates to an existing
 screen or exact draft snapshot. Priority is deterministic and fail-closed:
 
 1. A failed adapter write or `POSSIBLE_LIVE_WRITE` receipt that needs a platform check
-2. Drafts waiting for review
-3. Approved drafts waiting for a separate schedule yes
-4. A healthy scheduled queue
-5. Band setup, then guarded content creation
+2. Drafts waiting for review, with the generation snapshot named when present
+3. Held drafts that still need a review yes (not skipped for Studio or Schedule)
+4. Approved drafts waiting for a separate schedule yes
+5. A healthy scheduled queue
+6. Band setup, then guarded content creation
 
 This keeps a normal content task from hiding a possible live-post uncertainty.
 The decision logic lives in `lib/services/dashboard-next-action.ts` and has

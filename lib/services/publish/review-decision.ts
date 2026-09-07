@@ -175,12 +175,13 @@ export function reviewDecisionRail(options: {
   surface?: ReviewDecisionSurface;
   possibleLiveWrite?: boolean;
   riskLevel?: string;
+  heading?: string;
 }): ReviewDecisionRailView {
   const surface = options.surface ?? "queue";
   const nextYesId = reviewDecisionNextYesId(options.status);
 
   return {
-    heading: reviewDecisionHeading(options.status),
+    heading: options.heading ?? reviewDecisionHeading(options.status),
     nextYesId,
     decisions: reviewDecisionIdsForStatus(options.status).map((id) => ({
       id,
