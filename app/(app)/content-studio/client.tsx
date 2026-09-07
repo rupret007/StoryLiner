@@ -225,6 +225,16 @@ function StudioSession({ bands, selectedBandId, linkedContext: incomingContext =
     ? "The saved campaign context changed or became unavailable. Your input and previous result are kept. Reload and review current facts before generating."
     : contextError || (linkedMismatch ? CAMPAIGN_CONTEXT_UNAVAILABLE : null);
   const hasTypedContext = Boolean(venue || city || showDate || ticketUrl || additionalContext || mediaUrl);
+  const needsLeaveWarning = hasTypedContext || generationState !== "idle";
+  useEffect(() => {
+    if (!needsLeaveWarning) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [needsLeaveWarning]);
 
   function confirmReset() {
     return !(hasTypedContext || generatedSnapshot || generationState === "unconfirmed")
