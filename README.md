@@ -116,7 +116,7 @@ App runs at [http://localhost:3000](http://localhost:3000)
 
 | Route | Description |
 |---|---|
-| `/dashboard` | Overview: review queue status, scheduled posts, upcoming streams, recently published |
+| `/dashboard` | Overview: one next action (live-write, review, held, schedule), review/held snapshot cues, scheduled posts, upcoming streams, recently published |
 | `/bands` | All bands with stats |
 | `/bands/[id]` | Band detail: voice profile, platforms, knowledge entries, in-review drafts |
 | `/content-studio` | Generate platform-specific content with band voice, tone, and context |
@@ -180,7 +180,7 @@ boundary, read-only behavior and verification.
 
 Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes.
 
-The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, the **same saved campaign/event facts Studio generated with** (including honest Not saved / no-event lines), the full voice and never-say lists, and a **decision rail**. Scheduled-for uses Central time (America/Chicago) with CDT or CST. Approve, Hold, Deny, and Schedule are separate verbs: each has a consequence, and only one is the next yes. Edit / Copy / Archive stay in a tools row. After Approve, the desk shows the schedule form on the card — it queues a worker job and does not publish. After Schedule the desk stays on the job — Publish is the worker, not a desk button. Junk or missing `?focus=` is an honest empty desk, not a silent pile.
+The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, the **same saved campaign/event facts Studio generated with** (including honest Not saved / no-event lines), the full voice and never-say lists, and a **decision rail**. Scheduled-for uses Central time (America/Chicago) with CDT or CST. Approve, Hold, Deny, and Schedule are separate verbs: each has a consequence, and only one is the next yes. The next-action heading asks Jeff to check those saved (or unlinked) facts before the yes. Dashboard next-action and queue pile cards name the same generation snapshot in one line, and a held-only queue still opens the desk instead of Studio. Edit / Copy / Archive stay in a tools row. After Approve, the desk shows the schedule form on the card — it queues a worker job and does not publish. After Schedule the desk stays on the job — Publish is the worker, not a desk button. Junk or missing `?focus=` is an honest empty desk, not a silent pile.
 
 All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. Approve / Hold / Deny / Schedule never publish.
 
@@ -365,8 +365,9 @@ Jest is required in CI. Suites include:
 | `tests/workflow/campaign-studio-ui.test.tsx` | Actual Studio controls, linked/manual context, single-flight generation, pinned result and retained-input recovery |
 | `tests/services/postgres-fixture-boundary.test.ts` | Disposable PostgreSQL suite refuses non-fixture URLs, environment files and credentials |
 | `tests/services/local-deployment-boundary.test.ts` | Default Compose stays loopback-only while request-level auth is absent |
-| `tests/services/review-desk.test.ts` | Review desk pipeline, saved/unlinked facts, missing gaps, Central schedule, neighbors, no publish |
-| `tests/workflow/review-desk-facts-ui.test.tsx` | Actual desk renders saved facts, missing times, full voice, and Central scheduled-for |
+| `tests/services/review-desk.test.ts` | Review desk pipeline, saved/unlinked facts, snapshot cue, fact-aware next action, Central schedule, no publish |
+| `tests/workflow/review-desk-facts-ui.test.tsx` | Actual desk and pile render saved facts, missing times, next-action heading, and Central scheduled-for |
+| `tests/services/dashboard-next-action.test.ts` | Dashboard next action: live-write, review facts cue, held-only desk, schedule, setup |
 | `tests/services/review-decision.test.ts` | Approve / Hold / Deny / Schedule rail, next yes, no live claim |
 | `tests/workflow/schedule-snapshot-fence.test.ts` | Schedule binds to the approved caption/media/guard snapshot |
 | `tests/workflow/archive-snapshot-fence.test.ts` | Archive / resume refuse a stale card |

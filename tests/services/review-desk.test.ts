@@ -27,6 +27,8 @@ import {
   reviewDeskFactRows,
   reviewDeskFactsNote,
   reviewDeskFocusMissing,
+  reviewDeskNextAction,
+  reviewDeskSnapshotCue,
   reviewDeskNeighbors,
   reviewDeskPlatformNote,
   reviewDeskQueueHref,
@@ -424,6 +426,97 @@ describe("review desk facts Jeff needs", () => {
     expect(JSON.stringify(rows)).not.toContain("javascript:");
   });
 
+  it("names a one-line snapshot cue without inventing Saturday/8pm or echoing tickets", () => {
+    const linked = reviewDeskSnapshotCue({
+      campaign: { name: "Lincoln Hall — Pop Punk Night" },
+      generationRun: {
+        inputContext: {
+          ticketUrl: "https://example.test/lincoln-tickets",
+          missingFacts: ["Doors time not saved", "Set time not saved"],
+          source: { kind: "saved-campaign-event", eventId: "event-1" },
+        },
+      },
+    });
+    expect(linked).toMatchObject({
+      origin: "saved-campaign-event",
+      headline: "Lincoln Hall — Pop Punk Night",
+      missingLabel: "2 facts not saved",
+      line: "Saved campaign · Lincoln Hall — Pop Punk Night · 2 facts not saved",
+    });
+    expect(linked?.line).not.toMatch(/ticket|8:00\s*PM|javascript:/i);
+
+    expect(
+      reviewDeskSnapshotCue({
+        generationRun: {
+          inputContext: {
+            missingFacts: [
+              "No event linked — event dates, venue, and times are not supplied",
+            ],
+            source: { kind: "saved-campaign-event", campaignId: "c1" },
+          },
+        },
+      })?.line
+    ).toBe("Saved campaign · No event linked");
+
+    expect(
+      reviewDeskSnapshotCue({
+        generationRun: {
+          inputContext: {
+            venue: "Operator supplied room",
+            source: { kind: "operator-supplied" },
+          },
+        },
+      })?.line
+    ).toBe("Unlinked draft · Operator supplied room");
+
+    expect(reviewDeskSnapshotCue({ generationRun: { inputContext: { venue: "Room" } } })).toBeNull();
+    expect(reviewDeskSnapshotCue({})).toBeNull();
+  });
+
+  it("asks the next action to check generation facts before the yes", () => {
+    const linked = {
+      inputContext: {
+        campaignName: "Lincoln Hall — Pop Punk Night",
+        missingFacts: ["Doors time not saved", "Set time not saved"],
+        source: { kind: "saved-campaign-event", eventId: "event-1" },
+      },
+    };
+    expect(
+      reviewDeskNextAction({
+        status: "IN_REVIEW",
+        inputContext: linked.inputContext,
+        campaign: { name: "Lincoln Hall — Pop Punk Night" },
+      })
+    ).toBe(
+      "Check saved campaign facts (2 facts not saved), then Approve, Hold, or Deny. None of those publish."
+    );
+    expect(
+      reviewDeskNextAction({
+        status: "HELD",
+        inputContext: linked.inputContext,
+      })
+    ).toMatch(/Check saved campaign facts/i);
+    expect(
+      reviewDeskNextAction({
+        status: "APPROVED",
+        inputContext: linked.inputContext,
+      })
+    ).toMatch(/Schedule is the next yes/i);
+    expect(
+      reviewDeskNextAction({
+        status: "IN_REVIEW",
+        inputContext: {
+          venue: "Operator supplied room",
+          source: { kind: "operator-supplied" },
+        },
+      })
+    ).toMatch(/unlinked generate facts/i);
+    expect(reviewDeskNextAction({ status: "IN_REVIEW" })).toMatch(
+      /Approve, Hold, or Deny this snapshot/i
+    );
+    expect(reviewDeskNextAction({ status: "SCHEDULED" })).toMatch(/no Publish button/i);
+  });
+
   it("omits empty leftover fields so Jeff is not reading blanks", () => {
     expect(reviewDeskFactRows({})).toEqual([]);
     expect(generationContextFacts("not-an-object")).toMatchObject({
@@ -502,6 +595,8 @@ describe("review desk wiring after leftover #30", () => {
     expect(client).toMatch(/reviewDeskNeighbors/);
     expect(client).toMatch(/reviewDeskFactRows/);
     expect(client).toMatch(/reviewDeskFactsNote/);
+    expect(client).toMatch(/reviewDeskSnapshotCue/);
+    expect(client).toMatch(/reviewDeskNextAction/);
     expect(client).toMatch(/variant="desk"/);
     expect(client).toMatch(/Open review desk/);
     expect(client).toMatch(/reviewDeskQueueHref/);
@@ -525,6 +620,9 @@ describe("review desk wiring after leftover #30", () => {
     expect(readRepo("app/(app)/dashboard/page.tsx")).toMatch(
       /Approved — schedule is the next yes/
     );
+    expect(readRepo("app/(app)/dashboard/page.tsx")).toMatch(/heldCount: heldWaiting\.length/);
+    expect(readRepo("app/(app)/dashboard/page.tsx")).toMatch(/reviewDeskSnapshotCue/);
+    expect(readRepo("app/(app)/dashboard/page.tsx")).toMatch(/reviewFactsCue/);
     expect(readRepo("app/(app)/calendar/page.tsx")).toMatch(
       /reviewQueueFocusHref\(post\.draft\.id\)/
     );

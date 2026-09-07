@@ -28,6 +28,7 @@ import {
 } from "@/lib/services/publish/safety";
 import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
 import { dashboardNextAction } from "@/lib/services/dashboard-next-action";
+import { reviewDeskSnapshotCue } from "@/lib/services/publish/review-desk";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -49,7 +50,11 @@ export default async function DashboardPage() {
       prisma.band.findMany({ where: { isActive: true }, take: 10 }),
       prisma.draft.findMany({
         where: { status: "IN_REVIEW" },
-        include: { band: true },
+        include: {
+          band: true,
+          campaign: { select: { name: true } },
+          generationRun: { select: { inputContext: true } },
+        },
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
@@ -71,7 +76,11 @@ export default async function DashboardPage() {
       }),
       prisma.draft.findMany({
         where: { status: "APPROVED" },
-        include: { band: true },
+        include: {
+          band: true,
+          campaign: { select: { name: true } },
+          generationRun: { select: { inputContext: true } },
+        },
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
@@ -81,7 +90,11 @@ export default async function DashboardPage() {
       }),
       prisma.draft.findMany({
         where: { status: "HELD" },
-        select: { id: true, reviewNotes: true },
+        include: {
+          campaign: { select: { name: true } },
+          generationRun: { select: { inputContext: true } },
+        },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
@@ -139,6 +152,12 @@ export default async function DashboardPage() {
       approvedPossibleLiveWrite[0]?.id ?? heldPossibleLiveWrite[0]?.id,
     reviewCount: totalReviewCount,
     reviewDraftId: reviewQueue[0]?.id,
+    heldCount: heldWaiting.length,
+    heldDraftId: heldWaiting[0]?.id,
+    reviewFactsCue:
+      totalReviewCount > 0
+        ? reviewDeskSnapshotCue(reviewQueue[0])?.line ?? null
+        : reviewDeskSnapshotCue(heldWaiting[0])?.line ?? null,
     approvedCount: approvedWaiting.length,
     approvedDraftId: approvedReady[0]?.id,
     scheduledCount: totalScheduledCount,
@@ -236,7 +255,9 @@ export default async function DashboardPage() {
                 {needsReviewEmpty}
               </p>
             ) : (
-              reviewQueue.map((draft) => (
+              reviewQueue.map((draft) => {
+                const cue = reviewDeskSnapshotCue(draft);
+                return (
                 <Link
                   key={draft.id}
                   href={reviewQueueFocusHref(draft.id)}
@@ -247,6 +268,11 @@ export default async function DashboardPage() {
                     <p className="text-xs text-foreground line-clamp-2 group-hover:text-primary transition-colors">
                       {draft.caption}
                     </p>
+                    {cue && (
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {cue.line}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2 mt-1.5">
                       <BandChip
                         name={draft.band.name}
@@ -258,7 +284,8 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                 </Link>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -308,7 +335,9 @@ export default async function DashboardPage() {
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   Approved — schedule is the next yes
                 </p>
-                {approvedReady.map((draft) => (
+                {approvedReady.map((draft) => {
+                  const cue = reviewDeskSnapshotCue(draft);
+                  return (
                   <Link
                     key={draft.id}
                     href={reviewQueueFocusHref(draft.id)}
@@ -319,6 +348,11 @@ export default async function DashboardPage() {
                       <p className="text-xs text-foreground line-clamp-1">
                         {draft.caption}
                       </p>
+                      {cue && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {cue.line}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 mt-1.5">
                         <BandChip name={draft.band.name} color={draft.band.coverColor} />
                         <span className="text-[10px] text-muted-foreground">
@@ -327,7 +361,8 @@ export default async function DashboardPage() {
                       </div>
                     </div>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

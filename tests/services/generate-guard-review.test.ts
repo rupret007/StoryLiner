@@ -73,6 +73,15 @@ describe("generate → guard → review handoff", () => {
       /None of those publish/i
     );
     expect(reviewCardNextAction({ status: "HELD" })).toMatch(/Back to review/i);
+    expect(
+      reviewCardNextAction({
+        status: "IN_REVIEW",
+        inputContext: {
+          missingFacts: ["Doors time not saved"],
+          source: { kind: "saved-campaign-event", eventId: "event-1" },
+        },
+      })
+    ).toMatch(/Check saved campaign facts \(1 fact not saved\)/i);
     expect(reviewCardNextAction({ status: "APPROVED" })).toMatch(
       /Schedule is a separate yes/i
     );

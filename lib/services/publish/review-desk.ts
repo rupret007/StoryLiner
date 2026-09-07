@@ -7,9 +7,10 @@
  * facts needed to decide. Nothing on this desk publishes.
  *
  * After #37, linked generation stores saved campaign/event facts on
- * GenerationRun.inputContext. The desk must show those facts — including
- * honest missing doors/set/ticket — and Central scheduled times. It must
- * not invent Saturday/8pm or hide voice rules.
+ * GenerationRun.inputContext. After #39 the desk shows those facts. The
+ * leftover is next-action clarity: Dashboard, pile cards, and the decision
+ * heading must name the same snapshot and must not skip held work.
+ * It must not invent Saturday/8pm or hide voice rules.
  */
 
 import {
@@ -18,6 +19,7 @@ import {
   missingCampaignFacts,
   type GenerationContextFacts,
 } from "@/lib/services/content/campaign-context";
+import { reviewDecisionHeading } from "@/lib/services/publish/review-decision";
 
 export const PROMO_PIPELINE_STEPS = [
   "generate",
@@ -421,6 +423,108 @@ export function reviewDeskFactsNote(inputContext: unknown): string | null {
   if (origin === "saved-campaign-event") return REVIEW_DESK_SAVED_FACTS_NOTE;
   if (origin === "operator-supplied") return REVIEW_DESK_UNLINKED_FACTS_NOTE;
   return null;
+}
+
+export type ReviewDeskSnapshotCue = {
+  origin: Exclude<ReviewGenerationOrigin, "unknown">;
+  headline: string;
+  missingCount: number;
+  missingLabel: string | null;
+  line: string;
+};
+
+function missingFactsCueLabel(missingFacts: readonly string[]): string | null {
+  if (missingFacts.length === 0) return null;
+  if (missingFacts.some((fact) => /no event linked/i.test(fact))) {
+    return "No event linked";
+  }
+  const count = missingFacts.length;
+  return `${count} fact${count === 1 ? "" : "s"} not saved`;
+}
+
+/**
+ * One-line generation snapshot for Dashboard rows, queue pile cards, and
+ * next-action copy. Provenance comes from the generation receipt only.
+ * Ticket URLs and clock times stay off this line so the cue cannot invent
+ * Saturday/8pm or echo a refused link.
+ */
+export function reviewDeskSnapshotCue(draft: {
+  campaign?: { name?: string | null } | null;
+  generationRun?: { inputContext?: unknown } | null;
+}): ReviewDeskSnapshotCue | null {
+  const context = generationContextFacts(draft.generationRun?.inputContext);
+  const campaignName = draft.campaign?.name?.trim() || context.campaignName;
+
+  if (context.origin === "saved-campaign-event") {
+    const headline =
+      campaignName || context.eventDetails || "Saved campaign";
+    const missingLabel = missingFactsCueLabel(context.missingFacts);
+    return {
+      origin: "saved-campaign-event",
+      headline,
+      missingCount: context.missingFacts.length,
+      missingLabel,
+      line: ["Saved campaign", headline !== "Saved campaign" ? headline : null, missingLabel]
+        .filter(Boolean)
+        .join(" · "),
+    };
+  }
+
+  if (context.origin === "operator-supplied") {
+    const headline = campaignName || context.venue || "Unlinked draft";
+    return {
+      origin: "operator-supplied",
+      headline,
+      missingCount: 0,
+      missingLabel: null,
+      line:
+        headline === "Unlinked draft"
+          ? "Unlinked draft"
+          : `Unlinked draft · ${headline}`,
+    };
+  }
+
+  return null;
+}
+
+/** Status next-yes plus an honest check of the generation snapshot. */
+export function reviewDeskNextAction(options: {
+  status: string;
+  inputContext?: unknown;
+  campaign?: { name?: string | null } | null;
+}): string {
+  const cue = reviewDeskSnapshotCue({
+    campaign: options.campaign,
+    generationRun:
+      options.inputContext === undefined
+        ? undefined
+        : { inputContext: options.inputContext },
+  });
+  if (!cue) return reviewDecisionHeading(options.status);
+
+  const saved = cue.origin === "saved-campaign-event";
+  const missing = cue.missingLabel;
+
+  switch (options.status) {
+    case "IN_REVIEW":
+      if (saved && missing) {
+        return `Check saved campaign facts (${missing}), then Approve, Hold, or Deny. None of those publish.`;
+      }
+      if (saved) {
+        return "Check saved campaign facts, then Approve, Hold, or Deny. None of those publish.";
+      }
+      return "Check the unlinked generate facts, then Approve, Hold, or Deny. None of those publish.";
+    case "HELD":
+      return saved
+        ? "Check saved campaign facts, then Approve or return to review. Hold is not publish."
+        : "Check the unlinked generate facts, then Approve or return to review. Hold is not publish.";
+    case "APPROVED":
+      return saved
+        ? "Saved campaign facts stay with this snapshot. Schedule is the next yes. It does not publish."
+        : "These generate facts stay with this snapshot. Schedule is the next yes. It does not publish.";
+    default:
+      return reviewDecisionHeading(options.status);
+  }
 }
 
 export type ReviewDeskFact = { label: string; value: string };

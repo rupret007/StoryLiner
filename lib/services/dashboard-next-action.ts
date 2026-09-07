@@ -16,6 +16,9 @@ type DashboardNextActionInput = {
   possibleLiveWriteDraftId?: string;
   reviewCount: number;
   reviewDraftId?: string;
+  heldCount?: number;
+  heldDraftId?: string;
+  reviewFactsCue?: string | null;
   approvedCount: number;
   approvedDraftId?: string;
   scheduledCount: number;
@@ -65,14 +68,31 @@ export function dashboardNextAction(
 
   if (input.reviewCount > 0) {
     const count = input.reviewCount;
+    const cue = input.reviewFactsCue?.trim();
     return {
       tone: "review",
       eyebrow: "Your next decision",
       title: `Review ${count} draft${count === 1 ? "" : "s"}`,
-      description:
-        "Look at the caption, media, guard, and voice. Approve, Hold, and Deny do not publish.",
+      description: cue
+        ? `${cue}. Check caption, media, guard, voice, and these facts. Approve, Hold, and Deny do not publish.`
+        : "Look at the caption, media, guard, voice, and generation facts on the desk. Approve, Hold, and Deny do not publish.",
       href: reviewHref(input.reviewDraftId),
       cta: "Review first draft",
+    };
+  }
+
+  const heldCount = input.heldCount ?? 0;
+  if (heldCount > 0) {
+    const cue = input.reviewFactsCue?.trim();
+    return {
+      tone: "review",
+      eyebrow: "Your next decision",
+      title: `Review ${heldCount} held draft${heldCount === 1 ? "" : "s"}`,
+      description: cue
+        ? `${cue}. Parked snapshots still need a review yes. Approve does not publish.`
+        : "Parked snapshots still need a review yes. Approve, return to review, and Deny do not publish.",
+      href: reviewHref(input.heldDraftId),
+      cta: "Open held draft",
     };
   }
 

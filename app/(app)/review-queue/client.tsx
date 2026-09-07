@@ -93,7 +93,9 @@ import {
   reviewDeskChromeNote,
   reviewDeskFactRows,
   reviewDeskFactsNote,
+  reviewDeskNextAction,
   reviewDeskNeighbors,
+  reviewDeskSnapshotCue,
   reviewDeskPlatformNote,
   reviewDeskQueueHref,
   reviewDeskSamePileIds,
@@ -699,11 +701,17 @@ export function DraftCard({
   const isDesk = variant === "desk";
   const canMutate = reviewDeskCanMutateCreative(draft.status);
   const tools = reviewCardTools(draft.status);
+  const snapshotCue = reviewDeskSnapshotCue(draft);
   const decisionRail = reviewDecisionRail({
     status: draft.status,
     surface: isDesk ? "desk" : "queue",
     possibleLiveWrite,
     riskLevel: draft.riskLevel,
+    heading: reviewDeskNextAction({
+      status: draft.status,
+      inputContext: draft.generationRun?.inputContext,
+      campaign: draft.campaign,
+    }),
   });
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -943,6 +951,11 @@ export function DraftCard({
                 <p className="text-xs text-amber-200 mt-2">
                   A previous Facebook / Instagram / YouTube write may already be live.
                   Check the platform before scheduling again.
+                </p>
+              )}
+              {!isDesk && snapshotCue && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {snapshotCue.line}
                 </p>
               )}
               {!isDesk && (

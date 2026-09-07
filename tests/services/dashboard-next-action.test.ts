@@ -46,13 +46,47 @@ describe("dashboardNextAction", () => {
       ...idle,
       reviewCount: 2,
       reviewDraftId: "review-first",
+      heldCount: 4,
       approvedCount: 1,
       scheduledCount: 6,
     });
 
     expect(action.title).toBe("Review 2 drafts");
+    expect(action.description).toMatch(/generation facts on the desk/i);
     expect(action.description).toMatch(/do not publish/i);
     expect(action.href).toBe("/review-queue?focus=review-first");
+  });
+
+  it("names the generation snapshot on the review next action", () => {
+    const action = dashboardNextAction({
+      ...idle,
+      reviewCount: 1,
+      reviewDraftId: "review-lincoln",
+      reviewFactsCue: "Saved campaign · Lincoln Hall — Pop Punk Night · 2 facts not saved",
+    });
+
+    expect(action.description).toMatch(/Saved campaign · Lincoln Hall — Pop Punk Night/i);
+    expect(action.description).toMatch(/2 facts not saved/i);
+    expect(action.description).toMatch(/do not publish/i);
+    expect(action.description).not.toMatch(/8:00\s*PM|Saturday\/8pm/i);
+  });
+
+  it("sends a held-only queue back to the desk instead of Studio", () => {
+    const action = dashboardNextAction({
+      ...idle,
+      heldCount: 2,
+      heldDraftId: "held-first",
+      reviewFactsCue: "Unlinked draft · Operator supplied room",
+      approvedCount: 1,
+      scheduledCount: 3,
+    });
+
+    expect(action.tone).toBe("review");
+    expect(action.title).toBe("Review 2 held drafts");
+    expect(action.description).toMatch(/Unlinked draft · Operator supplied room/i);
+    expect(action.description).toMatch(/does not publish/i);
+    expect(action.href).toBe("/review-queue?focus=held-first");
+    expect(action.cta).toBe("Open held draft");
   });
 
   it("names schedule as a separate yes when only approved work waits", () => {
