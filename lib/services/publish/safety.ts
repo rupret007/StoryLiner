@@ -25,6 +25,34 @@ export function isLiveDestinationPlatform(platform: Platform): boolean {
   return REAL_LIVE_PLATFORMS.has(platform);
 }
 
+/** Generate must not create leftover-platform drafts Jeff cannot honestly schedule. */
+export function assertCanGenerateForPlatform(platform: string): LivePublishSafety {
+  if (platform === "TWITTER") {
+    return {
+      ok: false,
+      reason: `${TWITTER_SCHEMA_LEFTOVER_REFUSAL} Generate will not create an X draft.`,
+    };
+  }
+  if (!REAL_LIVE_PLATFORMS.has(platform as Platform)) {
+    return {
+      ok: false,
+      reason:
+        `${LIVE_DESTINATION_REFUSAL} Generate only creates Facebook, Instagram, or YouTube drafts.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function assertCanArchiveDraft(options: { status: string }): LivePublishSafety {
+  if (options.status === "SCHEDULED" || options.status === "PUBLISHED") {
+    return {
+      ok: false,
+      reason: `Draft cannot be archived from status ${options.status}.`,
+    };
+  }
+  return { ok: true };
+}
+
 /** Twitter/X is schema leftover only. Never a live or mock-publish destination. */
 export function isTwitterSchemaLeftover(platform: Platform): boolean {
   return platform === "TWITTER";
@@ -568,6 +596,7 @@ export function assertCanResumeHeldDraft(options: { status: string }): LivePubli
 }
 
 const MUTABLE_CAPTION_STATUSES = new Set(["IN_REVIEW", "HELD", "APPROVED"]);
+const MUTABLE_MEDIA_STATUSES = new Set(["IN_REVIEW", "HELD", "APPROVED"]);
 const DUPLICABLE_STATUSES = new Set([
   "DRAFT",
   "IN_REVIEW",
@@ -588,6 +617,23 @@ export function assertCanMutateDraftCaption(options: {
     return {
       ok: false,
       reason: `Caption cannot be changed from status ${options.status}.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Media is part of the reviewed creative, not attachment metadata. Never
+ * let an attach / replace / clear pull a scheduled or published draft back
+ * into review while its worker path still exists.
+ */
+export function assertCanMutateDraftMedia(options: {
+  status: string;
+}): LivePublishSafety {
+  if (!MUTABLE_MEDIA_STATUSES.has(options.status)) {
+    return {
+      ok: false,
+      reason: `Media cannot be changed from status ${options.status}.`,
     };
   }
   return { ok: true };
@@ -669,7 +715,7 @@ export function approveSuccessToast(options: { possibleLiveWrite: boolean }): st
       "Check the platform before scheduling."
     );
   }
-  return "Approved. This does not publish — schedule it from the Approved tab.";
+  return "Approved. This does not publish. Schedule is the next yes on this desk.";
 }
 
 export function approveHighRiskConfirmDescription(options: {
@@ -729,8 +775,37 @@ export function captionMutationSuccessToast(options: {
   }
 
   return options.kind === "edit"
-    ? "Caption updated."
-    : "Rewrite applied. Review the updated caption.";
+    ? "Caption updated. Review this new snapshot before approving. This does not publish."
+    : "Rewrite applied. Review the updated caption before approving. This does not publish.";
+}
+
+/**
+ * Attaching, replacing, or clearing media changes the publish payload.
+ * Approved / Held creative therefore returns to Needs Review, just like a
+ * caption edit. POSSIBLE_LIVE_WRITE remains a separate platform-check gate.
+ */
+export function mediaMutationSuccessToast(options: {
+  cleared: boolean;
+  fromStatus: "IN_REVIEW" | "HELD" | "APPROVED";
+  possibleLiveWrite: boolean;
+}): string {
+  const head = options.cleared ? "Media cleared." : "Media updated.";
+  const live = options.possibleLiveWrite
+    ? " A Facebook / Instagram / YouTube write may already be live."
+    : "";
+
+  if (options.fromStatus === "APPROVED" || options.fromStatus === "HELD") {
+    const nextStep =
+      options.fromStatus === "APPROVED"
+        ? "approve again before scheduling."
+        : "review it there before approving.";
+    return (
+      `${head} Back in Needs Review — ${nextStep}` +
+      `${live} This does not publish.`
+    );
+  }
+
+  return `${head} Review it with the caption before approving.${live} This does not publish.`;
 }
 
 /**

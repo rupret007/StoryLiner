@@ -64,6 +64,13 @@ export async function handlePublishPost(job: Job): Promise<PublishHandlerOutcome
     );
   }
 
+  if (scheduledPost.draft.status !== "SCHEDULED") {
+    throw new Error(
+      `Refusing to publish: draft status is ${scheduledPost.draft.status}, not SCHEDULED. ` +
+        "The reviewed creative and schedule no longer agree."
+    );
+  }
+
   if (parsed.adapterWriteStarted) {
     throw new Error(adapterRetryRefusedReason());
   }

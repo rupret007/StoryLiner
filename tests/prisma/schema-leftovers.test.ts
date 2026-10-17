@@ -42,7 +42,35 @@ describe("Draft.mediaUrls leftovers", () => {
     const attached = attachDraftMediaSchema.safeParse({
       draftId: "clhf5gt0000000test0draftid1",
       mediaUrls: ["https://cdn.example.com/show.jpg"],
+      reviewedSnapshot: {
+        updatedAt: "2026-09-03T11:00:00.000Z",
+        fingerprint: '{"v":1,"r":"LOW","c":"Thursday at The Hive.","h":[],"m":[],"f":[]}',
+      },
     });
     expect(attached.success).toBe(true);
+
+    const missingReceipt = attachDraftMediaSchema.safeParse({
+      draftId: "clhf5gt0000000test0draftid1",
+      mediaUrls: ["https://cdn.example.com/show.jpg"],
+    });
+    expect(missingReceipt.success).toBe(false);
+  });
+
+  it("refuses leftover-platform generate so Twitter/X cannot enter the path", () => {
+    for (const platform of ["TWITTER", "TIKTOK", "BLUESKY", "TWITCH"] as const) {
+      const leftover = generateContentSchema.safeParse({
+        bandId: "clhf5gt0000000test0bandid01",
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform,
+      });
+      expect(leftover.success).toBe(false);
+    }
+
+    const live = generateContentSchema.safeParse({
+      bandId: "clhf5gt0000000test0bandid01",
+      campaignType: "SHOW_ANNOUNCEMENT",
+      platform: "FACEBOOK",
+    });
+    expect(live.success).toBe(true);
   });
 });

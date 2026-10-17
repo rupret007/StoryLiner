@@ -19,8 +19,40 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npm test
+  postgres-fixtures:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: storyliner_fixture
+          POSTGRES_PASSWORD: storyliner_fixture
+          POSTGRES_DB: storyliner_campaign_test
+        ports:
+          - 59319:5432
+        options: >-
+          --health-cmd "pg_isready -U storyliner_fixture -d storyliner_campaign_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://storyliner_fixture:storyliner_fixture@127.0.0.1:59319/storyliner_campaign_test
+      STORYLINER_POSTGRES_FIXTURE: '1'
+      STORYLINER_POSTGRES_FIXTURE_LAYOUT: docker
+      LLM_ADAPTER: mock
+      SOCIAL_ADAPTER: mock
+      TZ: America/Chicago
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply schema only to disposable fixture database
+        run: |
+          npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > /tmp/storyliner-fixture-schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /tmp/storyliner-fixture-schema.sql
+      - run: npm run test:postgres
   build:
-    needs: [lint-and-typecheck, test]
+    needs: [lint-and-typecheck, test, postgres-fixtures]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

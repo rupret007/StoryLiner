@@ -61,6 +61,7 @@ function job(): Job {
 function scheduledRow(overrides: {
   platform?: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "TWITTER" | "TIKTOK" | "BLUESKY" | "TWITCH";
   status?: "SCHEDULED" | "PUBLISHED" | "FAILED";
+  draftStatus?: "IN_REVIEW" | "APPROVED" | "SCHEDULED" | "PUBLISHED";
   mediaUrls?: string[];
   isConnected?: boolean;
   isActive?: boolean;
@@ -82,7 +83,7 @@ function scheduledRow(overrides: {
       bandId: "band_1",
       campaignId: null,
       platform: overrides.platform ?? "FACEBOOK",
-      status: "SCHEDULED",
+      status: overrides.draftStatus ?? "SCHEDULED",
       toneVariant: "AUTHENTIC",
       contentLength: "SHORT",
       caption: overrides.caption ?? "Playing tonight.",
@@ -166,6 +167,18 @@ describe("handlePublishPost fail-closed", () => {
 
     await expect(handlePublishPost(job())).rejects.toThrow(/not SCHEDULED/i);
     expect(getSocialAdapter).not.toHaveBeenCalled();
+    expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the scheduled row and reviewed draft status disagree", async () => {
+    prismaMock.scheduledPost.findUniqueOrThrow.mockResolvedValue(
+      scheduledRow({ draftStatus: "IN_REVIEW" })
+    );
+
+    await expect(handlePublishPost(job())).rejects.toThrow(/draft status is IN_REVIEW/i);
+    expect(getSocialAdapter).not.toHaveBeenCalled();
+    expect(prismaMock.job.update).not.toHaveBeenCalled();
+    expect(prismaMock.publishLog.create).not.toHaveBeenCalled();
     expect(prismaMock.publishedPost.create).not.toHaveBeenCalled();
   });
 

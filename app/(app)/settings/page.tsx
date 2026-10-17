@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import {
+  PROMO_PIPELINE_PATH,
+  operatorPathPolicy,
+} from "@/lib/services/publish/review-desk";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -9,91 +11,62 @@ export const metadata: Metadata = { title: "Settings" };
 export default function SettingsPage() {
   const llmAdapter = process.env.LLM_ADAPTER ?? "mock";
   const socialAdapter = process.env.SOCIAL_ADAPTER ?? "mock";
+  const policy = operatorPathPolicy({
+    llmAdapter,
+    socialAdapter,
+  });
 
   return (
     <div className="max-w-2xl space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Adapter Mode</CardTitle>
+          <CardTitle className="text-sm">Operator path</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
+          <p className="text-sm font-medium text-foreground">{PROMO_PIPELINE_PATH}</p>
+          <p className="text-xs text-muted-foreground">
+            These are enforced in Generate, review, schedule, and the worker.
+            Settings cannot turn on auto-publish or add a desk Publish button.
+          </p>
+          <dl className="space-y-3">
+            {policy.map((row) => (
+              <div
+                key={row.label}
+                className="flex items-start justify-between gap-4 border-t border-border pt-3 first:border-t-0 first:pt-0"
+              >
+                <div>
+                  <dt className="text-sm text-foreground">{row.label}</dt>
+                  <dd className="text-xs text-muted-foreground">{row.value}</dd>
+                </div>
+                <Badge variant="secondary">Locked</Badge>
+              </div>
+            ))}
+          </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Adapter readout</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm">LLM Adapter</Label>
-              <p className="text-xs text-muted-foreground">
-                Controls which AI provider generates content
-              </p>
-            </div>
+            <p className="text-sm">LLM_ADAPTER</p>
             <Badge variant={llmAdapter === "mock" ? "secondary" : "success"}>
               {llmAdapter}
             </Badge>
           </div>
           <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm">Social Adapter</Label>
-              <p className="text-xs text-muted-foreground">
-                Controls how posts are published
-              </p>
-            </div>
+            <p className="text-sm">SOCIAL_ADAPTER</p>
             <Badge variant={socialAdapter === "mock" ? "secondary" : "success"}>
               {socialAdapter}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-            Change adapters via environment variables. See .env.example for available options.
+            Change adapters via environment variables, then restart. A UI
+            switch cannot override the connected-account gate or send a
+            leftover platform live.
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Publishing Safety</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm">Require review before scheduling</Label>
-              <p className="text-xs text-muted-foreground">
-                All drafts must be approved before they can be scheduled
-              </p>
-            </div>
-            <Switch checked disabled />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm">Auto-publish</Label>
-              <p className="text-xs text-muted-foreground">
-                Disabled by policy. Content always goes through review.
-              </p>
-            </div>
-            <Switch checked={false} disabled />
-          </div>
-          <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-            Live destinations are Facebook, Instagram, and YouTube only. Twitter/X, TikTok, Bluesky, and Twitch are refused. These settings are enforced at the service layer and cannot be overridden from the UI. See <code className="text-xs bg-muted px-1 rounded">lib/services/guardrails/policy.ts</code>.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Guardrail Policy</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {[
-            "Never sound like a LinkedIn influencer",
-            "Never overuse emojis or exclamation marks",
-            "Never generate fake accomplishments",
-            "Never mix band voices",
-            "Never auto-publish",
-            "Never mark draft-only writes as published",
-            "Facebook, Instagram, and YouTube only for live publish",
-            "Never use obvious AI phrases",
-          ].map((rule, i) => (
-            <div key={i} className="flex items-center gap-2 text-muted-foreground">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-              {rule}
-            </div>
-          ))}
         </CardContent>
       </Card>
     </div>

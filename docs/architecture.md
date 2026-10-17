@@ -82,25 +82,87 @@ scripts/
 
 ```
 User (Content Studio)
-  → generateContentAction (server action)
+  → generateStudioDraftAction (server action; saved / blocked code / unconfirmed)
   → generateContentSchema.parse() (Zod validation)
   → generateContent() (service layer)
-    → LLMAdapter.generateContent() (mock or real)
-    → checkHardGuardrails() (always runs)
-    → prisma.generationRun.create()
-    → prisma.draft.create(status: IN_REVIEW)
-    → prisma.draftVersion.create(version: 1)
-  → Draft sent to /review-queue
+    → loadGenerationContext() (active band; exact campaign/event ownership and receipt)
+    → linked context: mock-only privacy gate, saved facts + separate operator note
+    → LLMAdapter.generateContent() (linked: mock; unlinked: existing configured adapter)
+    → evaluateGuardrails() (always runs; isAutoPublish is explicitly false)
+    → serializable transaction:
+      → re-read source context and compare receipts
+      → generationRun.create() (effective context + source provenance)
+      → draft.create(status: IN_REVIEW)
+      → draftVersion.create(version: 1)
+  → Studio shows the guarded snapshot (caption, media, flags)
+  → Next action is /review-queue?focus=draftId — the review desk, not approve, not publish
 ```
+
+Campaign Builder and Studio share the bounded saved-fact projection. Invalid
+explicit selections do not silently fall back. The receipt is a source comparison,
+not authentication; the existing loopback-only, single-operator boundary remains.
+See [campaign generation context](campaign-generation-context.md) for persistence,
+privacy, timestamp and recovery limits.
+
+## Dashboard Decision Guide
+
+The dashboard turns existing workflow state into one read-only **next action**.
+It does not create a second queue and its button only navigates to an existing
+screen or exact draft snapshot. Priority is deterministic and fail-closed:
+
+1. A failed adapter write or `POSSIBLE_LIVE_WRITE` receipt that needs a platform check
+2. Drafts waiting for review, with the generation snapshot named when present
+3. Held drafts that still need a review yes (not skipped for Studio or Schedule)
+4. Approved drafts waiting for a separate schedule yes
+5. A healthy scheduled queue
+6. Band setup, then guarded content creation
+
+This keeps a normal content task from hiding a possible live-post uncertainty.
+The decision logic lives in `lib/services/dashboard-next-action.ts` and has
+branch coverage in `tests/services/dashboard-next-action.test.ts`.
+
+## Calendar Planning
+
+`/calendar` retains its three bounded Prisma reads: scheduled posts, uncancelled
+events and incomplete/uncancelled streams from now through 30 days out. Results
+sort by their saved absolute instant. `lib/services/calendar-timeline.ts` groups
+and formats them in America/Chicago, using the same zone for the day key,
+heading, clock and related event facts. CST/CDT labels distinguish the repeated
+hour at daylight-saving end. Semantic `time` elements retain the original ISO
+instant; group headings use the Chicago calendar date.
+
+Event cards display `eventDate`, optional `doorsTime` and optional `setTime`.
+Absent optional fields remain absent, and a related time on a different Chicago
+day includes its full date. These projections do not change the schema or
+database values. Existing post review links and queue warnings remain; stream
+cards stay informational. No provider, scheduling or worker code is called by
+this slice. See [Calendar handoff](calendar-planning.md) for proof and limits.
 
 ## Data Flow: Review → Publish
 
 ```
-Review Queue (IN_REVIEW drafts)
-  → approve / hold / deny / edit / rewrite / archive / duplicate
+Review Queue (`/review-queue?focus=` is the review desk)
+  → pipeline: Generate → Guard → Review → Approve → Schedule → Publish
+  → decision rail: Approve / Hold / Deny / Schedule (one next yes, none publish)
+  → tools: edit / rewrite / archive / duplicate
 
-Approve:
-  → prisma.draft.update(status: APPROVED)
+Media attach / replace / clear (IN_REVIEW, HELD, or APPROVED only):
+  → sanitize public HTTPS URLs
+  → compare-and-set the current status and return the draft to IN_REVIEW
+  → clear reviewedAt; preserve review notes and POSSIBLE_LIVE_WRITE
+  → if status changed concurrently, write nothing and require a refresh
+
+Approve / Hold / Deny / Schedule (decision rail):
+  → require the current review card's updatedAt + caption/media/guard fingerprint
+  → compare-and-set the same status + updatedAt
+  → stale card or mid-request creative change refuses and refreshes
+  → the card labels each verb and marks one next yes; Schedule on the
+    approved desk is the job form, not a publish button
+
+Caption edit / rewrite / media:
+  → require the same snapshot receipt
+  → compare-and-set; return to IN_REVIEW; clear reviewedAt
+  → a concurrent Schedule wins or loses atomically; unseen creative is not approved
 
 Schedule (approved drafts only):
   → validateDraftForPlatform() (character limits, risk check)
@@ -111,6 +173,7 @@ Schedule (approved drafts only):
 Worker (every 5 seconds):
   → prisma.job.findMany(status: PENDING, runAt: lte now)
   → handlePublishPost()
+    → require both ScheduledPost.status and Draft.status to be SCHEDULED
     → assertReadyForLivePublish() (connected account, FB/IG/YT only, Instagram media)
     → SocialProviderAdapter.publish({ mediaUrls })
     → assertLivePublishResult() (draft-only / failed writes throw — never mark PUBLISHED)
@@ -138,6 +201,37 @@ interface SocialAdapterCapabilities {
 
 The publisher checks `getDegradationWarning()` before executing. In **real** mode, Twitter/X, TikTok, Bluesky, and Twitch are refused before any adapter write. Mock mode may still simulate those platforms for the demo queue. Draft-only or failed adapter results never mark a post `PUBLISHED`.
 
+Approval is an exact-snapshot decision. The review card sends the
+`Draft.updatedAt` value it displayed plus a fingerprint of caption, media,
+hashtags, risk, and version. The server verifies both before Approve / Hold /
+Deny / edit / rewrite / media, then compare-and-sets the same timestamp.
+A stale browser card cannot approve or overwrite newer creative the reviewer
+has not seen. A race during the server action loses safely and nothing is
+scheduled or published.
+
+The client also freezes the **edit base**, rather than manufacturing a new
+receipt from refreshed props around old input. `useReviewEditSessions` keeps
+draft-keyed, React-mount-only caption/media buffers in the existing Review Queue.
+Each explicit field save captures its draft ID, original receipt, and request
+token. Only a matching confirmed server-action row advances that edit base;
+another unsaved field remains local. A newer saved snapshot requires comparison
+and an explicit keep/discard decision before another save. Unknown save results
+remain unconfirmed until a refresh and review, with no automatic retry.
+
+The existing caption/media actions and transactional compare-and-set remain the
+write authority. There is no new database table, browser storage, worker,
+provider, or publishing path. Media editing retains additional attached URLs;
+mixed valid/invalid lists are rejected instead of partially saved. Details and
+remaining boundaries: [review editing recovery](review-editing-recovery.md).
+
+The review queue opens a desk at `/review-queue?focus=` so Jeff can read
+the caption, media, guard, saved campaign/event facts, and voice before
+that yes. Linked snapshots show the same facts Studio generated with,
+including honest missing doors/set/ticket or a no-event line. Scheduled
+for uses America/Chicago. After Approve, Schedule is bound to that same
+snapshot. After Schedule the desk stays open on the job — Publish is the
+worker, never a desk button. See [review desk facts](review-desk-facts.md).
+
 ## Guardrail Architecture
 
 Hard guardrails run **after every generation**, regardless of LLM adapter. They check:
@@ -159,6 +253,14 @@ Voice isolation is enforced at multiple levels:
 2. **Generation**: Band voice profile is always fetched and passed to the LLM adapter — never shared
 3. **Guardrails**: Cross-band name check in `checkBandVoiceSeparation()`
 4. **UI**: Band selector always explicit — generation never runs without confirming the band
+
+The `/bands/new` first-run path creates the Band and its initial voice profile
+in one transaction. It derives a collision-safe URL slug and requires a
+human-written voice description plus at least one trait; optional facts remain
+empty instead of being invented. Setup never connects an account, schedules a
+job, or publishes. The current app is single-operator, so setup uses the first
+operator record (or creates the initial local operator); user selection belongs
+with the post-MVP auth/roles work below.
 
 ## Analytics Heuristics
 
@@ -240,6 +342,20 @@ USER: Write a {campaignType} caption in {contentLength} length for {platform}.
   Tone: {toneVariant}
   Output JSON: { caption, hashtags[], ctaText, altText, imagePrompt, fanReplies[] }
 ```
+
+### Local deployment boundary
+
+The default Compose package publishes the app as
+`127.0.0.1:3000:3000`. Postgres and the worker have no host ports. This keeps
+the single-operator UI on the same computer while request-level operator auth
+is not implemented. The container still listens on `0.0.0.0` inside its private
+Compose network so its own health check and worker architecture continue to
+work; only the host-side port is loopback-bound.
+
+Loopback is not authentication. Do not expose StoryLiner through a LAN binding,
+public host port, tunnel, or reverse proxy until every mutation has an
+authenticated operator identity and role check. Provider credentials and a
+real social adapter do not satisfy that boundary.
 
 ### Auth / Roles (post-MVP)
 

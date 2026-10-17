@@ -117,12 +117,12 @@ App runs at [http://localhost:3000](http://localhost:3000)
 
 | Route | Description |
 |---|---|
-| `/dashboard` | Overview: review queue status, scheduled posts, upcoming streams, recently published |
+| `/dashboard` | Overview: one next action (live-write, review, held, schedule), review/held snapshot cues, scheduled posts, upcoming streams, recently published |
 | `/bands` | All bands with stats |
 | `/bands/[id]` | Band detail: voice profile, platforms, knowledge entries, in-review drafts |
 | `/content-studio` | Generate platform-specific content with band voice, tone, and context |
 | `/campaign-builder` | View and manage campaign groupings |
-| `/calendar` | Upcoming posts, events, and streams in one view |
+| `/calendar` | Upcoming posts, events, and streams grouped by Central date, with saved event/doors/set times |
 | `/review-queue` | Approve / Hold / Deny / edit / rewrite / schedule / archive drafts |
 | `/scheduled-posts` | Queued worker jobs. Unschedule pending posts or return failed writes — neither publishes. |
 | `/published-posts` | Published post history with engagement metrics |
@@ -137,32 +137,80 @@ App runs at [http://localhost:3000](http://localhost:3000)
 Generate → Guard → Review → Approve → Schedule → Publish
 ```
 
-1. **Generate** — Content Studio calls `lib/services/content/generate.ts` → LLM adapter → draft created with `IN_REVIEW` status
-2. **Guard** — Hard guardrails run on every generated caption (`lib/services/guardrails/policy.ts`)
-3. **Review** — All drafts land in `/review-queue` — approve, hold, deny, edit, rewrite, or archive
+1. **Generate** — Content Studio calls `lib/services/content/generate.ts` → LLM adapter → draft created with `IN_REVIEW` status. The studio shows that exact caption, media, and guard result.
+2. **Guard** — Hard guardrails run on every generated caption (`lib/services/guardrails/policy.ts`). A clean pass is still shown — it is not a skip.
+3. **Review** — All drafts land in `/review-queue` as the snapshot Jeff just saw — approve, hold, deny, edit, rewrite, or archive. A stale card cannot decide on newer creative.
 4. **Rewrite** — Apply directives (`funnier`, `morePunk`, `noHashtags`, etc.) via `lib/services/content/rewrite.ts` — creates new version, recomputes risk, back to review
 5. **Approve** — Sets status to `APPROVED`, draft moves to the Approved tab for scheduling
 6. **Schedule** — Select a platform account and future datetime; creates `ScheduledPost` + `Job` in a single transaction
 7. **Publish** — Worker processes due jobs via social adapter → `PublishedPost` record created → metrics visible
 
+### Draft from a saved campaign
+
+In **Campaign Builder**, choose **Generate** on an active campaign. Content Studio
+shows its saved band, content type, campaign target date, and linked event facts
+before generation. Facts are read-only; your optional operator note is separate.
+Missing facts stay missing. Invalid or changed links require a deliberate choice,
+not a fallback to another band. **Start unlinked draft** clears the old context.
+
+Linked generation is currently **mock-only**. Exporting these additional saved
+fields to the optional live AI adapter needs explicit owner privacy approval;
+this change does not enable it. Generated results name their originating campaign
+and open the exact guarded draft in Review. Nothing publishes automatically.
+
+See [campaign context and handoff](docs/campaign-generation-context.md) for source
+checks, in-session recovery, database proof, and remaining boundaries.
+
+## Calendar Planning
+
+Calendar shows the next 30 days of scheduled posts, shows and streams in
+chronological order. Day headings and clock times use **Central time
+(America/Chicago)**, matching Campaign Builder and Studio. Each time includes
+CDT or CST, so the repeated hour when daylight saving ends remains distinct.
+
+Show cards expose the saved event, doors and set times. Missing doors/set times
+say **Not saved**; a time on another day includes that date. No start time is
+guessed from another field. This is a display convention, not a new per-event
+timezone setting or a change to saved schedules. Post cards retain the existing
+review links and possible-write warnings. Calendar adds no publishing actions.
+
+See [Calendar planning and handoff](docs/calendar-planning.md) for the timezone
+boundary, read-only behavior and verification.
+
 ## Review Queue
 
-Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes. Approve / Hold / Deny never publish.
+Jeff talks to Bob at the front door. StoryLiner is the promo engine — Bob's drafts wait here for Jeff's yes.
 
-All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. None of those actions publish.
+The queue now opens a **review desk** when Jeff follows Generate or a Dashboard row (`/review-queue?focus=`). That desk shows the six-step path, the full caption, media, guard, the **same saved campaign/event facts Studio generated with** (including honest Not saved / no-event lines), the full voice and never-say lists, and a **decision rail**. Scheduled-for uses Central time (America/Chicago) with CDT or CST. Approve, Hold, Deny, and Schedule are separate verbs: each has a consequence, and only one is the next yes. The next-action heading asks Jeff to check those saved (or unlinked) facts before the yes. Dashboard next-action and queue pile cards name the same generation snapshot in one line, and a held-only queue still opens the desk instead of Studio. Edit / Copy / Archive stay in a tools row. After Approve, the desk shows the schedule form on the card — it queues a worker job and does not publish. After Schedule the desk stays on the job — Publish is the worker, not a desk button. Junk or missing `?focus=` is an honest empty desk, not a silent pile.
+
+All review actions use `router.refresh()` (no hard page reloads). Hold, Deny, and Archive require confirmation. Approve / Hold / Deny / Schedule never publish.
+
+Caption and media edits now stay with their original draft while you move around
+the review queue. **Save caption** and **Save media** are separate, explicit
+writes; saving one keeps unfinished work in the other. Review decisions pause
+while edits are unresolved. If the saved draft changes, compare **Your edits**
+with the **Latest saved version**, then keep your edits for a new explicit save
+or use the saved version. A failed save retains your input and asks you to
+refresh and review before retrying — it never borrows a newer receipt silently.
+
+This recovery is in memory for the current review-page session, not a browser
+backup. Save before closing or reloading; browser leave warnings are best-effort.
+See [review editing and handoff](docs/review-editing-recovery.md) for the exact
+recovery boundaries and verification.
 
 | Action | Description |
 |---|---|
-| Approve | Marks draft as APPROVED, ready to schedule. Does **not** publish. |
+| Approve | Next yes in Needs Review / On Hold. Marks the exact caption/media/guard snapshot as APPROVED, ready to schedule. A stale card or unseen rewrite refreshes for a new decision. Does **not** publish. |
 | Hold | Parks the draft (`HELD`). Does **not** schedule or publish. |
 | Deny | Requires confirmation; marks as REJECTED. Does **not** publish. |
-| Schedule | Opens account + datetime picker (approved drafts only). After a write that may already be live, requires a platform check. |
+| Schedule | Next yes after Approve. On the desk this is the account + datetime form; on the pile it opens that form in a dialog. After a write that may already be live, requires a platform check. Queues a worker job. Does **not** publish. |
 | Edit | Direct caption edit inline, creates new version |
 | Rewrite | Apply a tone directive, recomputes risk signals, creates new version |
 | Duplicate | Creates a copy back in review for variant testing (copies `mediaUrls`) |
 | Archive | Requires confirmation; removes from active queue |
 
 Scheduling validation enforces:
+- Approval, Hold, Deny, edit, rewrite, and media saves are bound to the review card's `updatedAt` plus caption/media/guard fingerprint; any intervening creative change requires a fresh review
 - Account must belong to the same band
 - Account platform must match the draft platform
 - Account must be active
@@ -177,8 +225,8 @@ Controlled by `LLM_ADAPTER` in `.env.local`:
 
 | Value | Behavior |
 |---|---|
-| `mock` (default) | Uses distinct Stalemate / Rad Dad pools plus a neutral, confirmed-context-only Fault Lines pool |
-| `openai` | Uses the configured OpenAI model for generation, rewrites, risk assessment, talking points, and engagement prompts; requires `OPENAI_API_KEY` |
+| `mock` (default) | Distinct Stalemate / Rad Dad / Fault Lines pools for unlinked drafts; linked campaign/event drafts use saved facts without invented missing details |
+| `openai` | Existing unlinked generation, rewrites, risk assessment, talking points, and engagement prompts; requires `OPENAI_API_KEY`. New linked campaign/event generation is blocked pending owner privacy approval. |
 
 Any other `LLM_ADAPTER` value fails closed instead of silently selecting mock
 mode. Mock mode makes no provider calls. OpenAI mode sends the relevant band
@@ -303,8 +351,36 @@ Jest is required in CI. Suites include:
 | `tests/jobs/worker-policy.test.ts` | Unimplemented jobs and stale RUNNING fail closed |
 | `tests/services/youtube-url.test.ts` | YouTube watch/shorts/embed/live ids — no bare ids |
 | `tests/workflow/review-decisions.test.ts` | Approve / Hold / Deny status gates |
+| `tests/workflow/approval-snapshot-fence.test.ts` | Approve / Hold / Deny bind to caption/media/guard snapshot |
+| `tests/workflow/caption-review-fence.test.ts` | Caption edit returns to review and refuses unseen creative |
+| `tests/workflow/review-editing-ui.test.tsx` | Actual review-screen edits, cross-draft navigation, failed saves, conflicts, and blocked decisions |
+| `tests/workflow/review-decision-blocked-ui.test.tsx` | Disabled decisions do not pretend an unsaved edit is a network request |
+| `tests/workflow/media-edit-integrity.test.ts` | Full media selection, exact saved receipts, and all-or-nothing URL validation |
+| `tests/workflow/rewrite-review-fence.test.ts` | Rewrite returns to review and refuses a stale card |
+| `tests/services/generate-guard-review.test.ts` | Generate → Guard → Review next-action handoff |
+| `tests/services/campaign-context.test.ts` | Bounded saved-fact projection, ownership, receipts, absent facts, explicit display time zone |
+| `tests/services/campaign-generation.test.ts` | Authoritative context, stale/foreign links, mock-only privacy gate, atomic persistence contract |
+| `tests/services/studio-generation-result.test.ts` | Production-safe action outcomes, fixed refusal codes and no raw database/provider error leakage |
+| `tests/services/campaign-mock-generation.test.ts` | Saved campaign/event facts reach offline captions without fabricated dates or times |
+| `tests/workflow/campaign-builder-continuity.test.tsx` | Real Campaign Builder markup, valid navigation, unavailable campaigns and explicit bands |
+| `tests/workflow/campaign-studio-ui.test.tsx` | Actual Studio controls, linked/manual context, single-flight generation, pinned result and retained-input recovery |
+| `tests/services/postgres-fixture-boundary.test.ts` | Disposable PostgreSQL suite refuses non-fixture URLs, environment files and credentials |
+| `tests/services/local-deployment-boundary.test.ts` | Default Compose stays loopback-only while request-level auth is absent |
+| `tests/services/review-desk.test.ts` | Review desk pipeline, saved/unlinked facts, snapshot cue, fact-aware next action, Central schedule, no publish |
+| `tests/workflow/review-desk-facts-ui.test.tsx` | Actual desk and pile render saved facts, missing times, next-action heading, and Central scheduled-for |
+| `tests/services/dashboard-next-action.test.ts` | Dashboard next action: live-write, review facts cue, held-only desk, schedule, setup |
+| `tests/services/review-decision.test.ts` | Approve / Hold / Deny / Schedule rail, next yes, no live claim |
+| `tests/workflow/schedule-snapshot-fence.test.ts` | Schedule binds to the approved caption/media/guard snapshot |
+| `tests/workflow/archive-snapshot-fence.test.ts` | Archive / resume refuse a stale card |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
 | `tests/voice/demo-facts.test.ts` | Approved seeded identities, no Trailer Swift, and no invented Fault Lines canon |
+
+`npm run test:postgres` is a separate, required CI job using a fresh synthetic
+PostgreSQL service, not an operator database. Its actual Prisma tests cover
+linked persistence, changed-source refusal, foreign-band refusal and rollback
+after a later version insert fails. It is intentionally not part of `npm test`;
+see [fixture requirements](docs/campaign-generation-context.md#verification) before
+running it locally. No seed or live provider is used.
 
 ## Project Structure
 
@@ -383,6 +459,16 @@ StoryLiner ships a single `compose.yaml` that works identically with **Podman De
 
 `podman compose` and `docker compose` are interchangeable for every command below.
 
+### Local-only safety boundary
+
+The shipped Compose file binds StoryLiner to `127.0.0.1:3000`, so the operator
+UI is reachable only from the same computer. This matters because request-level
+operator auth is still post-MVP: any browser that can reach the app can invoke
+its review and scheduling actions. Loopback reduces that exposure but is not a
+login system. Do not expose this port to a LAN or the public internet, use a
+reverse proxy, or change it to `3000:3000` / `0.0.0.0` until real request-level
+auth and roles protect every mutation.
+
 ### Option A — One-command deploy (recommended)
 
 **Windows (PowerShell):**
@@ -452,7 +538,7 @@ podman compose run --rm migrate npx tsx prisma/seed.ts
 |---|---|---|
 | `db` | (internal) | Postgres 16 with persistent volume |
 | `migrate` | (none) | One-shot schema push (exits 0 after success) |
-| `app` | 3000 | Next.js app (standalone build) |
+| `app` | `127.0.0.1:3000` (host) | Next.js app (standalone build), local computer only |
 | `worker` | (none) | Background job worker — polls every 5 s |
 
 The app and worker start only after Postgres passes its health check, so you will never see "connection refused" errors on first boot.

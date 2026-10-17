@@ -16,7 +16,9 @@ import {
   scheduledPostsEmptyState,
   writeStartedQueueWarning,
 } from "@/lib/services/publish/safety";
+import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
 import { RescheduleButton, ReturnScheduleButton } from "./client";
+import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Scheduled Posts" };
@@ -132,7 +134,12 @@ export default async function ScheduledPostsPage() {
                         <Badge variant="info" className="text-xs">Scheduled</Badge>
                       )}
                     </div>
-                    <p className="text-sm text-foreground line-clamp-2">{post.draft.caption}</p>
+                    <Link
+                      href={reviewQueueFocusHref(post.draft.id)}
+                      className="text-sm text-foreground line-clamp-2 hover:text-primary transition-colors"
+                    >
+                      {post.draft.caption}
+                    </Link>
                     {post.draft.hashtags.length > 0 && (
                       <p className="text-xs text-primary mt-1 line-clamp-1">
                         {post.draft.hashtags.join(" ")}

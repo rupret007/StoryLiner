@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/storyliner/stat-card";
 import { BandChip } from "@/components/storyliner/band-chip";
-import { StatusBadge } from "@/components/storyliner/status-badge";
 import { PlatformIcon } from "@/components/storyliner/platform-icon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,9 +11,12 @@ import {
   Music2,
   ArrowRight,
   Radio,
+  ShieldAlert,
+  CalendarCheck2,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { formatRelative, formatDateTime } from "@/lib/utils";
+import { cn, formatRelative, formatDateTime } from "@/lib/utils";
 import { jobMayHaveStartedAdapterWrite } from "@/lib/jobs/publish-attempt";
 import {
   dashboardFailedWriteStartedNote,
@@ -24,6 +26,9 @@ import {
   isFailedWriteStartedSchedule,
   isQueuedUpcomingSchedule,
 } from "@/lib/services/publish/safety";
+import { reviewQueueFocusHref } from "@/lib/services/publish/review-snapshot";
+import { dashboardNextAction } from "@/lib/services/dashboard-next-action";
+import { reviewDeskSnapshotCue } from "@/lib/services/publish/review-desk";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -37,6 +42,7 @@ export default async function DashboardPage() {
     scheduled,
     recentPublished,
     livestreams,
+    approvedReady,
     approvedWaiting,
     heldWaiting,
   ] =
@@ -44,7 +50,11 @@ export default async function DashboardPage() {
       prisma.band.findMany({ where: { isActive: true }, take: 10 }),
       prisma.draft.findMany({
         where: { status: "IN_REVIEW" },
-        include: { band: true },
+        include: {
+          band: true,
+          campaign: { select: { name: true } },
+          generationRun: { select: { inputContext: true } },
+        },
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
@@ -66,11 +76,25 @@ export default async function DashboardPage() {
       }),
       prisma.draft.findMany({
         where: { status: "APPROVED" },
-        select: { reviewNotes: true },
+        include: {
+          band: true,
+          campaign: { select: { name: true } },
+          generationRun: { select: { inputContext: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+      prisma.draft.findMany({
+        where: { status: "APPROVED" },
+        select: { id: true, reviewNotes: true },
       }),
       prisma.draft.findMany({
         where: { status: "HELD" },
-        select: { reviewNotes: true },
+        include: {
+          campaign: { select: { name: true } },
+          generationRun: { select: { inputContext: true } },
+        },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
@@ -83,7 +107,7 @@ export default async function DashboardPage() {
         : false,
     })
   );
-  const failedWriteStartedCount = scheduled.filter((post) => {
+  const failedWriteStarted = scheduled.filter((post) => {
     const adapterWriteStarted = post.job
       ? jobMayHaveStartedAdapterWrite(post.job.payload)
       : false;
@@ -91,20 +115,23 @@ export default async function DashboardPage() {
       jobStatus: post.job?.status ?? null,
       adapterWriteStarted,
     });
-  }).length;
+  });
+  const failedWriteStartedCount = failedWriteStarted.length;
   const failedWriteNote = dashboardFailedWriteStartedNote(failedWriteStartedCount);
-  const approvedPossibleLiveWriteCount = approvedWaiting.filter((draft) =>
+  const approvedPossibleLiveWrite = approvedWaiting.filter((draft) =>
     draftHasPossibleLiveWrite(draft.reviewNotes)
-  ).length;
+  );
+  const heldPossibleLiveWrite = heldWaiting.filter((draft) =>
+    draftHasPossibleLiveWrite(draft.reviewNotes)
+  );
+  const approvedPossibleLiveWriteCount = approvedPossibleLiveWrite.length;
   const needsReviewEmpty = dashboardNeedsReviewEmptyState({
     approvedCount: approvedWaiting.length,
     heldCount: heldWaiting.length,
     possibleLiveWriteCount:
       approvedWaiting.length > 0
         ? approvedPossibleLiveWriteCount
-        : heldWaiting.filter((draft) =>
-            draftHasPossibleLiveWrite(draft.reviewNotes)
-          ).length,
+        : heldPossibleLiveWrite.length,
   });
   const scheduledEmpty = dashboardScheduledEmptyState({
     approvedCount: approvedWaiting.length,
@@ -115,9 +142,73 @@ export default async function DashboardPage() {
   const upcomingScheduled = queuedUpcoming.slice(0, 5);
   const totalPublishedCount = await prisma.publishedPost.count();
   const totalBandCount = await prisma.band.count({ where: { isActive: true } });
+  const possibleLiveWriteCount =
+    approvedPossibleLiveWrite.length + heldPossibleLiveWrite.length;
+  const nextAction = dashboardNextAction({
+    failedWriteStartedCount,
+    failedWriteDraftId: failedWriteStarted[0]?.draft.id,
+    possibleLiveWriteCount,
+    possibleLiveWriteDraftId:
+      approvedPossibleLiveWrite[0]?.id ?? heldPossibleLiveWrite[0]?.id,
+    reviewCount: totalReviewCount,
+    reviewDraftId: reviewQueue[0]?.id,
+    heldCount: heldWaiting.length,
+    heldDraftId: heldWaiting[0]?.id,
+    reviewFactsCue:
+      totalReviewCount > 0
+        ? reviewDeskSnapshotCue(reviewQueue[0])?.line ?? null
+        : reviewDeskSnapshotCue(heldWaiting[0])?.line ?? null,
+    approvedCount: approvedWaiting.length,
+    approvedDraftId: approvedReady[0]?.id,
+    scheduledCount: totalScheduledCount,
+    bandCount: totalBandCount,
+  });
+  const NextActionIcon = {
+    danger: ShieldAlert,
+    review: ClipboardList,
+    schedule: CalendarCheck2,
+    ready: Sparkles,
+  }[nextAction.tone];
 
   return (
     <div className="space-y-6">
+      <Card
+        className={cn(
+          "overflow-hidden border-l-4",
+          nextAction.tone === "danger"
+            ? "border-l-rose-500 bg-rose-500/5"
+            : nextAction.tone === "review"
+              ? "border-l-amber-500 bg-amber-500/5"
+              : nextAction.tone === "schedule"
+                ? "border-l-blue-500 bg-blue-500/5"
+                : "border-l-emerald-500 bg-emerald-500/5"
+        )}
+      >
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background/70">
+              <NextActionIcon className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {nextAction.eyebrow}
+              </p>
+              <h1 className="text-lg font-semibold text-foreground">
+                {nextAction.title}
+              </h1>
+              <p className="max-w-3xl text-sm text-muted-foreground">
+                {nextAction.description}
+              </p>
+            </div>
+          </div>
+          <Button asChild className="shrink-0">
+            <Link href={nextAction.href}>
+              {nextAction.cta} <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -164,10 +255,12 @@ export default async function DashboardPage() {
                 {needsReviewEmpty}
               </p>
             ) : (
-              reviewQueue.map((draft) => (
+              reviewQueue.map((draft) => {
+                const cue = reviewDeskSnapshotCue(draft);
+                return (
                 <Link
                   key={draft.id}
-                  href="/review-queue"
+                  href={reviewQueueFocusHref(draft.id)}
                   className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors group"
                 >
                   <PlatformIcon platform={draft.platform} />
@@ -175,6 +268,11 @@ export default async function DashboardPage() {
                     <p className="text-xs text-foreground line-clamp-2 group-hover:text-primary transition-colors">
                       {draft.caption}
                     </p>
+                    {cue && (
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {cue.line}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2 mt-1.5">
                       <BandChip
                         name={draft.band.name}
@@ -186,7 +284,8 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                 </Link>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -211,7 +310,11 @@ export default async function DashboardPage() {
               </p>
             ) : (
               upcomingScheduled.map((post) => (
-                <div key={post.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                <Link
+                  key={post.id}
+                  href={reviewQueueFocusHref(post.draft.id)}
+                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-accent transition-colors"
+                >
                   <PlatformIcon platform={post.draft.platform} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-foreground line-clamp-1">
@@ -224,8 +327,43 @@ export default async function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))
+            )}
+            {approvedReady.length > 0 && (
+              <div className="pt-2 border-t border-border space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Approved — schedule is the next yes
+                </p>
+                {approvedReady.map((draft) => {
+                  const cue = reviewDeskSnapshotCue(draft);
+                  return (
+                  <Link
+                    key={draft.id}
+                    href={reviewQueueFocusHref(draft.id)}
+                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
+                  >
+                    <PlatformIcon platform={draft.platform} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-foreground line-clamp-1">
+                        {draft.caption}
+                      </p>
+                      {cue && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {cue.line}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <BandChip name={draft.band.name} color={draft.band.coverColor} />
+                        <span className="text-[10px] text-muted-foreground">
+                          {formatRelative(draft.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>

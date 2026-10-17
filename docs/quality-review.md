@@ -10,6 +10,123 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 
 ---
 
+## Post-#39 leftover: next action names the campaign snapshot
+
+**Evidence:** leftover #39 put saved campaign/event facts on the review
+desk. Dashboard next-action still said “caption, media, guard, and voice”
+and skipped a HELD-only queue, sending Jeff to Studio or Schedule. Queue
+pile cards and Dashboard rows showed caption only — no campaign name,
+origin, or missing-fact count. The decision heading was status-only.
+
+**Fix:** Dashboard next-action keeps live-write first, then Needs Review,
+then held desk work, then Schedule. Review/held copy names the generation
+snapshot when present. Dashboard rows and queue pile cards show a one-line
+cue (`Saved campaign · name · N facts not saved` / `Unlinked draft`). The
+desk decision heading asks Jeff to check those facts before the yes.
+Unlinked stays unlinked. No invented Saturday/8pm. Nothing publishes.
+Parked Fault Lines #27 stays untouched. No X adapter.
+
+---
+
+## Post-#38 leftover: review desk shows the saved generation facts
+
+**Evidence:** leftover #37 stored campaign/event facts, missing doors/set,
+and America/Chicago dates on `GenerationRun.inputContext`. The review desk
+still projected only venue/city/showDate, truncated voice/never-say, and
+printed Scheduled for in the host timezone. Jeff could approve a snapshot
+Studio had previewed more completely.
+
+**Fix:** the desk now shows origin, campaign/event facts, operator note,
+honest Not saved / no-event lines, the full voice and banned-phrase lists,
+and Central scheduled-for with CDT/CST. Unlinked drafts stay unlinked.
+No invented Saturday/8pm. Nothing publishes. Calendar #38 is unchanged.
+Parked Fault Lines #27 stays untouched. No X adapter.
+
+---
+
+## Post-#34 leftover: Approve / Hold / Deny / Schedule as a decision rail
+
+**Evidence:** leftover #32/#34 left the four verbs as a flat wrap next to
+Edit / Copy / Archive. One shared "next action" line sat above every
+button. Approve and Schedule looked like the same kind of click.
+Schedule on the approved desk was still a dialog behind another button.
+
+**Fix:** the review card now has a decision rail. Approve, Hold, Deny,
+and Schedule each have a label, a consequence, and at most one next yes.
+Edit / Copy / Archive sit in a separate "Change this draft" row. On the
+approved desk, Schedule is the form on the card — it still only queues a
+worker job. None of those verbs publish. No X adapter. Parked Fault
+Lines #27 stays untouched.
+
+---
+
+## Post-#28 follow-up: approval snapshot identity
+
+**Evidence:** the review card sent only `draftId`, then `approveDraft` loaded
+whatever row was current and updated it by id. If caption, media, risk, notes,
+or status changed after the card rendered, an older click could approve newer
+creative Jeff had not reviewed. A change between the server read and write
+could also be overwritten.
+
+**Fix:** Approve now carries the card's `updatedAt` receipt. The server rejects
+a stale receipt before mutation, then compare-and-sets both status and the same
+timestamp so a mid-request change also loses safely. The client refreshes the
+queue after a refused approval. Neither path schedules or publishes.
+
+---
+
+## Post-#29 leftover: Generate → Guard → Review snapshot identity
+
+**Evidence:** Approve was clock-bound only. Content Studio stored the new
+draft id and hid the caption. Guard results were invisible on a clean pass.
+Caption edit and rewrite updated by id, kept `reviewedAt`, and did not
+compare-and-set. Hold / Deny / media could still act on a stale card. A
+reviewer could therefore decide on unseen creative, and the next action
+after Generate was a toast instead of the snapshot.
+
+**Fix:** Review decisions and creative mutations now carry the card's
+caption / media / guard fingerprint plus `updatedAt`. A mismatch refuses
+and refreshes. Edit / rewrite clear `reviewedAt` and return to
+`IN_REVIEW` through compare-and-set. Studio shows the guarded snapshot
+and sends Jeff to `/review-queue?focus=`. Every review card names the
+next yes. Nothing auto-publishes.
+
+---
+
+## Post-#30 product: review desk, not leftover ring
+
+**Evidence:** leftover #30 sent Jeff to `/review-queue?focus=`, then
+only ringed a card in a two-column pile. Caption, CTA, campaign, voice,
+and media were cramped or hidden. The six-step path lived in the README.
+
+**Fix:** `?focus=` opens a review desk. The path
+Generate → Guard → Review → Approve → Schedule → Publish is on the
+queue and the desk. Jeff can read the snapshot, see guard + voice +
+show context, walk the same-status pile, and decide. Publish is never
+a desk button. Nothing auto-publishes.
+
+---
+
+## Post-#31 leftover: Approve → Schedule is a desk walk, not a vanishing card
+
+**Evidence:** leftover #31 opened a review desk. Schedule still took only
+`draftId`. A stale approved card could queue unseen creative after a
+later edit + re-approve. After Schedule the desk query dropped
+`SCHEDULED` drafts, so Jeff fell back to the pile. Junk `?focus=` hit
+Prisma. Archive / resume had no snapshot fence. Generate still accepted
+Twitter/X. Settings was a fake auto-publish switch. Dashboard scheduled
+rows were not a path.
+
+**Fix:** Schedule carries the approved caption / media / guard snapshot
+and compare-and-sets it. The desk stays open for a focused SCHEDULED /
+PUBLISHED snapshot. Missing or junk focus is an honest empty desk.
+Archive and resume are snapshot-bound. Generate is Facebook /
+Instagram / YouTube only. Settings is a locked operator readout.
+Dashboard, Calendar, and Scheduled Posts open the desk. Publish is
+still the worker. Nothing auto-publishes.
+
+---
+
 ## P0
 
 ### 1. Real Facebook publish could fire against disconnected seed/demo accounts
@@ -106,15 +223,13 @@ Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publ
 
 | Item | Evidence |
 |---|---|
-| No auth on server actions | Any reachable client can approve/schedule. Post-MVP in architecture docs. |
+| No request-level auth on server actions | Any reachable client can approve/schedule. Default Compose is now fail-closed to `127.0.0.1`; that is exposure reduction, not auth. LAN/public hosting remains blocked until post-MVP auth/roles. |
 | Tokens/stream keys in DB plaintext | `PlatformAccount.metadata`, `LivestreamDestination.streamKey`. |
 | Worker does not forward `mediaUrls` | **Fixed on main (PR #3).** Worker sanitizes and forwards `mediaUrls`. See `prisma/README.md`. |
 | OpenAI campaign prompts separate established Stalemate vs Rad Dad archetypes | Those established fallbacks remain intact. Fault Lines uses its canon-pending profile and neutral guidance. Trailer Swift remains absent — do not invent an additional voice or extra history. |
 | Seed demo facts vs unknown Jeff locks | **Honesty pass:** knowledge rows are prefixed and tagged `demo-unconfirmed`. Voice locks were not rewritten. See `docs/voice-facts.md`. |
-| `datetime-local` `min` uses UTC slice | TZ skew on schedule picker. |
 | Instagram `canDirectPublish: true` vs no-media draft-only | Capability/docs mismatch. |
 | Mock YouTube `canDirectPublish: true` vs real YouTube draft-only | Adapter drift. |
-| High-risk drafts can be approved | By design (“human decides”) but no extra confirm. |
 | `checkBandVoiceSeparation` substring match | Short names could false-positive. |
 | Facebook `if (!response)` dead code | `fetch` does not return null. |
 | No NextAuth / audit log | Architecture “post-MVP”. |

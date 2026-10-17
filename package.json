@@ -14,6 +14,7 @@
     "worker": "tsx scripts/worker.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run worker\"",
     "test": "jest",
+    "test:postgres": "jest --config jest.postgres.config.ts --runInBand",
     "test:watch": "jest --watch",
     "postinstall": "echo 'Run npm run db:push after setting up schema'"
   },

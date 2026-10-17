@@ -5,16 +5,25 @@ import { getLlmAdapter } from "@/lib/services/llm";
 import { evaluateGuardrails, riskLevelFromFlags } from "@/lib/services/guardrails/policy";
 import { deriveHashtags, HASHTAG_DIRECTIVES } from "@/lib/services/content/hashtags";
 import { assertCanMutateDraftCaption } from "@/lib/services/publish/safety";
+import {
+  REVIEW_SNAPSHOT_RACE,
+  assertReviewSnapshotMatches,
+  parseReviewSnapshotReceipt,
+  reviewSnapshotWhere,
+} from "@/lib/services/publish/review-snapshot";
 import type { RewriteDraftInput } from "@/lib/schemas/content";
 import type { Draft } from "@prisma/client";
 
 export async function rewriteDraft(input: RewriteDraftInput): Promise<Draft> {
+  const receipt = parseReviewSnapshotReceipt(input.reviewedSnapshot);
   const draft = await prisma.draft.findUniqueOrThrow({
     where: { id: input.draftId },
     include: {
       band: { include: { voiceProfile: true } },
     },
   });
+
+  assertReviewSnapshotMatches(draft, receipt);
 
   const mutable = assertCanMutateDraftCaption({ status: draft.status });
   if (!mutable.ok) {
@@ -57,15 +66,29 @@ export async function rewriteDraft(input: RewriteDraftInput): Promise<Draft> {
   const riskLevel = riskLevelFromFlags(mergedFlags.length);
   const brandFitScore = hardFlags.length > 0 ? Math.min(riskAssessment.brandFitScore, 60) : riskAssessment.brandFitScore;
 
-  // Atomically increment version and save — prevents duplicate version numbers
-  // under concurrent rewrites
+  // Bind the rewrite to the card Jeff saw, then compare-and-set so a
+  // concurrent Schedule / edit cannot keep this new caption on a live path.
+  // reviewedAt is cleared — this is unseen creative until the next yes.
   const updated = await prisma.$transaction(async (tx) => {
-    // Re-read inside transaction for consistent version base
-    const current = await tx.draft.findUniqueOrThrow({
-      where: { id: draft.id },
-      select: { currentVersion: true },
+    const newVersion = draft.currentVersion + 1;
+
+    const moved = await tx.draft.updateMany({
+      where: reviewSnapshotWhere(draft.id, draft.status, receipt.updatedAt),
+      data: {
+        caption: newCaption,
+        hashtags: HASHTAG_DIRECTIVES.has(input.directive) ? newHashtags : draft.hashtags,
+        riskFlags: mergedFlags,
+        riskLevel,
+        brandFitScore,
+        confidenceNotes: riskAssessment.confidenceNotes,
+        currentVersion: newVersion,
+        status: "IN_REVIEW",
+        reviewedAt: null,
+      },
     });
-    const newVersion = current.currentVersion + 1;
+    if (moved.count === 0) {
+      throw new Error(REVIEW_SNAPSHOT_RACE);
+    }
 
     await tx.draftVersion.create({
       data: {
@@ -79,19 +102,7 @@ export async function rewriteDraft(input: RewriteDraftInput): Promise<Draft> {
       },
     });
 
-    return tx.draft.update({
-      where: { id: draft.id },
-      data: {
-        caption: newCaption,
-        hashtags: HASHTAG_DIRECTIVES.has(input.directive) ? newHashtags : draft.hashtags,
-        riskFlags: mergedFlags,
-        riskLevel,
-        brandFitScore,
-        confidenceNotes: riskAssessment.confidenceNotes,
-        currentVersion: newVersion,
-        status: "IN_REVIEW",
-      },
-    });
+    return tx.draft.findUniqueOrThrow({ where: { id: draft.id } });
   });
 
   return updated;

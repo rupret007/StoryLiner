@@ -4,12 +4,22 @@
  */
 
 import { scheduleDraftSchema } from "@/lib/schemas/content";
+import { reviewSnapshotReceipt } from "@/lib/services/publish/review-snapshot";
 
 describe("scheduleDraftSchema validation", () => {
   const validInput = {
     draftId: "clhf5gt0000000test0draftid1",
     platformAccountId: "clhf5gt0000000test0accountd",
     scheduledFor: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1hr from now
+    reviewedSnapshot: reviewSnapshotReceipt({
+      caption: "Thursday at The Hive.",
+      hashtags: ["#stalemate"],
+      mediaUrls: [],
+      riskLevel: "LOW",
+      riskFlags: [],
+      currentVersion: 1,
+      updatedAt: new Date("2026-09-03T08:00:00.000Z"),
+    }),
   };
 
   it("accepts a valid future datetime string", () => {
@@ -55,6 +65,12 @@ describe("scheduleDraftSchema validation", () => {
       confirmCheckedNoLivePost: true,
     });
     expect(result.success).toBe(true);
+  });
+
+  it("rejects a schedule without the approved snapshot receipt", () => {
+    const { reviewedSnapshot: _ignored, ...withoutReceipt } = validInput;
+    const result = scheduleDraftSchema.safeParse(withoutReceipt);
+    expect(result.success).toBe(false);
   });
 });
 

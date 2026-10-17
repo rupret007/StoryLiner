@@ -1,4 +1,5 @@
 import type { Band, BandVoiceProfile, CampaignType, Platform, ToneVariant, ContentLength } from "@prisma/client";
+import type { GenerationContextFacts } from "@/lib/services/content/campaign-context";
 
 export interface GenerateContentOptions {
   band: Band & { voiceProfile: BandVoiceProfile | null };
@@ -6,14 +7,9 @@ export interface GenerateContentOptions {
   platform: Platform;
   contentLength: ContentLength;
   toneVariant?: ToneVariant;
-  context?: {
-    eventDetails?: string;
-    showDate?: string;
-    venue?: string;
-    city?: string;
-    ticketUrl?: string;
-    additionalContext?: string;
-  };
+  context?: GenerationContextFacts;
+  /** Set by the server after exact saved-context verification, never by a browser override. */
+  contextSource?: "saved-campaign-event";
 }
 
 export interface GeneratedContent {
