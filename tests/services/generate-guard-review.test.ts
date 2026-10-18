@@ -154,11 +154,17 @@ describe("generate → guard → review handoff", () => {
     const voice = readFileSync(join(__dirname, "../../lib/services/llm/voice.ts"), "utf8");
     expect(voice).toMatch(/"fault-lines"/);
     expect(voice).not.toMatch(/trailer\s*swift/i);
+    expect([...voice.matchAll(/^\s*\| "([^"]+)"/gm)].map((match) => match[1])).toEqual([
+      "stalemate", "rad-dad", "fault-lines", "unknown",
+    ]);
 
     const seed = readFileSync(join(__dirname, "../../prisma/seed.ts"), "utf8");
     expect(seed).toMatch(/slug: "fault-lines"/);
     expect(seed).toMatch(/canon-pending/i);
     expect(seed).not.toMatch(/slug: "trailer-swift"/);
+    expect([...new Set([...seed.matchAll(/slug: "([^"]+)"/g)].map((match) => match[1]))]).toEqual([
+      "stalemate", "rad-dad", "fault-lines",
+    ]);
   });
 
   it("keeps Approve / Hold / Deny as review-only schema actions", () => {

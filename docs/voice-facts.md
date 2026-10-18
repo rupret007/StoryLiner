@@ -1,3 +1,7 @@
+---
+published: false
+---
+
 # Voice facts and Jeff locks
 
 StoryLiner has three approved band identities: **Stalemate**, **Rad Dad**, and **Fault Lines**. Jeff talks to Bob (front door). StoryLiner is the promo engine. Jeff owns feel and live posts. Nothing auto-publishes. Trailer Swift is not a voice in this product.

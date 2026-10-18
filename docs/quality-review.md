@@ -1,3 +1,7 @@
+---
+published: false
+---
+
 # StoryLiner quality review (tip/main → this branch)
 
 Review of `rupret007/StoryLiner` for Jeff Story. Scope: guardrails, no auto-publish, adapter safety, tests, types, demo-fact drift.

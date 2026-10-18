@@ -1,4 +1,6 @@
 import { MockLlmAdapter } from "@/lib/services/llm/mock-adapter";
+import { CampaignType } from "@prisma/client";
+import type { GenerationContextFacts } from "@/lib/services/content/campaign-context";
 import type { Band, BandVoiceProfile } from "@prisma/client";
 
 const mockStalemate = {
@@ -184,6 +186,72 @@ describe("MockLlmAdapter", () => {
       expect(result.hashtags).toHaveLength(3);
       expect(result.altText).toMatch(/add a factual image description/i);
       expect(result.imagePrompt).toMatch(/do not invent lineup/i);
+    });
+
+    it.each(Object.values(CampaignType))(
+      "leaves Fault Lines canon unclaimed for %s without context",
+      async (campaignType) => {
+        const result = await adapter.generateContent({
+          band: mockFaultLines,
+          campaignType,
+          platform: "INSTAGRAM",
+          contentLength: "MEDIUM",
+        });
+
+        expect(result.caption).toBe("Fault Lines");
+        expect(result.ctaText).toBeUndefined();
+        expect(result.fanReplies.join(" ")).not.toMatch(/\b(there|date|ticket|tonight|now)\b/i);
+      }
+    );
+
+    describe.each([undefined, "saved-campaign-event"] as const)("Fault Lines context source %s", (contextSource) => {
+      it.each<GenerationContextFacts>([
+        {},
+        { showDate: "" },
+        { venue: "Confirmed Venue" },
+        { showDate: "Confirmed Date" },
+        { city: "Confirmed City", doorsTime: "Confirmed Doors" },
+      ])("retains partial context without inventing live timing: %j", async (context) => {
+        const result = await adapter.generateContent({
+          band: mockFaultLines,
+          campaignType: "LIVESTREAM_ANNOUNCEMENT",
+          platform: "FACEBOOK",
+          contentLength: "SHORT",
+          contextSource,
+          context,
+        });
+
+        expect(result.caption).toContain("Fault Lines");
+        for (const value of Object.values(context).filter(Boolean)) {
+          expect(result.caption).toContain(value);
+        }
+        expect(result.caption).not.toMatch(/is live|Join us|Saturday|tonight|\bnow\b|8pm|the venue|the city/i);
+      });
+
+      it.each(["SHORT", "MEDIUM", "LONG"] as const)("retains all confirmed facts at %s length", async (contentLength) => {
+        const context = {
+          venue: "Confirmed Venue",
+          showDate: "Confirmed Date",
+          city: "Confirmed City",
+          doorsTime: "Confirmed Doors",
+          setTime: "Confirmed Set",
+          ticketUrl: "https://example.com/confirmed",
+          additionalContext: "Confirmed operator note",
+        };
+        const result = await adapter.generateContent({
+          band: mockFaultLines,
+          campaignType: "SHOW_ANNOUNCEMENT",
+          platform: "INSTAGRAM",
+          contentLength,
+          contextSource,
+          context,
+        });
+
+        for (const value of Object.values(context)) {
+          expect(result.caption.split(value)).toHaveLength(2);
+        }
+        expect(result.caption).not.toMatch(/Saturday|tonight|\bnow\b|8pm|Basket Case|tuning too slow/i);
+      });
     });
 
     it("generates different content for Stalemate vs Rad Dad", async () => {

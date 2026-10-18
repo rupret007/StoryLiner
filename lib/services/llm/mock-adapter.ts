@@ -111,22 +111,25 @@ export class MockLlmAdapter implements LLMAdapter {
       ? faultLinesPool
       : unknownPool;
     const savedContext = options.contextSource === "saved-campaign-event";
+    const factsOnly = savedContext || voice === "fault-lines";
 
     const vars: Record<string, string> = {
       venue: context?.venue ?? "the venue",
-      date: context?.showDate ?? (savedContext ? "[show date not supplied]" : "Saturday"),
+      date: context?.showDate ?? (factsOnly ? "[show date not supplied]" : "Saturday"),
       city: context?.city ?? "the city",
-      time: context?.doorsTime ?? (savedContext ? "[doors time not supplied]" : "8pm"),
+      time: context?.doorsTime ?? (factsOnly ? "[doors time not supplied]" : "8pm"),
       bandname: band.name,
     };
 
     let caption: string;
     const type = campaignType.toLowerCase();
 
-    if (savedContext) {
+    if (factsOnly) {
       // Keep the established voice pools unchanged. The saved-context path uses
       // only their first factual show template, not demos about invented lineups,
-      // attendance, dates, songs, or durations. All supplied facts remain visible.
+      // attendance, dates, songs, or durations. Fault Lines always uses this
+      // path, even without a saved link: missing canon must remain unclaimed.
+      // All supplied facts remain visible.
       const showLead = Boolean(context?.showDate && context?.venue &&
         ["SHOW_ANNOUNCEMENT", "REMINDER", "DAY_OF_SHOW", "LAST_CALL"].includes(campaignType));
       const lead = showLead ? fillTemplate(pool.show[0], vars) : band.name;
@@ -140,18 +143,16 @@ export class MockLlmAdapter implements LLMAdapter {
     } else if (type.includes("live") || type.includes("stream")) {
       caption = isRD
         ? `Going live ${context?.showDate ?? "tonight"}. We're playing covers and answering questions. Join us.`
-        : voice === "fault-lines"
-        ? `Fault Lines is live ${context?.showDate ?? "now"}. Join us.`
         : `Streaming ${context?.showDate ?? "tonight"}. Come hang.`;
     } else {
       caption = fillTemplate(pickRandom(pool.general), vars);
     }
 
-    if (!savedContext && contentLength === "LONG" && context?.additionalContext) {
+    if (!factsOnly && contentLength === "LONG" && context?.additionalContext) {
       caption += `\n\n${context.additionalContext}`;
     }
 
-    if (!savedContext && context?.ticketUrl && contentLength !== "SHORT") {
+    if (!factsOnly && context?.ticketUrl && contentLength !== "SHORT") {
       caption += `\n\nTickets: ${context.ticketUrl}`;
     }
 
@@ -190,7 +191,7 @@ export class MockLlmAdapter implements LLMAdapter {
           : voice === "stalemate"
           ? ["I'll be there", "Been waiting for this room", "See you if I can"]
           : voice === "fault-lines"
-          ? ["See you there", "Got the date", "Thanks for the update"]
+          ? ["Thanks for the update", "Thanks for sharing", "Noted"]
           : ["See you there", "Thanks for posting", "Noted"],
       brandFitScore,
       confidenceNotes: `Generated using mock adapter. Voice profile ${voiceProfile ? "applied" : "not configured"}.${savedContext ? " Saved context retained without invented event facts; length is a preference, not permission to omit facts. Review all copy before use." : ""}`,

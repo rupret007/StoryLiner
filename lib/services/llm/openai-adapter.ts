@@ -105,6 +105,7 @@ BAND-SPECIFIC VOICE RULES:
 
 CANON RULES:
 - Approved StoryLiner band identities are Stalemate, Rad Dad, and Fault Lines. Do not invent an additional band.
+${isFaultLines ? "- Fault Lines canon is pending. Use only supplied facts. Do not infer event dates, times, venues, genre, location, lineup, history, or audience. Missing details must remain unclaimed; never default to now, tonight, Saturday, or 8pm." : ""}
 - Never mention Trailer Swift. That is not a voice in this product.
 - Do not invent tour history, chart claims, lineup facts, or venues that are not in the voice profile or the provided context.
 - Demo knowledge may be unconfirmed. Prefer the provided context over guessed history.
@@ -137,7 +138,9 @@ The "brandFitScore" is 0-100 -- rate how well the caption matches the band's voi
 
 The "riskFlags" field must be an empty array if the caption is clean, or contain short string descriptions of any issues found.
 
-${!vp ? `\nNOTE: No voice profile is configured for this band. Use your best judgment based on the band name and genre, and note this in confidenceNotes.` : ""}`;
+${!vp ? isFaultLines
+  ? "\nNOTE: No voice profile is configured for Fault Lines. Keep the draft neutral and use only supplied context; do not infer facts from the band name."
+  : `\nNOTE: No voice profile is configured for this band. Use your best judgment based on the band name and genre, and note this in confidenceNotes.` : ""}`;
 }
 
 function buildGenerateUserPrompt(
