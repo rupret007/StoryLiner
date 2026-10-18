@@ -22,6 +22,13 @@ describe("demo voice-facts hygiene", () => {
     expect(seed).toMatch(/Jeff owns canon/);
   });
 
+  it("keeps Stalemate and Rad Dad as the only seeded bands", () => {
+    const seed = readFileSync(join(root, "prisma/seed.ts"), "utf8");
+    expect(seed).toMatch(/slug: "stalemate"/);
+    expect(seed).toMatch(/slug: "rad-dad"/);
+    expect(seed).not.toMatch(/slug: "trailer-swift"/);
+  });
+
   it("seeds the three approved bands and no Trailer Swift identity", () => {
     const seed = readFileSync(join(root, "prisma/seed.ts"), "utf8");
     expect(seed).toMatch(/slug: "stalemate"/);
