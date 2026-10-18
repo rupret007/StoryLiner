@@ -28,6 +28,9 @@ describe("demo voice-facts hygiene", () => {
     expect(seed).toMatch(/slug: "rad-dad"/);
     expect(seed).toMatch(/slug: "fault-lines"/);
     expect(seed).not.toMatch(/slug: "trailer-swift"/);
+    expect([...new Set([...seed.matchAll(/slug: "([^"]+)"/g)].map((match) => match[1]))]).toEqual([
+      "stalemate", "rad-dad", "fault-lines",
+    ]);
   });
 
   it("keeps Fault Lines canon pending instead of inventing band facts", () => {

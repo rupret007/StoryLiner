@@ -13,7 +13,7 @@ export function resolveStoryLinerVoice(bandName: string): StoryLinerVoice {
   const name = (bandName ?? "").toLowerCase();
   if (name.includes("rad dad")) return "rad-dad";
   if (name.includes("stalemate")) return "stalemate";
-  if (/\bfault\s*lines?\b/.test(name)) return "fault-lines";
+  if (/\bfault\s*lines\b/.test(name)) return "fault-lines";
   return "unknown";
 }
 

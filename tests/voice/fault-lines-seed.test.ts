@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import establishedProfiles from "@/tests/fixtures/established-band-profiles.json";
 
 const mockPrisma = {
   user: { upsert: jest.fn().mockResolvedValue({ id: "fixture-operator" }) },
@@ -58,7 +59,11 @@ describe("Fault Lines seed canon", () => {
       expect(mockPrisma.band.upsert.mock.calls.map(([args]) => args.create.slug)).toEqual([
         "stalemate", "rad-dad", "fault-lines",
       ]);
+      // Pin the established bands to main's pre-PR data, rather than merely
+      // checking their slugs while allowing their voice or canon to change.
+      expect(mockPrisma.band.upsert.mock.calls.slice(0, 2).map(([args]) => args)).toEqual(establishedProfiles.bands);
       const band = mockPrisma.band.upsert.mock.calls[2][0];
+      expect(band.where).toEqual({ slug: "fault-lines" });
       expect(band.create).toEqual({
         userId: "fixture-operator",
         name: "Fault Lines",
@@ -69,6 +74,8 @@ describe("Fault Lines seed canon", () => {
       expect(band.update).toEqual({});
       const profiles = mockPrisma.bandVoiceProfile.upsert.mock.calls.map(([args]) => args);
       expect(profiles).toHaveLength(3);
+      expect(profiles.slice(0, 2)).toEqual(establishedProfiles.profiles);
+      expect(profiles[2].where).toEqual({ bandId: "fixture-fault-lines" });
       expect(profiles[2].create.bandId).toBe("fixture-fault-lines");
       expect(profiles[2].create.toneDescription).toMatch(/canon-pending/i);
       for (const profile of profiles) expect(profile.update).toEqual({});
@@ -80,6 +87,22 @@ describe("Fault Lines seed canon", () => {
         if (!existingDemo) expect(write).toHaveBeenCalled();
         for (const [args] of write.mock.calls) {
           expect((args.create ?? args.data).bandId).toMatch(/^fixture-(stalemate|rad-dad)$/);
+        }
+      }
+      expect(mockPrisma.knowledgeEntry.count.mock.calls).toEqual([
+        [{ where: { bandId: "fixture-stalemate" } }],
+        [{ where: { bandId: "fixture-rad-dad" } }],
+      ]);
+      expect(mockPrisma.event.findFirst).toHaveBeenCalledWith({
+        where: { bandId: { in: ["fixture-stalemate", "fixture-rad-dad"] } },
+        select: { id: true },
+      });
+      if (existingDemo) {
+        for (const write of [mockPrisma.event.create, mockPrisma.campaign.create,
+          mockPrisma.draft.create, mockPrisma.draftVersion.create, mockPrisma.publishedPost.create,
+          mockPrisma.analyticsSnapshot.create, mockPrisma.livestreamEvent.create,
+          mockPrisma.livestreamRunOfShowItem.create, mockPrisma.livestreamDestination.createMany]) {
+          expect(write).not.toHaveBeenCalled();
         }
       }
     } finally {
