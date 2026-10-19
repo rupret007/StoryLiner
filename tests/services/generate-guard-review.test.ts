@@ -159,6 +159,25 @@ describe("generate → guard → review handoff", () => {
     );
   });
 
+  it("keeps Fault Lines as a canon-pending approved identity without inventing seed facts", () => {
+    const voice = readFileSync(join(__dirname, "../../lib/services/llm/approved-voices.ts"), "utf8");
+    expect(voice).toMatch(/"fault-lines"/);
+    expect(voice).not.toMatch(/trailer\s*swift/i);
+    expect([...voice.matchAll(/^\s*\| "([^"]+)"/gm)].map((match) => match[1])).toEqual([
+      "stalemate", "rad-dad", "fault-lines", "unknown",
+    ]);
+
+    const seed = ["seed.ts", "seed-approved.ts"]
+      .map((file) => readFileSync(join(__dirname, "../../prisma", file), "utf8"))
+      .join("\n");
+    expect(seed).toMatch(/slug: "fault-lines"/);
+    expect(seed).toMatch(/canon-pending/i);
+    expect(seed).not.toMatch(/slug: "trailer-swift"/);
+    expect([...new Set([...seed.matchAll(/slug: "([^"]+)"/g)].map((match) => match[1]))]).toEqual([
+      "stalemate", "rad-dad", "fault-lines",
+    ]);
+  });
+
   it("keeps Approve / Hold / Deny as review-only schema actions", () => {
     for (const action of ["approve", "hold", "deny"] as const) {
       expect(

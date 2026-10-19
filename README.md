@@ -6,7 +6,7 @@ Built for musicians who are strong at making music and performing, but need help
 
 ## Overview
 
-StoryLiner is a single-operator tool managing two distinct bands — **Stalemate** (original indie rock, dry and scene-rooted) and **Rad Dad** (pop punk cover band, nostalgic and crowd-first) — with completely separate voice profiles, content rules, and publishing workflows.
+StoryLiner is a single-operator tool managing three separate band profiles — **Stalemate** (original indie rock, dry and scene-rooted), **Rad Dad** (pop punk cover band, nostalgic and crowd-first), and **Fault Lines** (owner-confirmed identity with all other canon intentionally pending). Each band keeps its own voice profile, content rules, and review workflow.
 
 Everything lands in a review queue before it can be published. Nothing auto-publishes.
 
@@ -75,8 +75,9 @@ npm run db:seed
 ```
 
 Seed creates:
-- Stalemate and Rad Dad with full voice profiles, tone rules, and banned phrases
-- Knowledge entries for each band (tagged `demo-unconfirmed` — Jeff owns canon)
+- Stalemate and Rad Dad with their existing full voice profiles, tone rules, and banned phrases
+- Fault Lines with a conservative, context-led profile that does not infer genre, location, lineup, history, audience, handles, or events
+- Demo knowledge entries for Stalemate and Rad Dad (tagged `demo-unconfirmed` — Jeff owns canon); Fault Lines starts without invented knowledge
 - Platform accounts (mock/disconnected)
 - Upcoming events and show campaigns
 - Realistic drafts in the review queue at various stages
@@ -224,7 +225,7 @@ Controlled by `LLM_ADAPTER` in `.env.local`:
 
 | Value | Behavior |
 |---|---|
-| `mock` (default) | Uses per-band content pools for unlinked drafts; linked campaign/event drafts use saved facts without invented missing details |
+| `mock` (default) | Distinct Stalemate / Rad Dad / Fault Lines pools for unlinked drafts; linked campaign/event drafts use saved facts without invented missing details |
 | `openai` | Existing unlinked generation, rewrites, risk assessment, talking points, and engagement prompts; requires `OPENAI_API_KEY`. New linked campaign/event generation is blocked pending owner privacy approval. |
 
 Any other `LLM_ADAPTER` value fails closed instead of silently selecting mock
@@ -372,7 +373,7 @@ Jest is required in CI. Suites include:
 | `tests/workflow/schedule-snapshot-fence.test.ts` | Schedule binds to the approved caption/media/guard snapshot |
 | `tests/workflow/archive-snapshot-fence.test.ts` | Archive / resume refuse a stale card |
 | `tests/prisma/schema-leftovers.test.ts` | `Draft.mediaUrls` + `HELD` documented for `db push` |
-| `tests/voice/demo-facts.test.ts` | No Trailer Swift in seed / mock pools |
+| `tests/voice/demo-facts.test.ts` | Approved seeded identities, no Trailer Swift, and no invented Fault Lines canon |
 
 `npm run test:postgres` is a separate, required CI job using a fresh synthetic
 PostgreSQL service, not an operator database. Its actual Prisma tests cover
@@ -419,7 +420,8 @@ lib/
 
 prisma/
   schema.prisma        Full data model (19 models)
-  seed.ts              Realistic seed data for Stalemate and Rad Dad
+  seed.ts              Existing Stalemate/Rad Dad demo data
+  seed-approved.ts     Composes the demo with the canon-pending Fault Lines profile
 
 scripts/
   worker.ts            Background job poll loop (every 5s)
@@ -502,7 +504,7 @@ podman compose up -d       # or: docker compose up -d
 
 # 3. Seed the database (first time only — upsert-safe, run again any time)
 #    Uses the 'migrate' image which has the full dev deps (tsx, prisma CLI)
-podman compose run --rm migrate npx tsx prisma/seed.ts
+podman compose run --rm migrate npm run db:seed
 
 # 4. Open the app
 #    http://localhost:3000
@@ -528,7 +530,7 @@ podman compose down -v
 podman compose up -d --build
 
 # Re-seed after a reset
-podman compose run --rm migrate npx tsx prisma/seed.ts
+podman compose run --rm migrate npm run db:seed
 ```
 
 ### Services in the stack

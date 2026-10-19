@@ -6,7 +6,7 @@ import type {
   RewriteOptions,
   RiskAssessment,
 } from "./types";
-import { hashtagCapForVoice, resolveStoryLinerVoice } from "./voice";
+import { hashtagCapForVoice, resolveStoryLinerVoice } from "./approved-voices";
 import { generationContextLines } from "@/lib/services/content/campaign-context";
 
 // Realistic mock content pools per band archetype
@@ -56,6 +56,22 @@ const radDadPool = {
   hashtags: ["#covermusicband", "#popunk2000s", "#coverband", "#nostalgiafest", "#altrocklives", "#singalong", "#livecovers"],
 };
 
+// Fault Lines is an approved band identity with canon still pending. These
+// templates stay deliberately neutral and use only context supplied for the
+// current draft; they must not imply a genre, hometown, lineup, or history.
+const faultLinesPool = {
+  show: [
+    "Fault Lines at {venue} on {date}.",
+    "{date}. {venue}. Fault Lines.",
+  ],
+  recap: ["Thanks, {city}.", "Thanks for being there, {city}."],
+  general: [
+    "Fault Lines update. More confirmed details soon.",
+    "Working on the next thing. More when it is ready.",
+  ],
+  hashtags: ["#faultlines", "#livemusic", "#band"],
+};
+
 const unknownPool = {
   show: [
     "Playing {venue} on {date}.",
@@ -87,24 +103,33 @@ export class MockLlmAdapter implements LLMAdapter {
     const { band, campaignType, platform, contentLength, context } = options;
     const voice = resolveStoryLinerVoice(band.name);
     const isRD = voice === "rad-dad";
-    const pool = isRD ? radDadPool : voice === "stalemate" ? stalematePool : unknownPool;
+    const pool = isRD
+      ? radDadPool
+      : voice === "stalemate"
+      ? stalematePool
+      : voice === "fault-lines"
+      ? faultLinesPool
+      : unknownPool;
     const savedContext = options.contextSource === "saved-campaign-event";
+    const factsOnly = savedContext || voice === "fault-lines";
 
     const vars: Record<string, string> = {
       venue: context?.venue ?? "the venue",
-      date: context?.showDate ?? (savedContext ? "[show date not supplied]" : "Saturday"),
+      date: context?.showDate ?? (factsOnly ? "[show date not supplied]" : "Saturday"),
       city: context?.city ?? "the city",
-      time: context?.doorsTime ?? (savedContext ? "[doors time not supplied]" : "8pm"),
+      time: context?.doorsTime ?? (factsOnly ? "[doors time not supplied]" : "8pm"),
       bandname: band.name,
     };
 
     let caption: string;
     const type = campaignType.toLowerCase();
 
-    if (savedContext) {
+    if (factsOnly) {
       // Keep the established voice pools unchanged. The saved-context path uses
       // only their first factual show template, not demos about invented lineups,
-      // attendance, dates, songs, or durations. All supplied facts remain visible.
+      // attendance, dates, songs, or durations. Fault Lines always uses this
+      // path, even without a saved link: missing canon must remain unclaimed.
+      // All supplied facts remain visible.
       const showLead = Boolean(context?.showDate && context?.venue &&
         ["SHOW_ANNOUNCEMENT", "REMINDER", "DAY_OF_SHOW", "LAST_CALL"].includes(campaignType));
       const lead = showLead ? fillTemplate(pool.show[0], vars) : band.name;
@@ -123,11 +148,11 @@ export class MockLlmAdapter implements LLMAdapter {
       caption = fillTemplate(pickRandom(pool.general), vars);
     }
 
-    if (!savedContext && contentLength === "LONG" && context?.additionalContext) {
+    if (!factsOnly && contentLength === "LONG" && context?.additionalContext) {
       caption += `\n\n${context.additionalContext}`;
     }
 
-    if (!savedContext && context?.ticketUrl && contentLength !== "SHORT") {
+    if (!factsOnly && context?.ticketUrl && contentLength !== "SHORT") {
       caption += `\n\nTickets: ${context.ticketUrl}`;
     }
 
@@ -144,10 +169,18 @@ export class MockLlmAdapter implements LLMAdapter {
       ctaText: context?.ticketUrl
         ? isRD
           ? "Tickets in bio"
-          : "Tickets if you want them"
+          : voice === "stalemate"
+          ? "Tickets if you want them"
+          : "Confirmed ticket link included"
         : undefined,
-      altText: `${band.name} performing live on stage`,
-      imagePrompt: `${band.name} live performance photo, dark moody lighting, ${isRD ? "energetic crowd" : "intimate venue"}, concert photography style`,
+      altText:
+        voice === "fault-lines"
+          ? `${band.name} media asset; add a factual image description before approval`
+          : `${band.name} performing live on stage`,
+      imagePrompt:
+        voice === "fault-lines"
+          ? `${band.name} promotional image using only operator-confirmed visual details; do not invent lineup, venue, location, or genre styling`
+          : `${band.name} live performance photo, dark moody lighting, ${isRD ? "energetic crowd" : "intimate venue"}, concert photography style`,
       fanReplies:
         voice === "rad-dad"
           ? [
@@ -157,6 +190,8 @@ export class MockLlmAdapter implements LLMAdapter {
             ]
           : voice === "stalemate"
           ? ["I'll be there", "Been waiting for this room", "See you if I can"]
+          : voice === "fault-lines"
+          ? ["Thanks for the update", "Thanks for sharing", "Noted"]
           : ["See you there", "Thanks for posting", "Noted"],
       brandFitScore,
       confidenceNotes: `Generated using mock adapter. Voice profile ${voiceProfile ? "applied" : "not configured"}.${savedContext ? " Saved context retained without invented event facts; length is a preference, not permission to omit facts. Review all copy before use." : ""}`,
@@ -175,11 +210,15 @@ export class MockLlmAdapter implements LLMAdapter {
           ? t + " (We will absolutely take requests for Mr. Brightside.)"
           : voice === "stalemate"
           ? t + " We're very normal people who are definitely fine."
-          : t + " Keep it simple.",
+          : t,
       lessCheesy: (t) =>
         t.replace(/!/g, ".").replace(/amazing|incredible|awesome/gi, "good"),
       morePunk: (t) =>
-        isRD ? t + " Wear your band tee." : t + " No fake smiles.",
+        isRD
+          ? t + " Wear your band tee."
+          : voice === "stalemate"
+          ? t + " No fake smiles."
+          : t,
       cleaner: (t) =>
         t.replace(/[*!]{2,}/g, "").replace(/\n{3,}/g, "\n\n").trim(),
       moreHuman: (t) => {
@@ -188,15 +227,25 @@ export class MockLlmAdapter implements LLMAdapter {
       },
       moreConcise: (t) => t.split("\n")[0],
       moreUrgency: (t) =>
-        isRD ? t + " Don't wait on this." : t + " If you're coming, come.",
+        isRD
+          ? t + " Don't wait on this."
+          : voice === "stalemate"
+          ? t + " If you're coming, come."
+          : t,
       moreAuthentic: (t) =>
         isRD
           ? t.replace(/We're|We are/g, "We're still")
-          : t.replace(/We're|We are/g, "Still"),
+          : voice === "stalemate"
+          ? t.replace(/We're|We are/g, "Still")
+          : t,
       shorterHashtags: (t) => t.replace(/#\w{15,}/g, ""),
       noHashtags: (t) => t.replace(/#\w+/g, "").trim(),
       addCTA: (t) =>
-        isRD ? t + "\n\nTickets in bio." : t + "\n\nTickets if you want them.",
+        isRD
+          ? t + "\n\nTickets in bio."
+          : voice === "stalemate"
+          ? t + "\n\nTickets if you want them."
+          : t + "\n\nSee the confirmed details above.",
     };
 
     const transform = transformations[directive];
@@ -284,7 +333,8 @@ export class MockLlmAdapter implements LLMAdapter {
     runOfShowItems: string[];
   }): Promise<string[]> {
     const { livestreamTitle, bandName, runOfShowItems } = options;
-    const isRD = resolveStoryLinerVoice(bandName) === "rad-dad";
+    const voice = resolveStoryLinerVoice(bandName);
+    const isRD = voice === "rad-dad";
 
     const base = [
       `Welcome everyone, this is ${bandName}`,
@@ -292,7 +342,9 @@ export class MockLlmAdapter implements LLMAdapter {
       "Give us a second while we check the levels",
       isRD
         ? "Let us know in the chat where you're watching from"
-        : "We can see the chat, say hi if you want",
+        : voice === "stalemate"
+        ? "We can see the chat, say hi if you want"
+        : "We can see the chat. Say hello and tell us where you're watching from.",
     ];
 
     const itemPrompts = runOfShowItems.slice(0, 3).map(
@@ -303,7 +355,9 @@ export class MockLlmAdapter implements LLMAdapter {
       "Thank you for hanging out with us",
       isRD
         ? "We'll be back soon. Stay subscribed."
-        : "More stuff coming. We'll let you know.",
+        : voice === "stalemate"
+        ? "More stuff coming. We'll let you know."
+        : "We'll share more when the details are confirmed.",
     ];
 
     return [...base, ...itemPrompts, ...closing];
@@ -314,7 +368,8 @@ export class MockLlmAdapter implements LLMAdapter {
     platform: Platform;
   }): Promise<string[]> {
     const { bandName } = options;
-    const isRD = resolveStoryLinerVoice(bandName) === "rad-dad";
+    const voice = resolveStoryLinerVoice(bandName);
+    const isRD = voice === "rad-dad";
 
     const prompts = isRD
       ? [
@@ -324,12 +379,20 @@ export class MockLlmAdapter implements LLMAdapter {
           "Name a song we have to play tonight",
           "Who brought a friend who didn't know we were a cover band",
         ]
-      : [
+      : voice === "stalemate"
+      ? [
           "What was the last show you actually cared about",
           "Drop a song you think we'd never play",
           "Who's been here since the early days",
           "What city should we hit next",
           "Tell us one thing you want more of from us",
+        ]
+      : [
+          "Where are you watching from?",
+          "What would you like to see more of here?",
+          "Who is joining us today?",
+          "Which confirmed update should we share next?",
+          "What questions do you have for the band?",
         ];
 
     return prompts;

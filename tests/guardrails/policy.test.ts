@@ -114,6 +114,15 @@ describe("checkBandVoiceSeparation", () => {
     );
     expect(violations.some((v) => v.rule === "band-voice-separation")).toBe(true);
   });
+
+  it("keeps Fault Lines separate from both established voices", () => {
+    const violations = checkBandVoiceSeparation(
+      "Fault Lines with a Rad Dad-style singalong tonight.",
+      "Fault Lines",
+      ["Stalemate", "Rad Dad"]
+    );
+    expect(violations.some((v) => v.rule === "band-voice-separation")).toBe(true);
+  });
 });
 
 describe("checkEmojiOveruse", () => {
@@ -175,6 +184,10 @@ describe("checkInventedVoiceFacts", () => {
   it("does not flag Stalemate or Rad Dad copy", () => {
     expect(checkInventedVoiceFacts("Playing Burlington Bar on Saturday.")).toHaveLength(0);
     expect(checkInventedVoiceFacts("We will play Mr. Brightside. We always do.")).toHaveLength(0);
+  });
+
+  it("does not flag Fault Lines copy limited to confirmed context", () => {
+    expect(checkInventedVoiceFacts("Fault Lines. Confirmed details below.")).toHaveLength(0);
   });
 });
 
