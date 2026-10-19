@@ -18,7 +18,7 @@ import type {
   RiskAssessment,
 } from "./types";
 import { campaignTypeLabel, platformLabel } from "@/lib/utils";
-import { resolveStoryLinerVoice } from "./voice";
+import { resolveStoryLinerVoice } from "./approved-voices";
 
 // ---------------------------------------------------------------------------
 // Client bootstrap

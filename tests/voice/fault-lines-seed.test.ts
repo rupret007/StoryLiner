@@ -1,5 +1,6 @@
-import type { Prisma } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import establishedProfiles from "@/tests/fixtures/established-band-profiles.json";
+import { scripts } from "@/package.json";
 
 const mockPrisma = {
   user: { upsert: jest.fn().mockResolvedValue({ id: "fixture-operator" }) },
@@ -42,6 +43,28 @@ const mockPrisma = {
 jest.mock("@prisma/client", () => ({ PrismaClient: jest.fn(() => mockPrisma) }));
 
 describe("Fault Lines seed canon", () => {
+  it("uses the composed approved-band seed for the documented command", () => {
+    expect(scripts["db:seed"]).toBe("tsx prisma/seed-approved.ts");
+  });
+
+  it.each([false, true])("keeps standalone demo seeding limited to the established bands when demo rows exist: %s", async (existingDemo) => {
+    jest.clearAllMocks();
+    mockPrisma.event.findFirst.mockResolvedValue(existingDemo ? { id: "fixture-existing-event" } : null);
+    const log = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const { seedDemoData } = await import("../../prisma/seed");
+      await seedDemoData(new PrismaClient());
+
+      expect(mockPrisma.band.upsert.mock.calls.map(([args]) => args.create.slug)).toEqual([
+        "stalemate", "rad-dad",
+      ]);
+      expect(mockPrisma.band.upsert.mock.calls.map(([args]) => args)).toEqual(establishedProfiles.bands);
+      expect(mockPrisma.bandVoiceProfile.upsert.mock.calls.map(([args]) => args)).toEqual(establishedProfiles.profiles);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it.each([false, true])("leaves canon blank and existing profiles untouched when demo rows exist: %s", async (existingDemo) => {
     jest.clearAllMocks();
     mockPrisma.event.findFirst.mockResolvedValue(existingDemo ? { id: "fixture-existing-event" } : null);
@@ -52,7 +75,7 @@ describe("Fault Lines seed canon", () => {
     // Fail within Jest instead of exiting the test process on a seed error.
     const exit = jest.spyOn(process, "exit").mockImplementation(() => undefined as never);
     try {
-      await jest.isolateModulesAsync(async () => { await import("../../prisma/seed"); });
+      await jest.isolateModulesAsync(async () => { await import("../../prisma/seed-approved"); });
       await disconnected;
 
       expect(exit).not.toHaveBeenCalled();

@@ -6,7 +6,7 @@ import type {
   RewriteOptions,
   RiskAssessment,
 } from "./types";
-import { hashtagCapForVoice, resolveStoryLinerVoice } from "./voice";
+import { hashtagCapForVoice, resolveStoryLinerVoice } from "./approved-voices";
 import { generationContextLines } from "@/lib/services/content/campaign-context";
 
 // Realistic mock content pools per band archetype

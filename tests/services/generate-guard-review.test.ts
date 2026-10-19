@@ -150,15 +150,26 @@ describe("generate → guard → review handoff", () => {
     expect(missing.success).toBe(false);
   });
 
-  it("keeps Fault Lines as a canon-pending approved identity without inventing seed facts", () => {
+  it("does not add Fault Lines or a third-band voice on this leftover", () => {
     const voice = readFileSync(join(__dirname, "../../lib/services/llm/voice.ts"), "utf8");
+    expect(voice).toMatch(/"stalemate" \| "rad-dad" \| "unknown"/);
+    expect(voice).not.toMatch(/fault.?lines/i);
+    expect(readFileSync(join(__dirname, "../../prisma/seed.ts"), "utf8")).not.toMatch(
+      /fault.?lines/i
+    );
+  });
+
+  it("keeps Fault Lines as a canon-pending approved identity without inventing seed facts", () => {
+    const voice = readFileSync(join(__dirname, "../../lib/services/llm/approved-voices.ts"), "utf8");
     expect(voice).toMatch(/"fault-lines"/);
     expect(voice).not.toMatch(/trailer\s*swift/i);
     expect([...voice.matchAll(/^\s*\| "([^"]+)"/gm)].map((match) => match[1])).toEqual([
       "stalemate", "rad-dad", "fault-lines", "unknown",
     ]);
 
-    const seed = readFileSync(join(__dirname, "../../prisma/seed.ts"), "utf8");
+    const seed = ["seed.ts", "seed-approved.ts"]
+      .map((file) => readFileSync(join(__dirname, "../../prisma", file), "utf8"))
+      .join("\n");
     expect(seed).toMatch(/slug: "fault-lines"/);
     expect(seed).toMatch(/canon-pending/i);
     expect(seed).not.toMatch(/slug: "trailer-swift"/);

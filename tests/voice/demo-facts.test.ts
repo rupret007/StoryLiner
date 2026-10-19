@@ -2,10 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(__dirname, "../..");
+const approvedSeedSource = () => ["seed.ts", "seed-approved.ts"]
+  .map((file) => readFileSync(join(root, "prisma", file), "utf8"))
+  .join("\n");
 
 describe("demo voice-facts hygiene", () => {
   it("does not invent a Trailer Swift voice in seed or mock pools", () => {
-    const seed = readFileSync(join(root, "prisma/seed.ts"), "utf8");
+    const seed = approvedSeedSource();
     const mockLlm = readFileSync(join(root, "lib/services/llm/mock-adapter.ts"), "utf8");
     const openai = readFileSync(join(root, "lib/services/llm/openai-adapter.ts"), "utf8");
 
@@ -27,10 +30,13 @@ describe("demo voice-facts hygiene", () => {
     expect(seed).toMatch(/slug: "stalemate"/);
     expect(seed).toMatch(/slug: "rad-dad"/);
     expect(seed).not.toMatch(/slug: "trailer-swift"/);
+    expect([...new Set([...seed.matchAll(/slug: "([^"]+)"/g)].map((match) => match[1]))]).toEqual([
+      "stalemate", "rad-dad",
+    ]);
   });
 
   it("seeds the three approved bands and no Trailer Swift identity", () => {
-    const seed = readFileSync(join(root, "prisma/seed.ts"), "utf8");
+    const seed = approvedSeedSource();
     expect(seed).toMatch(/slug: "stalemate"/);
     expect(seed).toMatch(/slug: "rad-dad"/);
     expect(seed).toMatch(/slug: "fault-lines"/);
@@ -41,9 +47,9 @@ describe("demo voice-facts hygiene", () => {
   });
 
   it("keeps Fault Lines canon pending instead of inventing band facts", () => {
-    const seed = readFileSync(join(root, "prisma/seed.ts"), "utf8");
+    const seed = readFileSync(join(root, "prisma/seed-approved.ts"), "utf8");
     const start = seed.indexOf("// ─── Band: Fault Lines");
-    const end = seed.indexOf("const existingEvent", start);
+    const end = seed.indexOf("\n  console.log(", start);
     const faultLinesSeed = seed.slice(start, end);
 
     expect(start).toBeGreaterThan(-1);

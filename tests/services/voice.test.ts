@@ -1,6 +1,14 @@
-import { hashtagCapForVoice, resolveStoryLinerVoice } from "@/lib/services/llm/voice";
+import { hashtagCapForVoice, resolveStoryLinerVoice } from "@/lib/services/llm/approved-voices";
+import { resolveStoryLinerVoice as resolveEstablishedVoice } from "@/lib/services/llm/voice";
 
 describe("resolveStoryLinerVoice", () => {
+  it("keeps the established resolver limited to its original identities", () => {
+    expect(resolveEstablishedVoice("Stalemate")).toBe("stalemate");
+    expect(resolveEstablishedVoice("Rad Dad")).toBe("rad-dad");
+    expect(resolveEstablishedVoice("Fault Lines")).toBe("unknown");
+    expect(resolveEstablishedVoice("The Faultlines")).toBe("unknown");
+  });
+
   it("recognizes Stalemate and Rad Dad only", () => {
     expect(resolveStoryLinerVoice("Stalemate")).toBe("stalemate");
     expect(resolveStoryLinerVoice("Rad Dad")).toBe("rad-dad");

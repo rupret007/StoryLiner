@@ -420,7 +420,8 @@ lib/
 
 prisma/
   schema.prisma        Full data model (19 models)
-  seed.ts              Existing Stalemate/Rad Dad demo plus canon-pending Fault Lines profile
+  seed.ts              Existing Stalemate/Rad Dad demo data
+  seed-approved.ts     Composes the demo with the canon-pending Fault Lines profile
 
 scripts/
   worker.ts            Background job poll loop (every 5s)
@@ -503,7 +504,7 @@ podman compose up -d       # or: docker compose up -d
 
 # 3. Seed the database (first time only — upsert-safe, run again any time)
 #    Uses the 'migrate' image which has the full dev deps (tsx, prisma CLI)
-podman compose run --rm migrate npx tsx prisma/seed.ts
+podman compose run --rm migrate npm run db:seed
 
 # 4. Open the app
 #    http://localhost:3000
@@ -529,7 +530,7 @@ podman compose down -v
 podman compose up -d --build
 
 # Re-seed after a reset
-podman compose run --rm migrate npx tsx prisma/seed.ts
+podman compose run --rm migrate npm run db:seed
 ```
 
 ### Services in the stack
