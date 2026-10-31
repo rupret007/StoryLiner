@@ -1,8 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
-
-async function main() {
+export async function seedDemoData(prisma: PrismaClient) {
   console.log("Seeding StoryLiner...");
 
   // ─── User ────────────────────────────────────────────────────────────────────
@@ -360,7 +358,7 @@ async function main() {
   if (existingEvent) {
     console.log("Seed: events/drafts already present — skipping mutable demo rows.");
     console.log(`  Bands: Stalemate (${stalemate.id}), Rad Dad (${radDad.id})`);
-    return;
+    return user;
   }
 
   // ─── Events ──────────────────────────────────────────────────────────────────
@@ -896,13 +894,17 @@ async function main() {
   console.log(`  Livestream: ${radDadStream.id}`);
   console.log(`  Analytics snapshots: ${analyticsData.length}`);
   console.log(`  Published posts: ${publishedPosts.length}`);
+  return user;
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  seedDemoData(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

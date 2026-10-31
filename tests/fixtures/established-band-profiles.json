@@ -1,0 +1,192 @@
+{
+  "sourceCommit": "f1abcc7a6f791676f8b836151d25768cc86233cf",
+  "bands": [
+    {
+      "where": {
+        "slug": "stalemate"
+      },
+      "create": {
+        "userId": "fixture-operator",
+        "name": "Stalemate",
+        "slug": "stalemate",
+        "description": "An original band built on tight grooves, honest lyrics, and the kind of set that leaves the room a little quieter when it's over. No gimmicks.",
+        "genre": "Indie Rock / Post-Hardcore",
+        "location": "Chicago, IL",
+        "founded": "2019",
+        "coverColor": "#5b21b6"
+      },
+      "update": {}
+    },
+    {
+      "where": {
+        "slug": "rad-dad"
+      },
+      "create": {
+        "userId": "fixture-operator",
+        "name": "Rad Dad",
+        "slug": "rad-dad",
+        "description": "A high-energy cover band playing the pop punk, alternative rock, and early 2000s anthems that defined a generation. Full singalong policy. Shorts encouraged.",
+        "genre": "Pop Punk / Cover Band",
+        "location": "Chicago, IL",
+        "founded": "2021",
+        "coverColor": "#b91c1c"
+      },
+      "update": {}
+    }
+  ],
+  "profiles": [
+    {
+      "where": {
+        "bandId": "fixture-stalemate"
+      },
+      "create": {
+        "bandId": "fixture-stalemate",
+        "toneDescription": "Dry. Direct. Slightly self-aware but never self-deprecating for comedic effect. Stalemate writes like someone who's been in the scene long enough to stop trying to impress it. The voice is honest, occasionally blunt, and allergic to hype language. It doesn't beg for attention. It earns it.",
+        "personalityTraits": [
+          "dry wit",
+          "scene-rooted",
+          "anti-hype",
+          "honest",
+          "understated",
+          "occasionally sardonic"
+        ],
+        "audienceNotes": "Local scene regulars, people who follow DIY labels, 25-38 age range. They spot fake immediately. They respect restraint. They do not want to be sold to.",
+        "postingGoals": [
+          "Stay present without being annoying",
+          "Build credibility through consistency not frequency",
+          "Sound like an actual person wrote this",
+          "Leave people wanting to show up in person"
+        ],
+        "toneRules": [
+          "Never beg. If someone doesn't come to the show, that's fine.",
+          "No exclamation marks unless absolutely unavoidable.",
+          "Do not explain the joke.",
+          "Do not use the word 'journey'.",
+          "Do not describe a show as 'epic' or 'unforgettable'.",
+          "If it sounds like a band promoting itself, rewrite it.",
+          "Dry is better than hype.",
+          "Short is usually better than long.",
+          "Write like you're texting the scene, not presenting to a board."
+        ],
+        "bannedPhrases": [
+          "journey",
+          "excited to announce",
+          "honored",
+          "we can't wait",
+          "epic night",
+          "don't miss out",
+          "making memories",
+          "limited tickets",
+          "grab your tickets now",
+          "unforgettable experience",
+          "community",
+          "passionate about",
+          "proud to share",
+          "game changer",
+          "incredibly proud"
+        ],
+        "bannedTopics": [
+          "fake album chart claims",
+          "streaming numbers unless real",
+          "corporate partnerships",
+          "brand deals"
+        ],
+        "defaultTone": "AUTHENTIC",
+        "humorLevel": 6,
+        "edgeLevel": 7,
+        "emojiTolerance": 2,
+        "isExplicitOk": false,
+        "preferredLengths": [
+          "SHORT",
+          "MEDIUM"
+        ],
+        "instagramNotes": "One or two hashtags max. No emoji stacks. Caption reads first, hashtags feel like an afterthought.",
+        "blueskyNotes": "Treat this like a venue announcement on a corkboard. No fluff.",
+        "twitchNotes": "We don't usually stream but if we do, we're not performing — we're just playing.",
+        "goodExamples": [
+          "Playing Burlington Bar Saturday. Nine-ish.",
+          "We finished a record. It's called Nothing Stays. Out in February.",
+          "Rehearsal went long. No one's complaining."
+        ],
+        "badExamples": [
+          "We are SO EXCITED to announce our upcoming show — don't miss out on this unforgettable night!!!",
+          "Honored to share that we've been working incredibly hard and are proud to reveal our new single!",
+          "Tickets are moving fast — grab yours now before they're gone!!!"
+        ]
+      },
+      "update": {}
+    },
+    {
+      "where": {
+        "bandId": "fixture-rad-dad"
+      },
+      "create": {
+        "bandId": "fixture-rad-dad",
+        "toneDescription": "Energetic, nostalgic, self-aware about being a cover band in the best way. Rad Dad knows exactly what it is and leans in hard. The voice is warm, crowd-focused, and always one step away from a mid-2000s reference. It's fun but not performatively quirky. It sounds like someone who genuinely loves these songs.",
+        "personalityTraits": [
+          "nostalgic",
+          "crowd-focused",
+          "high-energy",
+          "self-aware",
+          "warm",
+          "slightly chaotic"
+        ],
+        "audienceNotes": "People who graduated between 2000 and 2012. They know every word. They want to sing. They bring their friends who don't know what the set list is but will by the end of the night.",
+        "postingGoals": [
+          "Make people feel excited before they even get there",
+          "Create FOMO among people who've been before",
+          "Be shareable — people should want to tag friends",
+          "Keep it fun without trying too hard"
+        ],
+        "toneRules": [
+          "It's okay to be enthusiastic — Rad Dad is allowed to have exclamation marks.",
+          "Reference specific songs or albums when relevant. The audience knows them.",
+          "Never sound corporate or formal.",
+          "The singalong is always the point. Center it.",
+          "Crowd first. Always.",
+          "Abbreviations and informal language are fine.",
+          "You can mention Mr. Brightside. Once. Per show."
+        ],
+        "bannedPhrases": [
+          "critically acclaimed",
+          "music journey",
+          "authentic experience",
+          "world-class",
+          "industry",
+          "monetize",
+          "content creator",
+          "leveraging",
+          "synergy"
+        ],
+        "bannedTopics": [
+          "political opinions",
+          "band drama",
+          "gear talk nobody asked for"
+        ],
+        "defaultTone": "ENERGETIC",
+        "humorLevel": 8,
+        "edgeLevel": 3,
+        "emojiTolerance": 5,
+        "isExplicitOk": false,
+        "preferredLengths": [
+          "SHORT",
+          "MEDIUM"
+        ],
+        "instagramNotes": "Reels work. Story polls work. Caption should be fun and quick. 3-5 hashtags is fine.",
+        "facebookNotes": "A lot of the core audience is on Facebook still. Event posts get good reach. Tag the venue.",
+        "tiktokNotes": "Short clips of crowd singalongs are the format. Caption is secondary.",
+        "twitchNotes": "Streaming covers is a copyright minefield. Avoid unless for a practice session.",
+        "goodExamples": [
+          "Playing Lincoln Hall this Saturday. We will 100% play Mr. Brightside. Come fight us.",
+          "Hey Chicago. Friday night. Full pop punk set. Bring your friends who 'don't really like live music'.",
+          "Band practice: we spent 40 minutes arguing about the tempo of Basket Case. Worth it."
+        ],
+        "badExamples": [
+          "We are incredibly honored to announce our upcoming performance and can't wait to share this incredible experience with all of you!",
+          "Our music journey continues as we bring our critically acclaimed set to a new stage!"
+        ]
+      },
+      "update": {}
+    }
+  ]
+}

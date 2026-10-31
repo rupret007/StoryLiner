@@ -1,4 +1,6 @@
 import { MockLlmAdapter } from "@/lib/services/llm/mock-adapter";
+import { CampaignType } from "@prisma/client";
+import type { GenerationContextFacts } from "@/lib/services/content/campaign-context";
 import type { Band, BandVoiceProfile } from "@prisma/client";
 
 const mockStalemate = {
@@ -57,6 +59,27 @@ const mockRadDad = {
     defaultTone: "ENERGETIC" as const,
     emojiTolerance: 5,
     humorLevel: 8,
+  } as BandVoiceProfile,
+} as Band & { voiceProfile: BandVoiceProfile };
+
+const mockFaultLines = {
+  ...mockStalemate,
+  id: "band_faultlines_01",
+  name: "Fault Lines",
+  slug: "fault-lines",
+  coverColor: "#0f766e",
+  voiceProfile: {
+    ...mockStalemate.voiceProfile,
+    id: "vp_faultlines_01",
+    bandId: "band_faultlines_01",
+    toneDescription: "Canon-pending and context-led; confirmed facts only",
+    personalityTraits: ["context-led", "concise", "canon-pending"],
+    toneRules: ["Use only supplied facts"],
+    bannedPhrases: ["award-winning"],
+    defaultTone: "AUTHENTIC" as const,
+    emojiTolerance: 1,
+    humorLevel: 3,
+    edgeLevel: 3,
   } as BandVoiceProfile,
 } as Band & { voiceProfile: BandVoiceProfile };
 
@@ -143,6 +166,94 @@ describe("MockLlmAdapter", () => {
       expect(result.hashtags.length).toBeGreaterThan(0);
     });
 
+    it("gives Fault Lines its neutral canon-pending pool", async () => {
+      const result = await adapter.generateContent({
+        band: mockFaultLines,
+        campaignType: "SHOW_ANNOUNCEMENT",
+        platform: "INSTAGRAM",
+        contentLength: "MEDIUM",
+        context: {
+          venue: "Confirmed Venue",
+          showDate: "Confirmed Date",
+          ticketUrl: "https://example.com/confirmed",
+        },
+      });
+
+      expect(result.caption).toContain("Fault Lines");
+      expect(result.caption).toContain("Confirmed Venue");
+      expect(result.caption).not.toMatch(/Basket Case|pop punk|tuning too slow/i);
+      expect(result.hashtags).toContain("#faultlines");
+      expect(result.hashtags).toHaveLength(3);
+      expect(result.altText).toMatch(/add a factual image description/i);
+      expect(result.imagePrompt).toMatch(/do not invent lineup/i);
+    });
+
+    it.each(Object.values(CampaignType))(
+      "leaves Fault Lines canon unclaimed for %s without context",
+      async (campaignType) => {
+        const result = await adapter.generateContent({
+          band: mockFaultLines,
+          campaignType,
+          platform: "INSTAGRAM",
+          contentLength: "MEDIUM",
+        });
+
+        expect(result.caption).toBe("Fault Lines");
+        expect(result.ctaText).toBeUndefined();
+        expect(result.fanReplies.join(" ")).not.toMatch(/\b(there|date|ticket|tonight|now)\b/i);
+      }
+    );
+
+    describe.each([undefined, "saved-campaign-event"] as const)("Fault Lines context source %s", (contextSource) => {
+      it.each<GenerationContextFacts>([
+        {},
+        { showDate: "" },
+        { venue: "Confirmed Venue" },
+        { showDate: "Confirmed Date" },
+        { city: "Confirmed City", doorsTime: "Confirmed Doors" },
+      ])("retains partial context without inventing live timing: %j", async (context) => {
+        const result = await adapter.generateContent({
+          band: mockFaultLines,
+          campaignType: "LIVESTREAM_ANNOUNCEMENT",
+          platform: "FACEBOOK",
+          contentLength: "SHORT",
+          contextSource,
+          context,
+        });
+
+        expect(result.caption).toContain("Fault Lines");
+        for (const value of Object.values(context).filter(Boolean)) {
+          expect(result.caption).toContain(value);
+        }
+        expect(result.caption).not.toMatch(/is live|Join us|Saturday|tonight|\bnow\b|8pm|the venue|the city/i);
+      });
+
+      it.each(["SHORT", "MEDIUM", "LONG"] as const)("retains all confirmed facts at %s length", async (contentLength) => {
+        const context = {
+          venue: "Confirmed Venue",
+          showDate: "Confirmed Date",
+          city: "Confirmed City",
+          doorsTime: "Confirmed Doors",
+          setTime: "Confirmed Set",
+          ticketUrl: "https://example.com/confirmed",
+          additionalContext: "Confirmed operator note",
+        };
+        const result = await adapter.generateContent({
+          band: mockFaultLines,
+          campaignType: "SHOW_ANNOUNCEMENT",
+          platform: "INSTAGRAM",
+          contentLength,
+          contextSource,
+          context,
+        });
+
+        for (const value of Object.values(context)) {
+          expect(result.caption.split(value)).toHaveLength(2);
+        }
+        expect(result.caption).not.toMatch(/Saturday|tonight|\bnow\b|8pm|Basket Case|tuning too slow/i);
+      });
+    });
+
     it("generates different content for Stalemate vs Rad Dad", async () => {
       const stalemateResult = await adapter.generateContent({
         band: mockStalemate,
@@ -177,6 +288,28 @@ describe("MockLlmAdapter", () => {
 
       expect(result.caption).toContain("https://example.com/tickets");
     });
+    // Regression (Karen FAIL 2026-10-21, chunk 2/8): short drafts for unknown
+    // voices must not claim a ticket link that the caption omits.
+    it.each(["SHORT", "MEDIUM", "LONG"] as const)(
+      "never claims an included ticket link the %s unknown-voice caption omits",
+      async (contentLength) => {
+        const unknownBand = { ...mockStalemate, id: "band_unknown_01", name: "Unlisted Garage Act", slug: "unlisted-garage-act", voiceProfile: null };
+        const ticketUrl = "https://example.com/unknown-tickets";
+        const result = await adapter.generateContent({
+          band: unknownBand,
+          campaignType: "SHOW_ANNOUNCEMENT",
+          platform: "INSTAGRAM",
+          contentLength,
+          context: { ticketUrl },
+        });
+        if (/ticket link included/i.test(result.ctaText ?? "")) {
+          expect(result.caption).toContain(ticketUrl);
+        }
+        if (!result.caption.includes(ticketUrl)) {
+          expect(result.ctaText ?? "").not.toMatch(/ticket link included/i);
+        }
+      },
+    );
   });
 
   describe("rewriteContent", () => {
@@ -228,6 +361,18 @@ describe("MockLlmAdapter", () => {
 
       expect(rewritten).toContain("If you're coming, come.");
       expect(rewritten).not.toMatch(/don't wait on this/i);
+    });
+
+    it("does not borrow Stalemate or Rad Dad copy for Fault Lines rewrites", async () => {
+      const rewritten = await adapter.rewriteContent({
+        originalCaption: "Fault Lines. Confirmed details below.",
+        directive: "morePunk",
+        band: mockFaultLines,
+        platform: "INSTAGRAM",
+      });
+
+      expect(rewritten).toBe("Fault Lines. Confirmed details below.");
+      expect(rewritten).not.toMatch(/band tee|fake smiles/i);
     });
 
     it("reduces exclamations with cleaner directive", async () => {

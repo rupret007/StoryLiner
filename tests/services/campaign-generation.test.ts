@@ -91,6 +91,50 @@ describe("actual campaign generation action/service", () => {
     expect(result.riskLevel).not.toBe("LOW");
   });
 
+  it.each([
+    ["Stalemate", "Rad Dad"],
+    ["Stalemate", "Fault Lines"],
+    ["Rad Dad", "Stalemate"],
+    ["Rad Dad", "Fault Lines"],
+    ["Fault Lines", "Stalemate"],
+    ["Fault Lines", "Rad Dad"],
+  ])("flags %s drafts that borrow the %s identity before review", async (bandName, otherBandName) => {
+    source.band.name = bandName;
+    prismaMock.band.findMany.mockResolvedValue([{ name: otherBandName }]);
+    adapterMock.generateContent.mockResolvedValue({
+      ...GENERATED, caption: `${bandName} with ${otherBandName}.`, riskFlags: [],
+    });
+
+    const result = await generateContent(linkedInput());
+
+    expect(result.status).toBe("IN_REVIEW");
+    expect(result.bandId).toBe(source.band.id);
+    expect(result.riskLevel).toBe("MEDIUM");
+    expect(result.riskFlags).toEqual([
+      `Caption references another band: "${otherBandName}". Bands must have separate voices.`,
+    ]);
+    expect(prismaMock.draft.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.draft.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      bandId: source.band.id, status: "IN_REVIEW", riskFlags: result.riskFlags,
+    }) });
+  });
+
+  it.each(["Stalemate", "Rad Dad", "Fault Lines"])("keeps clean %s generation bound to its selected band and review", async (bandName) => {
+    source.band.name = bandName;
+    prismaMock.band.findMany.mockResolvedValue(
+      ["Stalemate", "Rad Dad", "Fault Lines"].filter((name) => name !== bandName).map((name) => ({ name }))
+    );
+    adapterMock.generateContent.mockResolvedValue({ ...GENERATED, caption: bandName });
+
+    const result = await generateContent(linkedInput());
+
+    expect(result).toMatchObject({ bandId: source.band.id, caption: bandName, status: "IN_REVIEW", riskLevel: "LOW", riskFlags: [] });
+    expect(prismaMock.generationRun.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.generationRun.create).toHaveBeenCalledWith({ data: expect.objectContaining({ bandId: source.band.id }) });
+    expect(prismaMock.draft.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.draftVersion.create).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["openai", "unknown-provider"])("refuses %s for linked context before any adapter call or database write", async (name) => {
     adapterMock.name = name;
     await expect(generateContent(linkedInput())).rejects.toThrow(CAMPAIGN_CONTEXT_OFFLINE_ONLY);
