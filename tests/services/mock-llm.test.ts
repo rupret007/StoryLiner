@@ -288,6 +288,28 @@ describe("MockLlmAdapter", () => {
 
       expect(result.caption).toContain("https://example.com/tickets");
     });
+    // Regression (Karen FAIL 2026-10-21, chunk 2/8): short drafts for unknown
+    // voices must not claim a ticket link that the caption omits.
+    it.each(["SHORT", "MEDIUM", "LONG"] as const)(
+      "never claims an included ticket link the %s unknown-voice caption omits",
+      async (contentLength) => {
+        const unknownBand = { ...mockStalemate, id: "band_unknown_01", name: "Unlisted Garage Act", slug: "unlisted-garage-act", voiceProfile: null };
+        const ticketUrl = "https://example.com/unknown-tickets";
+        const result = await adapter.generateContent({
+          band: unknownBand,
+          campaignType: "SHOW_ANNOUNCEMENT",
+          platform: "INSTAGRAM",
+          contentLength,
+          context: { ticketUrl },
+        });
+        if (/ticket link included/i.test(result.ctaText ?? "")) {
+          expect(result.caption).toContain(ticketUrl);
+        }
+        if (!result.caption.includes(ticketUrl)) {
+          expect(result.ctaText ?? "").not.toMatch(/ticket link included/i);
+        }
+      },
+    );
   });
 
   describe("rewriteContent", () => {

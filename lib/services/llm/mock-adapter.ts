@@ -171,7 +171,9 @@ export class MockLlmAdapter implements LLMAdapter {
           ? "Tickets in bio"
           : voice === "stalemate"
           ? "Tickets if you want them"
-          : "Confirmed ticket link included"
+          : caption.includes(context.ticketUrl)
+          ? "Confirmed ticket link included"
+          : undefined
         : undefined,
       altText:
         voice === "fault-lines"
